@@ -672,6 +672,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .message-sender {
@@ -713,6 +715,8 @@ body {
   font-size: 15px;
   line-height: 1.4;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .message-time {
