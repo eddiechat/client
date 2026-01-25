@@ -49,3 +49,4 @@ fabric.properties
 .metadata/
 
 dist
+node_modules
