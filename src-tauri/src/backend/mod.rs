@@ -3,6 +3,10 @@
 //! This module provides the core email functionality using IMAP for receiving
 //! and SMTP for sending emails.
 
+pub mod carddav;
+
+pub use carddav::{get_carddav_backend, CardDAVBackend};
+
 use std::process::Command;
 use std::sync::Arc;
 

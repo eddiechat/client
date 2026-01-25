@@ -72,6 +72,12 @@ export interface SaveAccountRequest {
   smtp_tls_cert?: string;
   username: string;
   password: string;
+  // CardDAV settings (optional)
+  carddav_url?: string;
+  carddav_tls?: boolean;
+  carddav_tls_cert?: string;
+  carddav_username?: string;
+  carddav_password?: string;
 }
 
 // Conversation type for Signal-like messaging UI
@@ -87,4 +93,58 @@ export interface Conversation {
   is_outgoing: boolean;
   user_name: string;
   user_in_conversation: boolean;
+}
+
+// Contact types for CardDAV
+export interface Contact {
+  id: string;
+  full_name: string;
+  given_name?: string;
+  family_name?: string;
+  nickname?: string;
+  emails: ContactEmail[];
+  phones: ContactPhone[];
+  addresses: ContactAddress[];
+  organization?: string;
+  title?: string;
+  birthday?: string;
+  notes?: string;
+  photo_url?: string;
+  raw_vcard?: string;
+  etag?: string;
+  href?: string;
+}
+
+export interface ContactEmail {
+  email: string;
+  type?: string;
+  primary: boolean;
+}
+
+export interface ContactPhone {
+  number: string;
+  type?: string;
+  primary: boolean;
+}
+
+export interface ContactAddress {
+  type?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+  primary: boolean;
+}
+
+export interface AddressBook {
+  name: string;
+  href: string;
+  description?: string;
+  contact_count?: number;
+}
+
+export interface SaveContactRequest {
+  account?: string;
+  contact: Contact;
 }

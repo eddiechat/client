@@ -14,6 +14,11 @@ export interface AccountEditData {
   smtp_tls: boolean;
   smtp_tls_cert?: string;
   username: string;
+  // CardDAV settings
+  carddav_url?: string;
+  carddav_tls?: boolean;
+  carddav_tls_cert?: string;
+  carddav_username?: string;
 }
 
 interface AccountConfigModalProps {
@@ -44,6 +49,13 @@ export function AccountConfigModal({
   const [smtpTlsCert, setSmtpTlsCert] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  // CardDAV settings
+  const [enableCardDAV, setEnableCardDAV] = useState(false);
+  const [carddavUrl, setCarddavUrl] = useState("");
+  const [carddavTls, setCarddavTls] = useState(true);
+  const [carddavTlsCert, setCarddavTlsCert] = useState("");
+  const [carddavUsername, setCarddavUsername] = useState("");
+  const [carddavPassword, setCarddavPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -77,6 +89,13 @@ export function AccountConfigModal({
         setSmtpTlsCert(editData.smtp_tls_cert || "");
         setUsername(editData.username);
         setPassword(""); // Don't pre-fill password for security
+        // CardDAV settings
+        setEnableCardDAV(!!editData.carddav_url);
+        setCarddavUrl(editData.carddav_url || "");
+        setCarddavTls(editData.carddav_tls ?? true);
+        setCarddavTlsCert(editData.carddav_tls_cert || "");
+        setCarddavUsername(editData.carddav_username || "");
+        setCarddavPassword(""); // Don't pre-fill password for security
       } else {
         // Reset to defaults for new account
         setName("");
@@ -92,6 +111,13 @@ export function AccountConfigModal({
         setSmtpTlsCert("");
         setUsername("");
         setPassword("");
+        // CardDAV defaults
+        setEnableCardDAV(false);
+        setCarddavUrl("");
+        setCarddavTls(true);
+        setCarddavTlsCert("");
+        setCarddavUsername("");
+        setCarddavPassword("");
       }
       setError(null);
     }
@@ -149,6 +175,12 @@ export function AccountConfigModal({
         smtp_tls_cert: smtpTlsCert.trim() || undefined,
         username: username.trim(),
         password,
+        // CardDAV settings (only if enabled)
+        carddav_url: enableCardDAV && carddavUrl.trim() ? carddavUrl.trim() : undefined,
+        carddav_tls: enableCardDAV ? carddavTls : undefined,
+        carddav_tls_cert: enableCardDAV && carddavTlsCert.trim() ? carddavTlsCert.trim() : undefined,
+        carddav_username: enableCardDAV && carddavUsername.trim() ? carddavUsername.trim() : undefined,
+        carddav_password: enableCardDAV && carddavPassword ? carddavPassword : undefined,
       });
       onClose();
     } catch (err) {
@@ -344,6 +376,80 @@ export function AccountConfigModal({
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+          </fieldset>
+
+          <fieldset className="config-section">
+            <legend>CardDAV (Contacts)</legend>
+            <div className="form-row checkbox-row">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={enableCardDAV}
+                  onChange={(e) => setEnableCardDAV(e.target.checked)}
+                />
+                Enable CardDAV for contacts sync
+              </label>
+            </div>
+            {enableCardDAV && (
+              <>
+                <div className="form-row">
+                  <label htmlFor="carddavUrl">CardDAV URL:</label>
+                  <input
+                    id="carddavUrl"
+                    type="text"
+                    value={carddavUrl}
+                    onChange={(e) => setCarddavUrl(e.target.value)}
+                    placeholder="https://contacts.example.com/dav/"
+                  />
+                </div>
+                <div className="form-row-inline">
+                  <div className="form-row checkbox-row">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={carddavTls}
+                        onChange={(e) => setCarddavTls(e.target.checked)}
+                      />
+                      Use TLS
+                    </label>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <label htmlFor="carddavTlsCert">TLS Certificate (optional):</label>
+                  <input
+                    id="carddavTlsCert"
+                    type="text"
+                    value={carddavTlsCert}
+                    onChange={(e) => setCarddavTlsCert(e.target.value)}
+                    placeholder="Path to certificate file"
+                  />
+                </div>
+                <div className="form-row">
+                  <label htmlFor="carddavUsername">
+                    Username (leave blank to use IMAP username):
+                  </label>
+                  <input
+                    id="carddavUsername"
+                    type="text"
+                    value={carddavUsername}
+                    onChange={(e) => setCarddavUsername(e.target.value)}
+                    placeholder="Optional: separate CardDAV username"
+                  />
+                </div>
+                <div className="form-row">
+                  <label htmlFor="carddavPassword">
+                    Password (leave blank to use IMAP password):
+                  </label>
+                  <input
+                    id="carddavPassword"
+                    type="password"
+                    value={carddavPassword}
+                    onChange={(e) => setCarddavPassword(e.target.value)}
+                    placeholder="Optional: separate CardDAV password"
+                  />
+                </div>
+              </>
+            )}
           </fieldset>
         </div>
 

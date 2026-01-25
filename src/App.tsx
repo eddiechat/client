@@ -5,20 +5,30 @@ import {
   ComposeModal,
   ConversationView,
 } from "./components";
+import { ContactsList } from "./components/ContactsList";
 import type { AccountEditData } from "./components";
 import { useAccounts } from "./hooks/useEmail";
 import {
   useConversations,
   useConversationMessages,
 } from "./hooks/useConversations";
+import { useContacts } from "./hooks/useContacts";
 import * as api from "./lib/api";
-import type { Conversation, ComposeMessageData, SaveAccountRequest } from "./types";
+import type { Conversation, ComposeMessageData, SaveAccountRequest, Contact } from "./types";
 import "./App.css";
 
+type SidebarTab = "messages" | "contacts";
+
 function App() {
+  // Sidebar tab state
+  const [activeTab, setActiveTab] = useState<SidebarTab>("messages");
+
   // Conversation selection state
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Contact selection state (for future contact detail view)
+  const [, setSelectedContact] = useState<Contact | null>(null);
 
   // Compose modal state
   const [composeOpen, setComposeOpen] = useState(false);
@@ -50,6 +60,15 @@ function App() {
     loading: conversationsLoading,
     refresh: refreshConversations,
   } = useConversations(currentAccount || undefined);
+
+  // Contacts hook
+  const {
+    contacts,
+    loading: contactsLoading,
+    error: contactsError,
+    hasCardDAV,
+    refresh: refreshContacts,
+  } = useContacts(currentAccount || undefined);
 
   // Messages for selected conversation
   const {
@@ -170,9 +189,20 @@ function App() {
     setSelectedConversation(null);
   }, []);
 
+  // Contact handlers
+  const handleContactSelect = useCallback((contact: Contact) => {
+    setSelectedContact(contact);
+  }, []);
+
+  const handleStartEmailToContact = useCallback((email: string) => {
+    setComposeMode("new");
+    setComposeInitialData({ to: [email] });
+    setComposeOpen(true);
+  }, []);
+
   return (
     <main className="app">
-      {/* Sidebar with chat list */}
+      {/* Sidebar with chat list or contacts */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-title">
@@ -194,15 +224,53 @@ function App() {
           </button>
         </div>
 
-        <ChatList
-          conversations={conversations}
-          selectedId={selectedConversation?.id || null}
-          onSelect={handleConversationSelect}
-          loading={conversationsLoading}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          currentAccountEmail={currentAccountEmail}
-        />
+        {/* Tab buttons */}
+        <div className="sidebar-tabs">
+          <button
+            className={`sidebar-tab ${activeTab === "messages" ? "active" : ""}`}
+            onClick={() => setActiveTab("messages")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Messages
+          </button>
+          <button
+            className={`sidebar-tab ${activeTab === "contacts" ? "active" : ""}`}
+            onClick={() => setActiveTab("contacts")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Contacts
+          </button>
+        </div>
+
+        {/* Conditionally render based on active tab */}
+        {activeTab === "messages" ? (
+          <ChatList
+            conversations={conversations}
+            selectedId={selectedConversation?.id || null}
+            onSelect={handleConversationSelect}
+            loading={conversationsLoading}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            currentAccountEmail={currentAccountEmail}
+          />
+        ) : (
+          <ContactsList
+            contacts={contacts}
+            loading={contactsLoading}
+            error={contactsError}
+            hasCardDAV={hasCardDAV}
+            onSelectContact={handleContactSelect}
+            onStartEmail={handleStartEmailToContact}
+            onRefresh={refreshContacts}
+          />
+        )}
       </aside>
 
       {/* Main conversation view */}

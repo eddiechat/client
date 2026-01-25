@@ -5,6 +5,9 @@ import type {
   SaveAccountRequest,
   Conversation,
   Message,
+  Contact,
+  AddressBook,
+  SaveContactRequest,
 } from "../types";
 
 export async function saveAccount(request: SaveAccountRequest): Promise<void> {
@@ -52,4 +55,37 @@ export async function getConversationMessages(
 ): Promise<Message[]> {
   if (messageIds.length === 0) return [];
   return invoke("get_conversation_messages", { account, messageIds });
+}
+
+// Contact commands (CardDAV)
+export async function listContacts(account?: string): Promise<Contact[]> {
+  return invoke("list_contacts", { account });
+}
+
+export async function getContact(contactId: string, account?: string): Promise<Contact> {
+  return invoke("get_contact", { account, contactId });
+}
+
+export async function createContact(request: SaveContactRequest): Promise<Contact> {
+  return invoke("create_contact", { request });
+}
+
+export async function updateContact(request: SaveContactRequest): Promise<Contact> {
+  return invoke("update_contact", { request });
+}
+
+export async function deleteContact(
+  contactId: string,
+  href?: string,
+  account?: string
+): Promise<void> {
+  return invoke("delete_contact", { account, contactId, href });
+}
+
+export async function listAddressBooks(account?: string): Promise<AddressBook[]> {
+  return invoke("list_address_books", { account });
+}
+
+export async function hasCardDAVConfig(account?: string): Promise<boolean> {
+  return invoke("has_carddav_config", { account });
 }

@@ -1,5 +1,8 @@
+pub mod contact;
 pub mod conversation;
 pub mod error;
+
+pub use contact::*;
 
 use serde::{Deserialize, Serialize};
 
