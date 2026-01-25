@@ -8,6 +8,7 @@ import {
   getConversationNameParts,
   parseEmailContent,
 } from "../lib/utils";
+import { Avatar } from "./Avatar";
 
 interface ConversationViewProps {
   conversation: Conversation | null;
@@ -188,48 +189,15 @@ export function ConversationView({
         )}
 
         <div className="header-avatar-group" title={headerTooltip}>
-          {headerAvatarsToShow.map((participantData, index) => {
-            const { email, name } = participantData;
-            const avatarColor = getAvatarColor(name);
-            const initials = getInitials(name);
-            const gravatarUrl = email ? getGravatarUrl(email, 40) : null;
-
-            return (
-              <div
-                key={index}
-                className={`header-avatar ${headerAvatarsToShow.length > 1 ? `header-avatar-stacked header-avatar-pos-${index}` : ''}`}
-                style={{ backgroundColor: avatarColor }}
-              >
-                {gravatarUrl ? (
-                  <img
-                    src={gravatarUrl}
-                    alt={name}
-                    className="chat-avatar-img"
-                    onError={(e) => {
-                      const avatar = e.currentTarget.parentElement;
-                      if (avatar) {
-                        e.currentTarget.style.display = 'none';
-                        const initials = avatar.querySelector('.chat-avatar-initials');
-                        if (initials) {
-                          (initials as HTMLElement).style.display = 'block';
-                        }
-                      }
-                    }}
-                    onLoad={(e) => {
-                      const avatar = e.currentTarget.parentElement;
-                      if (avatar) {
-                        const initials = avatar.querySelector('.chat-avatar-initials');
-                        if (initials) {
-                          (initials as HTMLElement).style.display = 'none';
-                        }
-                      }
-                    }}
-                  />
-                ) : null}
-                <span className="chat-avatar-initials">{initials}</span>
-              </div>
-            );
-          })}
+          {headerAvatarsToShow.map((participantData, index) => (
+            <Avatar
+              key={index}
+              email={participantData.email}
+              name={participantData.name}
+              size={40}
+              className={`header-avatar ${headerAvatarsToShow.length > 1 ? `header-avatar-stacked header-avatar-pos-${index}` : ''}`}
+            />
+          ))}
         </div>
 
         <div className="header-info">
@@ -327,7 +295,6 @@ export function ConversationView({
                                   alt={getSenderName(message.envelope.from)}
                                   className="chat-avatar-img"
                                   onError={(e) => {
-                                    // On error, hide image and show initials
                                     const avatar = e.currentTarget.parentElement;
                                     if (avatar) {
                                       e.currentTarget.style.display = 'none';
@@ -338,7 +305,6 @@ export function ConversationView({
                                     }
                                   }}
                                   onLoad={(e) => {
-                                    // On success, hide initials
                                     const avatar = e.currentTarget.parentElement;
                                     if (avatar) {
                                       const initials = avatar.querySelector('.chat-avatar-initials');
