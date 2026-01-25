@@ -75,8 +75,6 @@ function App() {
 
   // Handle when participants are confirmed in compose mode
   const handleComposeParticipantsConfirm = useCallback((participants: string[]) => {
-    setComposeParticipants(participants);
-
     // Try to find existing conversation with these participants
     const normalizedParticipants = participants.map(p => extractEmail(p).toLowerCase()).sort();
 
@@ -90,10 +88,14 @@ function App() {
     });
 
     if (existingConversation) {
+      // Found existing conversation - switch to it
       setSelectedConversation(existingConversation);
       setIsComposing(false);
+      setComposeParticipants([]);
+    } else {
+      // No existing conversation - stay in compose mode with participants set
+      setComposeParticipants(participants);
     }
-    // If no existing conversation, stay in compose mode with participants set
   }, [conversations]);
 
   // Handle sending a new message in compose mode (no existing conversation)

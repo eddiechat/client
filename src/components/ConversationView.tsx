@@ -139,6 +139,10 @@ export function ConversationView({
   const inputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
 
+  // Track previous conversation to detect switches from compose mode
+  const prevConversationRef = useRef<Conversation | null>(null);
+  const wasComposingRef = useRef(false);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -153,10 +157,20 @@ export function ConversationView({
       setInputValue("");
       setParticipantsConfirmed(false);
     } else if (isComposing && (participantsConfirmed || composeParticipants.length > 0)) {
-      // Focus on message input when participants confirmed
+      // Focus on message input when participants confirmed (new conversation)
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isComposing, participantsConfirmed, composeParticipants.length]);
+
+  // Focus on message input when switching from compose mode to existing conversation
+  useEffect(() => {
+    if (wasComposingRef.current && !isComposing && conversation) {
+      // We just switched from compose mode to an existing conversation
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+    wasComposingRef.current = isComposing || false;
+    prevConversationRef.current = conversation;
+  }, [isComposing, conversation]);
 
   // Reset compose state when exiting compose mode
   useEffect(() => {
