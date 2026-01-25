@@ -5,6 +5,7 @@ pub mod folders;
 pub mod messages;
 pub mod flags;
 pub mod config;
+pub mod sync;
 
 pub use accounts::*;
 pub use conversations::*;
@@ -13,3 +14,4 @@ pub use folders::*;
 pub use messages::*;
 pub use flags::*;
 pub use config::*;
+pub use sync::*;

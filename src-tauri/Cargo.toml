@@ -32,6 +32,18 @@ thiserror = "1"
 dirs = "5"
 chrono = { version = "0.4", features = ["serde"] }
 
+# Database and sync engine
+rusqlite = { version = "0.32", features = ["bundled", "blob"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.25"
+uuid = { version = "1.10", features = ["v4"] }
+
+# Async channels for sync notifications
+flume = "0.11"
+
+# Email address parsing
+mailparse = "0.15"
+
 [features]
 default = []
 

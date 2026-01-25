@@ -1,8 +1,10 @@
 mod backend;
 mod commands;
 mod config;
+mod sync;
 mod types;
 
+use commands::SyncManager;
 use tracing::info;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,6 +16,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(SyncManager::new())
         .setup(|_app| {
             // Try to initialize config on startup
             if let Err(e) = config::init_config() {
@@ -60,6 +63,17 @@ pub fn run() {
             // Conversation commands
             commands::list_conversations,
             commands::get_conversation_messages,
+            // Sync commands
+            commands::init_sync_engine,
+            commands::get_sync_status,
+            commands::sync_folder,
+            commands::initial_sync,
+            commands::get_cached_conversations,
+            commands::get_cached_conversation_messages,
+            commands::queue_sync_action,
+            commands::set_sync_online,
+            commands::has_pending_sync_actions,
+            commands::shutdown_sync_engine,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
