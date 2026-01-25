@@ -25,7 +25,11 @@
       "Bash(ls:*)",
       "Bash(npm run build:*)",
       "Bash(cargo doc:*)",
-      "Bash(openssl s_client:*)"
+      "Bash(openssl s_client:*)",
+      "Bash(tree:*)",
+      "Bash(bun install)",
+      "Bash(bun run build:*)",
+      "Bash(bun tauri dev:*)"
     ]
   }
 }
