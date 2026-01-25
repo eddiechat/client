@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo install:*)",
+      "Bash(pnpm install:*)",
+      "Bash(cargo check:*)",
+      "Bash(rustc:*)",
+      "Bash(cargo --version:*)",
+      "Bash(rustup show:*)",
+      "Bash(rustup install:*)",
+      "Bash(cargo +nightly check:*)",
+      "Bash(pnpm type-check:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm tauri build:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(cargo +nightly build:*)",
+      "Bash(npm run tauri build:*)",
+      "Bash(cargo expand:*)",
+      "Bash(nc:*)",
+      "Bash(timeout 5 openssl s_client:*)",
+      "Bash(cargo metadata:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(cargo doc:*)",
+      "Bash(openssl s_client:*)"
+    ]
+  }
+}
