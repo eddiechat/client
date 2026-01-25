@@ -17,6 +17,10 @@
         "height": 600
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": false
+    },
     "security": {
       "csp": null
     }
