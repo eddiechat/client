@@ -9,7 +9,7 @@
   --bg-selected: #3a3a3a;
 
   /* Message bubble colors */
-  --bubble-sent: #3478f6;
+  --bubble-sent: #33CC00;
   --bubble-sent-text: #ffffff;
   --bubble-received: #3a3a3c;
   --bubble-received-text: #ffffff;
@@ -636,6 +636,7 @@ body {
 .message-bubble-container.outgoing {
   align-self: flex-end;
   flex-direction: row-reverse;
+  margin-left: auto;
 }
 
 /* Message avatar */
