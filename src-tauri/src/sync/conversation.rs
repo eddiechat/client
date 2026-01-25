@@ -6,7 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::sync::db::{CachedConversation, CachedMessage, SyncDatabase};
@@ -385,7 +385,7 @@ impl ConversationGrouper {
     }
 
     /// Update conversation when a message is deleted
-    pub fn handle_message_deleted(&self, account_id: &str, message_id: i64) -> Result<(), HimalayaError> {
+    pub fn handle_message_deleted(&self, account_id: &str, _message_id: i64) -> Result<(), HimalayaError> {
         // The conversation_messages table has ON DELETE CASCADE,
         // so the link is automatically removed.
         // We just need to clean up empty conversations.
