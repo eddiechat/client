@@ -44,8 +44,15 @@ pub struct SyncConfig {
 
 impl Default for SyncConfig {
     fn default() -> Self {
+        // In dev mode, use .sqlite relative to project root for easier debugging
+        let db_path = if cfg!(debug_assertions) {
+            PathBuf::from("../.sqlite/eddie_sync.db")
+        } else {
+            PathBuf::from("eddie_sync.db")
+        };
+
         Self {
-            db_path: PathBuf::from("eddie_sync.db"),
+            db_path,
             initial_sync_days: 365, // 1 year
             max_cache_age_days: 365,
             auto_classify: true,

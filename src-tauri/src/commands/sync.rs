@@ -25,10 +25,15 @@ pub struct SyncManager {
 
 impl SyncManager {
     pub fn new() -> Self {
-        let db_dir = dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("eddie.chat")
-            .join("sync");
+        // In dev mode, use .sqlite relative to project root for easier debugging
+        let db_dir = if cfg!(debug_assertions) {
+            PathBuf::from("../.sqlite")
+        } else {
+            dirs::data_local_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("eddie.chat")
+                .join("sync")
+        };
 
         // Ensure directory exists
         let _ = std::fs::create_dir_all(&db_dir);
