@@ -79,7 +79,6 @@ body {
   justify-content: space-between;
   padding: 12px 16px;
   height: var(--header-height);
-  border-bottom: 1px solid var(--border-color);
 }
 
 .sidebar-title {
@@ -437,8 +436,7 @@ body {
   gap: 12px;
   padding: 12px 16px;
   height: var(--header-height);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiery);
 }
 
 .back-button {
@@ -697,8 +695,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiery);
 }
 
 .input-action-btn,
