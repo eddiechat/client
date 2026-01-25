@@ -201,6 +201,35 @@ body {
   background: var(--bg-hover);
 }
 
+/* Filter badges */
+.filter-badges {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.filter-badge {
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filter-badge:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.filter-badge.active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
 /* Chat list content */
 .chat-list-content {
   flex: 1;

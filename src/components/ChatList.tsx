@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Conversation } from "../types";
 import {
   getAvatarColor,
@@ -6,6 +7,8 @@ import {
   getGravatarUrl,
   getConversationNameParts,
 } from "../lib/utils";
+
+type FilterType = "chats" | "important" | "requests" | "all";
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -58,6 +61,8 @@ export function ChatList({
   onSearchChange,
   currentAccountEmail,
 }: ChatListProps) {
+  const [activeFilter, setActiveFilter] = useState<FilterType>("chats");
+
   // Filter conversations by search query
   const filteredConversations = searchQuery
     ? conversations.filter((conv) => {
@@ -90,6 +95,32 @@ export function ChatList({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />
+        </div>
+        <div className="filter-badges">
+          <button
+            className={`filter-badge ${activeFilter === "chats" ? "active" : ""}`}
+            onClick={() => setActiveFilter("chats")}
+          >
+            Connections
+          </button>
+          {/* <button
+            className={`filter-badge ${activeFilter === "important" ? "active" : ""}`}
+            onClick={() => setActiveFilter("important")}
+          >
+            Important
+          </button> */}
+          <button
+            className={`filter-badge ${activeFilter === "requests" ? "active" : ""}`}
+            onClick={() => setActiveFilter("requests")}
+          >
+            Strangers
+          </button>
+          <button
+            className={`filter-badge ${activeFilter === "all" ? "active" : ""}`}
+            onClick={() => setActiveFilter("all")}
+          >
+            All
+          </button>
         </div>
       </div>
 
