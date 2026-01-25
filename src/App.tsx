@@ -2,7 +2,6 @@ import { useState, useCallback } from "react";
 import {
   AccountConfigModal,
   ChatList,
-  ComposeModal,
   ConversationView,
 } from "./components";
 import type { AccountEditData } from "./components";
@@ -12,7 +11,8 @@ import {
   useConversationMessages,
 } from "./hooks/useConversations";
 import * as api from "./lib/api";
-import type { Conversation, ComposeMessageData, SaveAccountRequest } from "./types";
+import type { Conversation, SaveAccountRequest } from "./types";
+import { extractEmail } from "./lib/utils";
 import "./App.css";
 
 function App() {
@@ -20,10 +20,9 @@ function App() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Compose modal state
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [composeMode, setComposeMode] = useState<"new" | "reply" | "forward">("new");
-  const [composeInitialData, setComposeInitialData] = useState<Partial<ComposeMessageData>>({});
+  // Compose mode state (messenger-style compose in chat view)
+  const [isComposing, setIsComposing] = useState(false);
+  const [composeParticipants, setComposeParticipants] = useState<string[]>([]);
 
   // Account config modal state
   const [accountModalOpen, setAccountModalOpen] = useState(false);
@@ -64,71 +63,111 @@ function App() {
   // Handlers
   const handleConversationSelect = useCallback((conversation: Conversation) => {
     setSelectedConversation(conversation);
+    setIsComposing(false);
+    setComposeParticipants([]);
   }, []);
 
   const handleCompose = useCallback(() => {
-    setComposeMode("new");
-    setComposeInitialData({});
-    setComposeOpen(true);
+    setSelectedConversation(null);
+    setIsComposing(true);
+    setComposeParticipants([]);
   }, []);
 
-  const handleSendMessage = async (data: ComposeMessageData) => {
-    const headers = [
-      `From: ${data.from || currentAccount || "user@example.com"}`,
-      `To: ${data.to.join(", ")}`,
-      data.cc?.length ? `Cc: ${data.cc.join(", ")}` : "",
-      `Subject: ${data.subject}`,
-      `Date: ${new Date().toUTCString()}`,
-      data.in_reply_to ? `In-Reply-To: ${data.in_reply_to}` : "",
-      "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
-    ]
-      .filter(Boolean)
-      .join("\r\n");
+  // Handle when participants are confirmed in compose mode
+  const handleComposeParticipantsConfirm = useCallback((participants: string[]) => {
+    setComposeParticipants(participants);
 
-    const rawMessage = `${headers}\r\n\r\n${data.body}`;
-    await api.sendMessage(rawMessage, currentAccount || undefined);
-    refreshConversations();
-  };
+    // Try to find existing conversation with these participants
+    const normalizedParticipants = participants.map(p => extractEmail(p).toLowerCase()).sort();
 
-  const handleSaveDraft = async (data: ComposeMessageData) => {
-    const headers = [
-      `From: ${data.from || currentAccount || "user@example.com"}`,
-      `To: ${data.to.join(", ")}`,
-      data.cc?.length ? `Cc: ${data.cc.join(", ")}` : "",
-      `Subject: ${data.subject}`,
-      "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
-    ]
-      .filter(Boolean)
-      .join("\r\n");
+    const existingConversation = conversations.find(conv => {
+      const convParticipants = conv.participants
+        .map(p => extractEmail(p).toLowerCase())
+        .sort();
 
-    const rawMessage = `${headers}\r\n\r\n${data.body}`;
-    await api.saveMessage(rawMessage, "Drafts", currentAccount || undefined);
-  };
+      // Check if participants match (excluding current user)
+      return JSON.stringify(normalizedParticipants) === JSON.stringify(convParticipants);
+    });
 
-  const handleSendFromConversation = useCallback(
-    async (text: string) => {
-      if (!selectedConversation || !text.trim()) return;
+    if (existingConversation) {
+      setSelectedConversation(existingConversation);
+      setIsComposing(false);
+    }
+    // If no existing conversation, stay in compose mode with participants set
+  }, [conversations]);
 
-      // Get the recipient (first participant that's not the current user)
-      const recipient =
-        selectedConversation.participants.find(
-          (p) => !p.includes(currentAccount || "")
-        ) || selectedConversation.participants[0];
+  // Handle sending a new message in compose mode (no existing conversation)
+  const handleSendNewMessage = useCallback(
+    async (text: string, participants: string[]) => {
+      if (!text.trim() || participants.length === 0) return;
 
-      const subject = `Re: ${selectedConversation.last_message_preview}`;
+      // Extract first line as subject
+      const lines = text.split('\n');
+      const subject = lines[0].trim() || '(No subject)';
+      const body = lines.length > 1 ? lines.slice(1).join('\n').trim() || lines[0] : text;
 
       const headers = [
         `From: ${currentAccount || "user@example.com"}`,
-        `To: ${recipient}`,
+        `To: ${participants.join(", ")}`,
         `Subject: ${subject}`,
         `Date: ${new Date().toUTCString()}`,
         "MIME-Version: 1.0",
         "Content-Type: text/plain; charset=utf-8",
       ].join("\r\n");
 
-      const rawMessage = `${headers}\r\n\r\n${text}`;
+      const rawMessage = `${headers}\r\n\r\n${body}`;
+      await api.sendMessage(rawMessage, currentAccount || undefined);
+
+      // Exit compose mode and refresh
+      setIsComposing(false);
+      setComposeParticipants([]);
+      await refreshConversations();
+
+      // Try to select the newly created conversation
+      const normalizedParticipants = participants.map(p => extractEmail(p).toLowerCase()).sort();
+      setTimeout(() => {
+        const newConversation = conversations.find(conv => {
+          const convParticipants = conv.participants
+            .map(p => extractEmail(p).toLowerCase())
+            .sort();
+          return JSON.stringify(normalizedParticipants) === JSON.stringify(convParticipants);
+        });
+        if (newConversation) {
+          setSelectedConversation(newConversation);
+        }
+      }, 500);
+    },
+    [currentAccount, refreshConversations, conversations]
+  );
+
+  const handleSendFromConversation = useCallback(
+    async (text: string) => {
+      if (!selectedConversation || !text.trim()) return;
+
+      // Get all recipients (all participants except current user)
+      const recipients = selectedConversation.participants.filter(
+        (p) => !extractEmail(p).toLowerCase().includes((currentAccount || "").toLowerCase())
+      );
+
+      // If no recipients found, use first participant
+      const to = recipients.length > 0 ? recipients : [selectedConversation.participants[0]];
+
+      // Extract first line as subject for new message style
+      const lines = text.split('\n');
+      const firstLine = lines[0].trim();
+      const subject = firstLine || `Re: ${selectedConversation.last_message_preview}`;
+      const body = lines.length > 1 ? lines.slice(1).join('\n').trim() || text : text;
+
+      const headers = [
+        `From: ${currentAccount || "user@example.com"}`,
+        `To: ${to.join(", ")}`,
+        `Subject: ${subject}`,
+        `Date: ${new Date().toUTCString()}`,
+        "MIME-Version: 1.0",
+        "Content-Type: text/plain; charset=utf-8",
+      ].join("\r\n");
+
+      const rawMessage = `${headers}\r\n\r\n${body}`;
       await api.sendMessage(rawMessage, currentAccount || undefined);
       refreshConversations();
     },
@@ -168,6 +207,8 @@ function App() {
 
   const handleBack = useCallback(() => {
     setSelectedConversation(null);
+    setIsComposing(false);
+    setComposeParticipants([]);
   }, []);
 
   return (
@@ -215,18 +256,12 @@ function App() {
           currentAccountEmail={currentAccountEmail}
           onSendMessage={handleSendFromConversation}
           onBack={handleBack}
+          isComposing={isComposing}
+          composeParticipants={composeParticipants}
+          onComposeParticipantsConfirm={handleComposeParticipantsConfirm}
+          onSendNewMessage={handleSendNewMessage}
         />
       </section>
-
-      {/* Compose Modal */}
-      <ComposeModal
-        isOpen={composeOpen}
-        onClose={() => setComposeOpen(false)}
-        onSend={handleSendMessage}
-        onSaveDraft={handleSaveDraft}
-        initialData={composeInitialData}
-        mode={composeMode}
-      />
 
       {/* Account Config Modal */}
       <AccountConfigModal

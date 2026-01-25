@@ -18,6 +18,11 @@ interface ConversationViewProps {
   currentAccountEmail?: string;
   onSendMessage: (text: string) => void;
   onBack?: () => void;
+  // Compose mode props
+  isComposing?: boolean;
+  composeParticipants?: string[];
+  onComposeParticipantsConfirm?: (participants: string[]) => void;
+  onSendNewMessage?: (text: string, participants: string[]) => void;
 }
 
 // Format time for message bubbles
@@ -122,24 +127,170 @@ export function ConversationView({
   currentAccountEmail,
   onSendMessage,
   onBack,
+  isComposing,
+  composeParticipants = [],
+  onComposeParticipantsConfirm,
+  onSendNewMessage,
 }: ConversationViewProps) {
   const [inputValue, setInputValue] = useState("");
+  const [toInputValue, setToInputValue] = useState("");
+  const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const toInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Focus management for compose mode
+  useEffect(() => {
+    if (isComposing && !participantsConfirmed && composeParticipants.length === 0) {
+      // Focus on to input when starting compose
+      setTimeout(() => toInputRef.current?.focus(), 50);
+      setToInputValue("");
+      setInputValue("");
+      setParticipantsConfirmed(false);
+    } else if (isComposing && (participantsConfirmed || composeParticipants.length > 0)) {
+      // Focus on message input when participants confirmed
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [isComposing, participantsConfirmed, composeParticipants.length]);
+
+  // Reset compose state when exiting compose mode
+  useEffect(() => {
+    if (!isComposing) {
+      setToInputValue("");
+      setParticipantsConfirmed(false);
+    }
+  }, [isComposing]);
+
+  // Handle Enter key in To field
+  const handleToKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const participants = toInputValue
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      if (participants.length > 0 && onComposeParticipantsConfirm) {
+        setParticipantsConfirmed(true);
+        onComposeParticipantsConfirm(participants);
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputValue.trim()) {
-      onSendMessage(inputValue.trim());
-      setInputValue("");
+      // Check if we're in compose mode with no existing conversation
+      if (isComposing && !conversation && composeParticipants.length > 0 && onSendNewMessage) {
+        onSendNewMessage(inputValue.trim(), composeParticipants);
+        setInputValue("");
+        setParticipantsConfirmed(false);
+      } else if (conversation) {
+        onSendMessage(inputValue.trim());
+        setInputValue("");
+      }
       inputRef.current?.focus();
     }
   };
+
+  // Compose mode - show compose UI
+  if (isComposing && !conversation) {
+    const hasParticipants = composeParticipants.length > 0 || participantsConfirmed;
+
+    return (
+      <div className="conversation-view">
+        {/* Compose Header */}
+        <div className="conversation-header compose-header-mode">
+          {onBack && (
+            <button className="back-button" onClick={onBack}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
+          {!hasParticipants ? (
+            <div className="compose-to-field">
+              <span className="compose-to-label">To:</span>
+              <input
+                ref={toInputRef}
+                type="text"
+                className="compose-to-input"
+                placeholder="Enter email addresses (comma-separated)"
+                value={toInputValue}
+                onChange={(e) => setToInputValue(e.target.value)}
+                onKeyDown={handleToKeyDown}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="header-avatar-group">
+                {composeParticipants.slice(0, 2).map((participant, index) => (
+                  <Avatar
+                    key={index}
+                    email={extractEmail(participant)}
+                    name={participant}
+                    size={40}
+                    className={`header-avatar ${composeParticipants.length > 1 ? `header-avatar-stacked header-avatar-pos-${index}` : ''}`}
+                  />
+                ))}
+              </div>
+              <div className="header-info">
+                <h2 className="header-name">{composeParticipants.join(", ")}</h2>
+                <span className="header-status">New conversation</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Empty Messages Area */}
+        <div className="conversation-messages">
+          <div className="messages-empty compose-empty">
+            {!hasParticipants ? (
+              <p>Enter recipients and press Enter to start a new conversation</p>
+            ) : (
+              <p>Start your conversation</p>
+            )}
+          </div>
+        </div>
+
+        {/* Input - only show when participants are confirmed */}
+        {hasParticipants && (
+          <form className="conversation-input" onSubmit={handleSubmit}>
+            <button type="button" className="input-action-btn" title="Add attachment">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+
+            <div className="input-wrapper">
+              <input
+                ref={inputRef}
+                type="text"
+                className="message-input"
+                placeholder="Type your message (first line becomes subject)"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+              />
+              <button type="button" className="emoji-btn" title="Emoji">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                  <line x1="9" y1="9" x2="9.01" y2="9" />
+                  <line x1="15" y1="9" x2="15.01" y2="9" />
+                </svg>
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    );
+  }
 
   // Empty state - no conversation selected
   if (!conversation) {
