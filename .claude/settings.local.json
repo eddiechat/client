@@ -35,7 +35,8 @@
       "Bash(npx tsc:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npm search:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(cargo build:*)"
     ]
   }
 }
