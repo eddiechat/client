@@ -48,4 +48,4 @@ fabric.properties
 ## Others
 .metadata/
 
-dist/
+dist
