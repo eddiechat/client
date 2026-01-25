@@ -12,7 +12,7 @@ use crate::sync::db::{CachedMessage, MessageClassification, SyncDatabase};
 use crate::types::error::HimalayaError;
 
 /// Message classification categories
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Classification {
     /// Human-to-human chat message
     Chat,

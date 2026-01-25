@@ -8,12 +8,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
-use tracing::info;
 
 use crate::config;
 use crate::sync::action_queue::ActionType;
 use crate::sync::db::{CachedConversation, CachedMessage};
-use crate::sync::engine::{SyncConfig, SyncEngine, SyncEvent, SyncState, SyncStatus};
+use crate::sync::engine::{SyncConfig, SyncEngine, SyncState, SyncStatus};
 use crate::types::error::HimalayaError;
 
 /// Sync engine manager state

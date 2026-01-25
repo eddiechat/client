@@ -20,13 +20,13 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::sync::action_queue::{ActionQueue, ActionType, QueuedAction, ReplayResult};
-use crate::sync::capability::{CapabilityDetector, CapabilityInfo, ServerCapability};
+use crate::sync::capability::{CapabilityInfo, ServerCapability};
 use crate::sync::classifier::MessageClassifier;
 use crate::sync::conversation::ConversationGrouper;
 use crate::sync::db::{
     CachedConversation, CachedMessage, FolderSyncState, SyncDatabase, SyncProgress,
 };
-use crate::sync::idle::{ChangeNotification, IdleConfig, IdleMonitor, PollMonitor, QuickCheckState};
+use crate::sync::idle::{IdleConfig, QuickCheckState};
 use crate::types::error::HimalayaError;
 
 /// Sync engine configuration
@@ -356,7 +356,7 @@ impl SyncEngine {
     }
 
     /// Handle UIDVALIDITY change
-    pub async fn handle_uidvalidity_change(&self, folder: &str, new_uidvalidity: u32) -> Result<(), HimalayaError> {
+    pub async fn handle_uidvalidity_change(&self, folder: &str, _new_uidvalidity: u32) -> Result<(), HimalayaError> {
         warn!("UIDVALIDITY changed for {}, invalidating cache", folder);
 
         // Purge entire folder cache
@@ -512,8 +512,8 @@ impl SyncEngine {
     /// Fetch new messages (UID > last_seen_uid)
     async fn fetch_new_messages(
         &self,
-        folder: &str,
-        last_seen_uid: Option<u32>,
+        _folder: &str,
+        _last_seen_uid: Option<u32>,
     ) -> Result<Vec<CachedMessage>, HimalayaError> {
         // This is a placeholder - actual implementation would:
         // 1. UID FETCH <last_seen_uid+1>:* (ENVELOPE FLAGS BODYSTRUCTURE)
@@ -527,8 +527,8 @@ impl SyncEngine {
     /// Fetch flag changes using CHANGEDSINCE
     async fn fetch_flag_changes(
         &self,
-        folder: &str,
-        since_modseq: u64,
+        _folder: &str,
+        _since_modseq: u64,
     ) -> Result<Vec<i64>, HimalayaError> {
         // This is a placeholder - actual implementation would:
         // 1. UID FETCH 1:* (FLAGS) (CHANGEDSINCE <modseq>)
@@ -539,7 +539,7 @@ impl SyncEngine {
     }
 
     /// Full flag comparison against cache
-    async fn full_flag_comparison(&self, folder: &str) -> Result<Vec<i64>, HimalayaError> {
+    async fn full_flag_comparison(&self, _folder: &str) -> Result<Vec<i64>, HimalayaError> {
         // This is a placeholder - actual implementation would:
         // 1. UID FETCH 1:* FLAGS
         // 2. Compare with cached flags
@@ -553,7 +553,7 @@ impl SyncEngine {
     async fn detect_deletions(
         &self,
         folder: &str,
-        last_seen_uid: Option<u32>,
+        _last_seen_uid: Option<u32>,
     ) -> Result<Vec<u32>, HimalayaError> {
         // Get cached UIDs
         let cached_uids = self.db.get_folder_uids(&self.account_id, folder)?;
@@ -575,7 +575,7 @@ impl SyncEngine {
     async fn update_sync_state(
         &self,
         folder: &str,
-        result: &InternalSyncResult,
+        _result: &InternalSyncResult,
     ) -> Result<(), HimalayaError> {
         let mut state = self.db.get_folder_sync_state(&self.account_id, folder)?
             .unwrap_or(FolderSyncState {
@@ -669,8 +669,8 @@ impl SyncEngine {
     /// Sync messages since a date
     async fn sync_messages_since(
         &self,
-        folder: &str,
-        since: DateTime<Utc>,
+        _folder: &str,
+        _since: DateTime<Utc>,
     ) -> Result<u32, HimalayaError> {
         // Placeholder - actual implementation would:
         // 1. SEARCH SINCE <date>
