@@ -276,18 +276,13 @@ export function ConversationView({
   }
 
   const conversationName = getConversationName(conversation);
+  const nameParts = getConversationNameParts(conversation);
   const primaryEmail = getPrimaryEmail(conversation);
 
   // Use same logic as sidebar: color/initials based on other participants (not user)
-  const userFirstName = conversation.user_name.replace(/<[^>]+>/g, "").trim().split(/\s+/)[0].toLowerCase();
-  const otherParticipantNames = conversation.participant_names
-    .map(name => name.replace(/<[^>]+>/g, "").trim().split(/\s+/)[0])
-    .filter(name => name.toLowerCase() !== userFirstName)
-    .join(", ");
-  const displayForAvatar = otherParticipantNames || conversationName;
-
-  const avatarColor = getAvatarColor(displayForAvatar);
-  const initials = getInitials(displayForAvatar);
+  const otherPartsName = nameParts.filter(p => !p.isUser).map(p => p.name).join(", ") || conversationName;
+  const avatarColor = getAvatarColor(otherPartsName);
+  const initials = getInitials(otherPartsName);
   const headerTooltip = getHeaderAvatarTooltip(conversation);
   const headerGravatarUrl = primaryEmail ? getGravatarUrl(primaryEmail, 40) : null;
 
