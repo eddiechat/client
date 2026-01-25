@@ -77,26 +77,22 @@ export function getFirstName(name: string): string {
   return cleanName.split(/\s+/)[0];
 }
 
-// Get display name parts for conversation (first names, with user marked)
+// Get display name parts for conversation (first names, excluding user)
 export function getConversationNameParts(conversation: Conversation): { name: string; isUser: boolean }[] {
   if (conversation.participant_names.length === 0) {
     return [{ name: "Unknown", isUser: false }];
   }
 
-  const userFirstName = getFirstName(conversation.user_name).toLowerCase();
   const parts: { name: string; isUser: boolean }[] = [];
 
   if (conversation.user_in_conversation && conversation.participant_names.length > 1) {
-    // User is in the conversation - add them first (faded), then others
-    parts.push({ name: userFirstName, isUser: true });
-
-    // Add other participants (skip index 0 which is the user)
-    for (let i = 1; i < conversation.participant_names.length && parts.length < 3; i++) {
+    // User is in the conversation - only show other participants (skip index 0 which is the user)
+    for (let i = 1; i < conversation.participant_names.length && parts.length < 2; i++) {
       const firstName = getFirstName(conversation.participant_names[i]);
       parts.push({ name: firstName, isUser: false });
     }
 
-    // Handle more than 3 participants
+    // Handle more than 3 participants (user + 2 others shown + remaining)
     if (conversation.participant_names.length > 3) {
       const remaining = conversation.participant_names.length - 3;
       parts.push({ name: `+${remaining}`, isUser: false });
