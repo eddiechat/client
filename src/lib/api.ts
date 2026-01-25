@@ -7,38 +7,16 @@ import type {
   Message,
 } from "../types";
 
-// Config commands
-export async function initConfig(): Promise<void> {
-  return invoke("init_config");
-}
-
-export async function initConfigFromPaths(paths: string[]): Promise<void> {
-  return invoke("init_config_from_paths", { paths });
-}
-
-export async function isConfigInitialized(): Promise<boolean> {
-  return invoke("is_config_initialized");
-}
-
-export async function getConfigPaths(): Promise<string[]> {
-  return invoke("get_config_paths");
-}
-
 export async function saveAccount(request: SaveAccountRequest): Promise<void> {
   return invoke("save_account", { request });
 }
 
-// Account commands
 export async function listAccounts(): Promise<Account[]> {
   return invoke("list_accounts");
 }
 
 export async function getDefaultAccount(): Promise<string | null> {
   return invoke("get_default_account");
-}
-
-export async function accountExists(name: string): Promise<boolean> {
-  return invoke("account_exists", { name });
 }
 
 export async function removeAccount(name: string): Promise<void> {

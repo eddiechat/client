@@ -31,9 +31,6 @@ use crate::types::{Attachment, Envelope, Folder, Message};
 
 /// Backend service for email operations
 pub struct EmailBackend {
-    /// Account name
-    #[allow(dead_code)]
-    account_name: String,
     /// Account configuration from our config
     account_config: AccountConfig,
     /// email-lib account configuration
@@ -49,18 +46,16 @@ impl EmailBackend {
             .ok_or_else(|| HimalayaError::AccountNotFound(account_name.to_string()))?;
 
         let account_config = account_config.clone();
-        let account_name = name.to_string();
 
         // Build email-lib account config
         let email_account_config = Arc::new(EmailAccountConfig {
-            name: account_name.clone(),
+            name: name.to_string(),
             email: account_config.email.clone(),
             display_name: account_config.display_name.clone(),
             ..Default::default()
         });
 
         Ok(Self {
-            account_name,
             account_config,
             email_account_config,
         })

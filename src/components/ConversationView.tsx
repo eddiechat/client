@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import type { Conversation, Message } from "../types";
-import md5 from "md5";
+import {
+  getAvatarColor,
+  getInitials,
+  extractEmail,
+  getGravatarUrl,
+  getConversationNameParts,
+} from "../lib/utils";
 
 interface ConversationViewProps {
   conversation: Conversation | null;
@@ -10,62 +16,6 @@ interface ConversationViewProps {
   currentAccountEmail?: string;
   onSendMessage: (text: string) => void;
   onBack?: () => void;
-}
-
-// Generate a consistent color from a string
-function getAvatarColor(name: string): string {
-  const colors = [
-    "#e91e63",
-    "#9c27b0",
-    "#673ab7",
-    "#3f51b5",
-    "#2196f3",
-    "#03a9f4",
-    "#00bcd4",
-    "#009688",
-    "#4caf50",
-    "#8bc34a",
-    "#ff9800",
-    "#ff5722",
-  ];
-
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-}
-
-// Get initials from a name
-function getInitials(name: string): string {
-  const cleanName = name.replace(/<[^>]+>/g, "").trim();
-  if (!cleanName) return "?";
-
-  if (cleanName.includes("@")) {
-    return cleanName.split("@")[0].charAt(0).toUpperCase();
-  }
-
-  const parts = cleanName.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
-  }
-
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
-// Extract email from a participant string (handles both "Name <email>" and "email" formats)
-function extractEmail(participant: string): string {
-  const match = participant.match(/<([^>]+)>/);
-  if (match) {
-    return match[1].trim().toLowerCase();
-  }
-  return participant.trim().toLowerCase();
-}
-
-// Generate Gravatar URL from email
-function getGravatarUrl(email: string, size: number = 40): string {
-  const hash = md5(email.trim().toLowerCase());
-  return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
 }
 
 // Format time for message bubbles
@@ -120,19 +70,6 @@ function getSenderName(from: string): string {
   return cleanName;
 }
 
-// Extract first name from a full name
-function getFirstName(name: string): string {
-  // Remove any email parts first
-  const cleanName = name.replace(/<[^>]+>/g, "").trim();
-  if (!cleanName || cleanName.includes("@")) {
-    // It's an email address, use username part
-    const email = cleanName || name;
-    return email.split("@")[0];
-  }
-  // Return the first word (first name)
-  return cleanName.split(/\s+/)[0];
-}
-
 // Get tooltip text for avatar (name and email)
 function getAvatarTooltip(from: string): string {
   const name = getSenderName(from);
@@ -156,47 +93,6 @@ function isOutgoing(message: Message, currentAccountEmail?: string): boolean {
     fromEmail.includes(accountEmail) ||
     accountEmail.includes(fromEmail.replace(/<|>/g, "").split("@")[0])
   );
-}
-
-// Get display name parts for conversation (first names, with user marked)
-function getConversationNameParts(conversation: Conversation): { name: string; isUser: boolean }[] {
-  if (conversation.participant_names.length === 0) {
-    return [{ name: "Unknown", isUser: false }];
-  }
-
-  const userFirstName = getFirstName(conversation.user_name).toLowerCase();
-  const parts: { name: string; isUser: boolean }[] = [];
-
-  if (conversation.user_in_conversation && conversation.participant_names.length > 1) {
-    // User is in the conversation - add them first (faded), then others
-    parts.push({ name: userFirstName, isUser: true });
-
-    // Add other participants (skip index 0 which is the user)
-    for (let i = 1; i < conversation.participant_names.length && parts.length < 3; i++) {
-      const firstName = getFirstName(conversation.participant_names[i]);
-      parts.push({ name: firstName, isUser: false });
-    }
-
-    // Handle more than 3 participants
-    if (conversation.participant_names.length > 3) {
-      const remaining = conversation.participant_names.length - 3;
-      parts.push({ name: `+${remaining}`, isUser: false });
-    }
-  } else {
-    // User is not in this conversation - just show the participants
-    for (let i = 0; i < conversation.participant_names.length && parts.length < 2; i++) {
-      const firstName = getFirstName(conversation.participant_names[i]);
-      parts.push({ name: firstName, isUser: false });
-    }
-
-    // Handle more than 2 participants
-    if (conversation.participant_names.length > 2) {
-      const remaining = conversation.participant_names.length - 2;
-      parts.push({ name: `+${remaining}`, isUser: false });
-    }
-  }
-
-  return parts;
 }
 
 // Get conversation display name (first names, comma-separated)

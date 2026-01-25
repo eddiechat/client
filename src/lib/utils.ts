@@ -1,0 +1,117 @@
+import md5 from "md5";
+import type { Conversation } from "../types";
+
+// Generate a consistent color from a string (name/email)
+export function getAvatarColor(name: string): string {
+  const colors = [
+    "#e91e63", // pink
+    "#9c27b0", // purple
+    "#673ab7", // deep purple
+    "#3f51b5", // indigo
+    "#2196f3", // blue
+    "#03a9f4", // light blue
+    "#00bcd4", // cyan
+    "#009688", // teal
+    "#4caf50", // green
+    "#8bc34a", // light green
+    "#ff9800", // orange
+    "#ff5722", // deep orange
+  ];
+
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+// Get initials from a name or email
+export function getInitials(name: string): string {
+  // Clean up the name (remove email parts if present)
+  const cleanName = name.replace(/<[^>]+>/g, "").trim();
+
+  if (!cleanName) return "?";
+
+  // If it's an email address, use first letter of username
+  if (cleanName.includes("@")) {
+    return cleanName.split("@")[0].charAt(0).toUpperCase();
+  }
+
+  // Get initials from name parts
+  const parts = cleanName.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase();
+  }
+
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+// Extract email from a participant string (handles both "Name <email>" and "email" formats)
+export function extractEmail(participant: string): string {
+  const match = participant.match(/<([^>]+)>/);
+  if (match) {
+    return match[1].trim().toLowerCase();
+  }
+  return participant.trim().toLowerCase();
+}
+
+// Generate Gravatar URL from email
+export function getGravatarUrl(email: string, size: number = 40): string {
+  const hash = md5(email.trim().toLowerCase());
+  // Use 404 as default to get a 404 if no gravatar exists (we'll handle fallback)
+  return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
+}
+
+// Extract first name from a full name
+export function getFirstName(name: string): string {
+  // Remove any email parts first
+  const cleanName = name.replace(/<[^>]+>/g, "").trim();
+  if (!cleanName || cleanName.includes("@")) {
+    // It's an email address, use username part
+    const email = cleanName || name;
+    return email.split("@")[0];
+  }
+  // Return the first word (first name)
+  return cleanName.split(/\s+/)[0];
+}
+
+// Get display name parts for conversation (first names, with user marked)
+export function getConversationNameParts(conversation: Conversation): { name: string; isUser: boolean }[] {
+  if (conversation.participant_names.length === 0) {
+    return [{ name: "Unknown", isUser: false }];
+  }
+
+  const userFirstName = getFirstName(conversation.user_name).toLowerCase();
+  const parts: { name: string; isUser: boolean }[] = [];
+
+  if (conversation.user_in_conversation && conversation.participant_names.length > 1) {
+    // User is in the conversation - add them first (faded), then others
+    parts.push({ name: userFirstName, isUser: true });
+
+    // Add other participants (skip index 0 which is the user)
+    for (let i = 1; i < conversation.participant_names.length && parts.length < 3; i++) {
+      const firstName = getFirstName(conversation.participant_names[i]);
+      parts.push({ name: firstName, isUser: false });
+    }
+
+    // Handle more than 3 participants
+    if (conversation.participant_names.length > 3) {
+      const remaining = conversation.participant_names.length - 3;
+      parts.push({ name: `+${remaining}`, isUser: false });
+    }
+  } else {
+    // User is not in this conversation - just show the participants
+    for (let i = 0; i < conversation.participant_names.length && parts.length < 2; i++) {
+      const firstName = getFirstName(conversation.participant_names[i]);
+      parts.push({ name: firstName, isUser: false });
+    }
+
+    // Handle more than 2 participants
+    if (conversation.participant_names.length > 2) {
+      const remaining = conversation.participant_names.length - 2;
+      parts.push({ name: `+${remaining}`, isUser: false });
+    }
+  }
+
+  return parts;
+}

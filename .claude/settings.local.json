@@ -31,7 +31,8 @@
       "Bash(bun run build:*)",
       "Bash(bun tauri dev:*)",
       "Bash(npm install:*)",
-      "Bash(npm run check:*)"
+      "Bash(npm run check:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

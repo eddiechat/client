@@ -52,10 +52,8 @@ export interface ComposeMessageData {
   from?: string;
   to: string[];
   cc?: string[];
-  bcc?: string[];
   subject: string;
   body: string;
-  reply_to?: string;
   in_reply_to?: string;
 }
 
