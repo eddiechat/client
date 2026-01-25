@@ -1,4 +1,6 @@
 import md5 from "md5";
+// @ts-expect-error - no types available for browser version
+import EmailReplyParser from "email-reply-parser-browser";
 import type { Conversation } from "../types";
 
 // Generate a consistent color from a string (name/email)
@@ -114,4 +116,14 @@ export function getConversationNameParts(conversation: Conversation): { name: st
   }
 
   return parts;
+}
+
+// Parse email content to extract the visible reply (removes quoted text, signatures, etc.)
+export function parseEmailContent(emailBody: string | undefined | null): string {
+  if (!emailBody) return "";
+
+  const parser = new EmailReplyParser().read(emailBody);
+  const visibleText = parser.getVisibleText();
+
+  return visibleText.trim();
 }

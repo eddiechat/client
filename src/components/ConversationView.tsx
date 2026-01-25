@@ -6,6 +6,7 @@ import {
   extractEmail,
   getGravatarUrl,
   getConversationNameParts,
+  parseEmailContent,
 } from "../lib/utils";
 
 interface ConversationViewProps {
@@ -364,7 +365,7 @@ export function ConversationView({
 
                       <div className={`message-bubble ${isOut ? "sent" : "received"}`}>
                         <div className="message-text">
-                          {message.text_body || message.envelope.subject || "(No content)"}
+                          {parseEmailContent(message.text_body) || message.envelope.subject || "(No content)"}
                         </div>
                         <span className="message-time">
                           {formatMessageTime(message.envelope.date)}

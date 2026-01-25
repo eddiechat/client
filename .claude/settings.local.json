@@ -33,7 +33,9 @@
       "Bash(npm install:*)",
       "Bash(npm run check:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm run typecheck:*)"
+      "Bash(npm run typecheck:*)",
+      "Bash(npm search:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }
