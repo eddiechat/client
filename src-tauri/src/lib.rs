@@ -57,6 +57,9 @@ pub fn run() {
             commands::mark_as_read,
             commands::mark_as_unread,
             commands::toggle_flagged,
+            // Conversation commands
+            commands::list_conversations,
+            commands::get_conversation_messages,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

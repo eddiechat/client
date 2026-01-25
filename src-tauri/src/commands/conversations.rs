@@ -1,0 +1,268 @@
+use std::collections::HashMap;
+use chrono::{Duration, Utc};
+use tracing::info;
+
+use crate::backend;
+use crate::types::conversation::{Conversation, normalize_email, extract_name};
+use crate::types::Envelope;
+
+/// Envelope with its source folder for proper message ID tracking
+struct EnvelopeWithFolder {
+    envelope: Envelope,
+    folder: String,
+}
+
+impl EnvelopeWithFolder {
+    /// Create a folder-qualified message ID in the format "folder:id"
+    fn qualified_id(&self) -> String {
+        format!("{}:{}", self.folder, self.envelope.id)
+    }
+}
+
+fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> Vec<Conversation> {
+    let user_email_normalized = normalize_email(user_email);
+    let mut conv_map: HashMap<String, Conversation> = HashMap::new();
+
+    // Extract user name from their email (will be refined when we see an outgoing message)
+    let user_name_from_email = user_email.split('@').next().unwrap_or("me").to_string();
+    let mut user_display_name = user_name_from_email.clone();
+
+    for env_with_folder in envelopes {
+        let envelope = &env_with_folder.envelope;
+        let qualified_id = env_with_folder.qualified_id();
+
+        let from_email = normalize_email(&envelope.from);
+        let from_name = extract_name(&envelope.from);
+
+        // If this is from the user, capture their display name
+        if from_email == user_email_normalized && !from_name.contains('@') {
+            user_display_name = from_name.clone();
+        }
+
+        // Check if user is actually part of this conversation
+        let user_is_sender = from_email == user_email_normalized;
+        let user_is_recipient = envelope.to.iter().any(|to| normalize_email(to) == user_email_normalized);
+        let user_in_conversation = user_is_sender || user_is_recipient;
+
+        // Collect all participants (from + to), excluding user's own email
+        let mut other_participants: Vec<String> = vec![];
+        let mut other_names: Vec<String> = vec![];
+
+        // Add sender if not user
+        if from_email != user_email_normalized {
+            other_participants.push(from_email.clone());
+            other_names.push(from_name.clone());
+        }
+
+        // Add recipients if not user
+        for to in envelope.to.iter() {
+            let to_email = normalize_email(to);
+            let to_name = extract_name(to);
+            if to_email != user_email_normalized && !other_participants.contains(&to_email) {
+                other_participants.push(to_email);
+                other_names.push(to_name);
+            }
+        }
+
+        // Build full participant list: only include user if they're actually part of the conversation
+        let mut participants: Vec<String> = vec![];
+        let mut participant_names: Vec<String> = vec![];
+
+        if user_in_conversation {
+            participants.push(user_email_normalized.clone());
+            participant_names.push(user_display_name.clone());
+        }
+        participants.extend(other_participants.clone());
+        participant_names.extend(other_names.clone());
+
+        // Key is based on other participants only (for grouping conversations)
+        let key = if other_participants.is_empty() {
+            // Self-email case
+            Conversation::participants_key(&[user_email_normalized.clone()])
+        } else {
+            Conversation::participants_key(&other_participants)
+        };
+        let is_outgoing = normalize_email(&envelope.from) == user_email_normalized;
+        let is_unread = !envelope.flags.iter().any(|f| f.to_lowercase() == "seen");
+
+        if let Some(conv) = conv_map.get_mut(&key) {
+            // Update existing conversation with folder-qualified ID
+            conv.message_ids.push(qualified_id);
+            if is_unread {
+                conv.unread_count += 1;
+            }
+            // Update last message if newer
+            if envelope.date > conv.last_message_date {
+                conv.last_message_date = envelope.date.clone();
+                conv.last_message_preview = envelope.subject.clone();
+                conv.last_message_from = if is_outgoing { "You".to_string() } else { extract_name(&envelope.from) };
+                conv.is_outgoing = is_outgoing;
+            }
+        } else {
+            // Create new conversation with folder-qualified ID
+            conv_map.insert(key.clone(), Conversation {
+                id: key,
+                participants: participants.clone(),
+                participant_names,
+                last_message_date: envelope.date.clone(),
+                last_message_preview: envelope.subject.clone(),
+                last_message_from: if is_outgoing { "You".to_string() } else { extract_name(&envelope.from) },
+                unread_count: if is_unread { 1 } else { 0 },
+                message_ids: vec![qualified_id],
+                is_outgoing,
+                user_name: user_display_name.clone(),
+                user_in_conversation,
+            });
+        }
+    }
+
+    // Update user_name in all conversations now that we have the final display name
+    for conv in conv_map.values_mut() {
+        conv.user_name = user_display_name.clone();
+        // Only update the first participant name if user is actually in the conversation
+        if conv.user_in_conversation && !conv.participant_names.is_empty() {
+            conv.participant_names[0] = user_display_name.clone();
+        }
+    }
+
+    // Sort by last message date descending
+    let mut conversations: Vec<Conversation> = conv_map.into_values().collect();
+    conversations.sort_by(|a, b| b.last_message_date.cmp(&a.last_message_date));
+    conversations
+}
+
+#[tauri::command]
+pub async fn list_conversations(
+    account: Option<String>,
+) -> Result<Vec<Conversation>, String> {
+    info!("Tauri command: list_conversations - account: {:?}", account);
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let user_email = backend.get_email();
+
+    // Get list of folders to find the sent folder dynamically
+    let folders = backend.list_folders().await.unwrap_or_default();
+    let mut folders_to_fetch = vec!["INBOX".to_string()];
+
+    // Find sent folder by checking folder names (case-insensitive)
+    for folder in &folders {
+        let name_lower = folder.name.to_lowercase();
+        if name_lower.contains("sent") || name_lower.contains("envoy") || name_lower.contains("gesendet") {
+            info!("Found sent folder: {}", folder.name);
+            folders_to_fetch.push(folder.name.clone());
+        }
+    }
+
+    info!("Will fetch from folders: {:?}", folders_to_fetch);
+
+    // Fetch emails from last year from all folders
+    let one_year_ago = Utc::now() - Duration::days(365);
+    let mut all_envelopes: Vec<EnvelopeWithFolder> = Vec::new();
+
+    for folder in &folders_to_fetch {
+        match backend.list_envelopes(Some(folder), 0, 1000).await {
+            Ok(envelopes) => {
+                info!("Fetched {} envelopes from {}", envelopes.len(), folder);
+                // Filter by date and wrap with folder info
+                let recent: Vec<EnvelopeWithFolder> = envelopes
+                    .into_iter()
+                    .filter(|e| {
+                        if let Ok(date) = chrono::DateTime::parse_from_rfc3339(&e.date) {
+                            date > one_year_ago
+                        } else {
+                            true // Include if date parsing fails
+                        }
+                    })
+                    .map(|envelope| EnvelopeWithFolder {
+                        envelope,
+                        folder: folder.clone(),
+                    })
+                    .collect();
+                all_envelopes.extend(recent);
+            }
+            Err(e) => {
+                info!("Could not fetch from folder {}: {}", folder, e);
+            }
+        }
+    }
+
+    info!("Fetched {} envelopes total", all_envelopes.len());
+
+    // Build conversations with folder-qualified message IDs
+    let conversations = build_conversations(all_envelopes, &user_email);
+
+    Ok(conversations)
+}
+
+/// Parse a folder-qualified message ID in the format "folder:id"
+/// Returns (folder, id) tuple, or None if parsing fails
+fn parse_qualified_id(qualified_id: &str) -> Option<(String, String)> {
+    // Find the last colon to handle folder names that might contain colons
+    // But IMAP folder names typically don't contain colons, so we use the first colon
+    if let Some(colon_pos) = qualified_id.find(':') {
+        let folder = &qualified_id[..colon_pos];
+        let id = &qualified_id[colon_pos + 1..];
+        if !folder.is_empty() && !id.is_empty() {
+            return Some((folder.to_string(), id.to_string()));
+        }
+    }
+    None
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub async fn get_conversation_messages(
+    account: Option<String>,
+    messageIds: Vec<String>,
+) -> Result<Vec<crate::types::Message>, String> {
+    info!("Tauri command: get_conversation_messages - {} messages", messageIds.len());
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut messages = Vec::new();
+
+    // Fetch each message using the folder-qualified ID
+    for qualified_id in &messageIds {
+        if let Some((folder, msg_id)) = parse_qualified_id(qualified_id) {
+            // Use the exact folder from the qualified ID
+            match backend.get_message(Some(&folder), &msg_id, true).await {
+                Ok(msg) => {
+                    messages.push(msg);
+                }
+                Err(e) => {
+                    info!("Could not fetch message {} from folder {}: {}", msg_id, folder, e);
+                }
+            }
+        } else {
+            // Fallback for legacy unqualified IDs: try common folders
+            info!("Warning: unqualified message ID '{}', trying fallback folders", qualified_id);
+            let folders = backend.list_folders().await.unwrap_or_default();
+            let mut folders_to_try = vec!["INBOX".to_string()];
+            for folder in &folders {
+                let name_lower = folder.name.to_lowercase();
+                if name_lower.contains("sent") || name_lower.contains("envoy") || name_lower.contains("gesendet") {
+                    folders_to_try.push(folder.name.clone());
+                }
+            }
+            for folder in &folders_to_try {
+                match backend.get_message(Some(folder), qualified_id, true).await {
+                    Ok(msg) => {
+                        messages.push(msg);
+                        break;
+                    }
+                    Err(_) => continue,
+                }
+            }
+        }
+    }
+
+    // Sort messages by date ascending (oldest first)
+    messages.sort_by(|a, b| a.envelope.date.cmp(&b.envelope.date));
+
+    Ok(messages)
+}

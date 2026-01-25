@@ -110,6 +110,32 @@ export interface SaveAccountRequest {
   password: string;
 }
 
+// Conversation type for Signal-like messaging UI
+export interface Conversation {
+  id: string;
+  participants: string[];
+  participant_names: string[];
+  last_message_date: string;
+  last_message_preview: string;
+  last_message_from: string;
+  unread_count: number;
+  message_ids: string[];
+  is_outgoing: boolean;
+  user_name: string;
+  user_in_conversation: boolean;
+}
+
+// Request/response types for conversations
+export interface ListConversationsRequest {
+  account?: string;
+  force_refresh?: boolean;
+}
+
+export interface ConversationMessagesRequest {
+  account?: string;
+  conversation_id: string;
+}
+
 // Common flag names
 export const FLAGS = {
   SEEN: 'seen',

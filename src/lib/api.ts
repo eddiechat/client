@@ -10,6 +10,7 @@ import type {
   ReadMessageRequest,
   FlagRequest,
   SaveAccountRequest,
+  Conversation,
 } from "../types";
 
 // Config commands
@@ -200,4 +201,17 @@ export async function toggleFlagged(
     id,
     is_flagged: isFlagged,
   });
+}
+
+// Conversation commands (for Signal-like messaging UI)
+export async function listConversations(account?: string): Promise<Conversation[]> {
+  return invoke("list_conversations", { account });
+}
+
+export async function getConversationMessages(
+  messageIds: string[],
+  account?: string
+): Promise<Message[]> {
+  if (messageIds.length === 0) return [];
+  return invoke("get_conversation_messages", { account, messageIds });
 }

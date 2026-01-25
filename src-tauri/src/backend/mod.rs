@@ -66,6 +66,11 @@ impl EmailBackend {
         })
     }
 
+    /// Get the email address for this account
+    pub fn get_email(&self) -> String {
+        self.account_config.email.clone()
+    }
+
     /// Create backend for default account
     pub async fn default() -> Result<Self, HimalayaError> {
         let config = config::get_config()?;
@@ -247,24 +252,32 @@ impl EmailBackend {
             .await
             .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        Ok(envelopes
+        let result: Vec<Envelope> = envelopes
             .into_iter()
-            .map(|e| Envelope {
-                id: e.id.clone(),
-                message_id: if e.message_id.is_empty() {
-                    None
-                } else {
-                    Some(e.message_id.clone())
-                },
-                in_reply_to: e.in_reply_to.clone(),
-                from: e.from.to_string(),
-                to: vec![e.to.to_string()],
-                subject: e.subject.clone(),
-                date: e.date.to_rfc3339(),
-                flags: e.flags.iter().map(|f| f.to_string()).collect(),
-                has_attachment: e.has_attachment,
+            .map(|e| {
+                info!(
+                    "Fetched envelope: from={}, to={}, date={}, subject={}",
+                    e.from.to_string(), e.to.to_string(), e.date.to_rfc3339(), e.subject
+                );
+                Envelope {
+                    id: e.id.clone(),
+                    message_id: if e.message_id.is_empty() {
+                        None
+                    } else {
+                        Some(e.message_id.clone())
+                    },
+                    in_reply_to: e.in_reply_to.clone(),
+                    from: e.from.to_string(),
+                    to: vec![e.to.to_string()],
+                    subject: e.subject.clone(),
+                    date: e.date.to_rfc3339(),
+                    flags: e.flags.iter().map(|f| f.to_string()).collect(),
+                    has_attachment: e.has_attachment,
+                }
             })
-            .collect())
+            .collect();
+
+        Ok(result)
     }
 
     /// Get a message by ID
@@ -360,6 +373,25 @@ impl EmailBackend {
             .unwrap_or_default();
         let message_id = parsed.message_id().map(|s| s.to_string());
         let in_reply_to = parsed.in_reply_to().as_text().map(|s| s.to_string());
+
+        // Log message metadata with body preview
+        let body_preview = text_body
+            .as_ref()
+            .or(html_body.as_ref())
+            .map(|b| {
+                let trimmed = b.trim();
+                if trimmed.len() > 50 {
+                    format!("{}...", &trimmed.chars().take(50).collect::<String>())
+                } else {
+                    trimmed.to_string()
+                }
+            })
+            .unwrap_or_else(|| "<no body>".to_string());
+
+        info!(
+            "Fetched message: from={}, to={:?}, date={}, subject={}, body_preview={}",
+            from, to, date, subject, body_preview
+        );
 
         Ok(Message {
             id: id.to_string(),

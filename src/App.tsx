@@ -1,26 +1,26 @@
 import { useState, useCallback } from "react";
 import {
   AccountConfigModal,
-  AccountSelector,
+  ChatList,
   ComposeModal,
-  EnvelopeList,
-  FolderList,
-  MessageView,
+  ConversationView,
 } from "./components";
 import type { AccountEditData } from "./components";
+import { useAccounts } from "./hooks/useEmail";
 import {
-  useAccounts,
-  useFolders,
-  useEnvelopes,
-  useMessage,
-  useEmailActions,
-} from "./hooks/useEmail";
+  useConversations,
+  useConversationMessages,
+} from "./hooks/useConversations";
 import * as api from "./lib/api";
-import type { Envelope, ComposeMessageData, SaveAccountRequest } from "./types";
+import type { Conversation, ComposeMessageData, SaveAccountRequest } from "./types";
 import "./App.css";
 
 function App() {
-  const [selectedEnvelopeId, setSelectedEnvelopeId] = useState<string | null>(null);
+  // Conversation selection state
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Compose modal state
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeMode, setComposeMode] = useState<"new" | "reply" | "forward">("new");
   const [composeInitialData, setComposeInitialData] = useState<Partial<ComposeMessageData>>({});
@@ -38,94 +38,33 @@ function App() {
     refresh: refreshAccounts,
   } = useAccounts();
 
+  // Get current account email for determining message direction
+  const currentAccountEmail = currentAccount || undefined;
+
   // Show config modal when no accounts are configured
   const showConfigModal = !accountsLoading && accounts.length === 0;
 
+  // Conversations hook
   const {
-    folders,
-    currentFolder,
-    setCurrentFolder,
-    loading: foldersLoading,
-    error: foldersError,
-    refresh: refreshFolders,
-  } = useFolders(currentAccount || undefined);
+    conversations,
+    loading: conversationsLoading,
+    refresh: refreshConversations,
+  } = useConversations(currentAccount || undefined);
 
+  // Messages for selected conversation
   const {
-    envelopes,
-    loading: envelopesLoading,
-    error: envelopesError,
-    refresh: refreshEnvelopes,
-    query,
-    setQuery,
-    page,
-    setPage,
-  } = useEnvelopes(currentAccount || undefined, currentFolder);
-
-  const {
-    message,
-    loading: messageLoading,
-    error: messageError,
-  } = useMessage(selectedEnvelopeId, currentAccount || undefined, currentFolder);
-
-  const actions = useEmailActions(
-    currentAccount || undefined,
-    currentFolder,
-    refreshEnvelopes
+    messages,
+    loading: messagesLoading,
+    error: messagesError,
+  } = useConversationMessages(
+    selectedConversation?.message_ids || [],
+    currentAccount || undefined
   );
-
-  // Reset UI state
-  const resetUIState = useCallback(() => {
-    setSelectedEnvelopeId(null);
-    setQuery("");
-    setPage(1);
-  }, [setQuery, setPage]);
 
   // Handlers
-  const handleEnvelopeSelect = useCallback((envelope: Envelope) => {
-    setSelectedEnvelopeId(envelope.id);
+  const handleConversationSelect = useCallback((conversation: Conversation) => {
+    setSelectedConversation(conversation);
   }, []);
-
-  const handleCloseMessage = useCallback(() => {
-    setSelectedEnvelopeId(null);
-  }, []);
-
-  const handleToggleFlag = useCallback(
-    (id: string, isFlagged: boolean) => {
-      actions.toggleFlagged(id, isFlagged);
-    },
-    [actions]
-  );
-
-  const handleDelete = useCallback(async () => {
-    if (selectedEnvelopeId) {
-      await actions.deleteMessages([selectedEnvelopeId]);
-      setSelectedEnvelopeId(null);
-    }
-  }, [selectedEnvelopeId, actions]);
-
-  const handleReply = useCallback(() => {
-    if (message) {
-      setComposeMode("reply");
-      setComposeInitialData({
-        to: [message.envelope.from],
-        subject: `Re: ${message.envelope.subject}`,
-        body: `\n\n--- Original Message ---\n${message.text_body || ""}`,
-        in_reply_to: message.envelope.message_id,
-      });
-      setComposeOpen(true);
-    }
-  }, [message]);
-
-  const handleForward = useCallback(() => {
-    if (message) {
-      setComposeMode("forward");
-      setComposeInitialData({
-        subject: `Fwd: ${message.envelope.subject}`,
-        body: `\n\n--- Forwarded Message ---\n${message.text_body || ""}`,
-      });
-      setComposeOpen(true);
-    }
-  }, [message]);
 
   const handleCompose = useCallback(() => {
     setComposeMode("new");
@@ -134,7 +73,6 @@ function App() {
   }, []);
 
   const handleSendMessage = async (data: ComposeMessageData) => {
-    // Build RFC 822 message (simplified)
     const headers = [
       `From: ${data.from || currentAccount || "user@example.com"}`,
       `To: ${data.to.join(", ")}`,
@@ -150,6 +88,7 @@ function App() {
 
     const rawMessage = `${headers}\r\n\r\n${data.body}`;
     await api.sendMessage(rawMessage, currentAccount || undefined);
+    refreshConversations();
   };
 
   const handleSaveDraft = async (data: ComposeMessageData) => {
@@ -168,6 +107,34 @@ function App() {
     await api.saveMessage(rawMessage, "Drafts", currentAccount || undefined);
   };
 
+  const handleSendFromConversation = useCallback(
+    async (text: string) => {
+      if (!selectedConversation || !text.trim()) return;
+
+      // Get the recipient (first participant that's not the current user)
+      const recipient =
+        selectedConversation.participants.find(
+          (p) => !p.includes(currentAccount || "")
+        ) || selectedConversation.participants[0];
+
+      const subject = `Re: ${selectedConversation.last_message_preview}`;
+
+      const headers = [
+        `From: ${currentAccount || "user@example.com"}`,
+        `To: ${recipient}`,
+        `Subject: ${subject}`,
+        `Date: ${new Date().toUTCString()}`,
+        "MIME-Version: 1.0",
+        "Content-Type: text/plain; charset=utf-8",
+      ].join("\r\n");
+
+      const rawMessage = `${headers}\r\n\r\n${text}`;
+      await api.sendMessage(rawMessage, currentAccount || undefined);
+      refreshConversations();
+    },
+    [selectedConversation, currentAccount, refreshConversations]
+  );
+
   const handleEditAccount = useCallback(async () => {
     if (!currentAccount) return;
 
@@ -183,17 +150,13 @@ function App() {
 
   const handleSaveAccount = async (data: SaveAccountRequest) => {
     await api.saveAccount(data);
-    // Reset UI and refresh data
-    resetUIState();
     await refreshAccounts();
-    await refreshFolders();
-    await refreshEnvelopes();
+    refreshConversations();
   };
 
   const handleDeleteAccount = async (accountName: string) => {
     await api.removeAccount(accountName);
-    // Reset UI and refresh accounts
-    resetUIState();
+    setSelectedConversation(null);
     setCurrentAccount(null);
     await refreshAccounts();
   };
@@ -203,83 +166,55 @@ function App() {
     setAccountEditData(null);
   }, []);
 
+  const handleBack = useCallback(() => {
+    setSelectedConversation(null);
+  }, []);
+
   return (
     <main className="app">
-      <header className="app-header">
-        <h1>Himalaya</h1>
-        <AccountSelector
-          accounts={accounts}
-          currentAccount={currentAccount}
-          onAccountChange={setCurrentAccount}
-          onEditAccount={handleEditAccount}
-          loading={accountsLoading}
+      {/* Sidebar with chat list */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="sidebar-title">
+            <h1>Himalaya</h1>
+            {accounts.length > 0 && (
+              <span className="account-badge" onClick={handleEditAccount}>
+                {currentAccount || "No account"}
+              </span>
+            )}
+          </div>
+          <button className="new-message-btn" onClick={handleCompose} title="New message">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+        </div>
+
+        <ChatList
+          conversations={conversations}
+          selectedId={selectedConversation?.id || null}
+          onSelect={handleConversationSelect}
+          loading={conversationsLoading}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
-        <button className="compose-btn" onClick={handleCompose}>
-          Compose
-        </button>
-      </header>
+      </aside>
 
-      <div className="app-content">
-        <aside className="sidebar">
-          {foldersError && (
-            <div className="error-banner">{foldersError}</div>
-          )}
-          <FolderList
-            folders={folders}
-            currentFolder={currentFolder}
-            onFolderSelect={setCurrentFolder}
-            loading={foldersLoading}
-          />
-        </aside>
+      {/* Main conversation view */}
+      <section className="main-panel">
+        <ConversationView
+          conversation={selectedConversation}
+          messages={messages}
+          loading={messagesLoading}
+          error={messagesError}
+          currentAccountEmail={currentAccountEmail}
+          onSendMessage={handleSendFromConversation}
+          onBack={handleBack}
+        />
+      </section>
 
-        <section className="main-panel">
-          <div className="toolbar">
-            <input
-              type="search"
-              placeholder="Search emails..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="search-input"
-            />
-            <div className="pagination">
-              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>
-                Prev
-              </button>
-              <span>Page {page}</span>
-              <button onClick={() => setPage(page + 1)}>Next</button>
-            </div>
-          </div>
-
-          <div className="content-area">
-            {envelopesError && (
-              <div className="error-banner">{envelopesError}</div>
-            )}
-            {selectedEnvelopeId ? (
-              <MessageView
-                message={message}
-                loading={messageLoading}
-                error={messageError}
-                onClose={handleCloseMessage}
-                onDelete={handleDelete}
-                onReply={handleReply}
-                onForward={handleForward}
-                onDownloadAttachments={() =>
-                  selectedEnvelopeId && actions.downloadAttachments(selectedEnvelopeId)
-                }
-              />
-            ) : (
-              <EnvelopeList
-                envelopes={envelopes}
-                selectedId={selectedEnvelopeId}
-                onSelect={handleEnvelopeSelect}
-                onToggleFlag={handleToggleFlag}
-                loading={envelopesLoading}
-              />
-            )}
-          </div>
-        </section>
-      </div>
-
+      {/* Compose Modal */}
       <ComposeModal
         isOpen={composeOpen}
         onClose={() => setComposeOpen(false)}
@@ -289,6 +224,7 @@ function App() {
         mode={composeMode}
       />
 
+      {/* Account Config Modal */}
       <AccountConfigModal
         isOpen={showConfigModal || accountModalOpen}
         onClose={handleCloseAccountModal}

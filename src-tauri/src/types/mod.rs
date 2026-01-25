@@ -1,3 +1,4 @@
+pub mod conversation;
 pub mod error;
 
 use serde::{Deserialize, Serialize};
