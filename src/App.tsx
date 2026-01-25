@@ -176,7 +176,10 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-title">
-            <h1>eddie</h1>
+            <div className="sidebar-brand">
+              <img src="/eddie-swirl-green.svg" alt="Eddie logo" className="sidebar-logo" />
+              <h1>eddie</h1>
+            </div>
             {accounts.length > 0 && (
               <span className="account-badge" onClick={handleEditAccount}>
                 {currentAccount || "No account"}

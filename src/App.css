@@ -88,6 +88,17 @@ body {
   gap: 2px;
 }
 
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-logo {
+  width: 24px;
+  height: 24px;
+}
+
 .sidebar-title h1 {
   font-size: 20px;
   font-weight: 600;
