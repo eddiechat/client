@@ -302,9 +302,8 @@ export function ConversationView({
                   )}
 
                   <div
-                    className={`message-bubble-container ${
-                      isOut ? "outgoing" : "incoming"
-                    }`}
+                    className={`message-bubble-container ${isOut ? "outgoing" : "incoming"
+                      }`}
                   >
                     {!isOut && (
                       <div
@@ -364,13 +363,8 @@ export function ConversationView({
                       )}
 
                       <div className={`message-bubble ${isOut ? "sent" : "received"}`}>
-                        {message.envelope.subject && (
-                          <div className="message-subject">
-                            {message.envelope.subject}
-                          </div>
-                        )}
                         <div className="message-text">
-                          {message.text_body || "(No content)"}
+                          {message.text_body || message.envelope.subject || "(No content)"}
                         </div>
                         <span className="message-time">
                           {formatMessageTime(message.envelope.date)}

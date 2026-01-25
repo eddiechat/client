@@ -184,6 +184,31 @@ impl EmailBackend {
         })
     }
 
+    /// Find the Sent folder by checking common folder names
+    pub async fn find_sent_folder(&self) -> Result<Option<String>, HimalayaError> {
+        let folders = self.list_folders().await?;
+
+        for folder in &folders {
+            let name_lower = folder.name.to_lowercase();
+            // Check for common sent folder names in various languages
+            if name_lower == "sent"
+                || name_lower == "sent mail"
+                || name_lower == "sent messages"
+                || name_lower.contains("sent")
+                || name_lower.contains("envoy")      // French
+                || name_lower.contains("gesendet")   // German
+                || name_lower.contains("enviados")   // Spanish
+                || name_lower.contains("inviati")    // Italian
+            {
+                info!("Found sent folder: {}", folder.name);
+                return Ok(Some(folder.name.clone()));
+            }
+        }
+
+        info!("No sent folder found");
+        Ok(None)
+    }
+
     /// List all folders
     pub async fn list_folders(&self) -> Result<Vec<Folder>, HimalayaError> {
         let imap_config = self.build_imap_config().await?;
@@ -639,8 +664,9 @@ impl EmailBackend {
             .map_err(|e| HimalayaError::Backend(e.to_string()))
     }
 
-    /// Send a message via SMTP
-    pub async fn send_message(&self, raw_message: &[u8]) -> Result<(), HimalayaError> {
+    /// Send a message via SMTP and save to Sent folder
+    pub async fn send_message(&self, raw_message: &[u8]) -> Result<Option<String>, HimalayaError> {
+        // First, send via SMTP
         let smtp_config = self.build_smtp_config().await?;
 
         let ctx = email::smtp::SmtpContextBuilder::new(
@@ -656,7 +682,22 @@ impl EmailBackend {
         backend
             .send_message(raw_message)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        info!("Message sent via SMTP successfully");
+
+        // Now save to Sent folder via IMAP
+        let sent_folder = self.find_sent_folder().await?;
+
+        if let Some(folder) = sent_folder {
+            info!("Saving sent message to folder: {}", folder);
+            let id = self.save_message(Some(&folder), raw_message).await?;
+            info!("Message saved to Sent folder with id: {}", id);
+            Ok(Some(id))
+        } else {
+            info!("No Sent folder found, message not saved to IMAP");
+            Ok(None)
+        }
     }
 
     /// Save a message to a folder
