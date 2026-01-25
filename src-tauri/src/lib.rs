@@ -70,6 +70,7 @@ pub fn run() {
             commands::initial_sync,
             commands::get_cached_conversations,
             commands::get_cached_conversation_messages,
+            commands::fetch_message_body,
             commands::queue_sync_action,
             commands::set_sync_online,
             commands::has_pending_sync_actions,

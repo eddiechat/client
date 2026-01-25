@@ -135,6 +135,14 @@ export async function getCachedConversationMessages(
   return invoke("get_cached_conversation_messages", { account, conversationId });
 }
 
+/** Fetch message body on demand (if not already cached) */
+export async function fetchMessageBody(
+  messageId: number,
+  account?: string
+): Promise<CachedMessage> {
+  return invoke("fetch_message_body", { account, messageId });
+}
+
 /** Queue a sync action for offline support */
 export async function queueSyncAction(
   actionType: "add_flags" | "remove_flags" | "delete" | "move" | "copy",

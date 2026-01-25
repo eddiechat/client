@@ -1,6 +1,7 @@
 //! Sync engine Tauri commands
 //!
 //! Provides commands for the frontend to interact with the sync engine.
+//! The sync engine is started automatically when accounts are accessed.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -8,15 +9,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config;
 use crate::sync::action_queue::ActionType;
 use crate::sync::db::{CachedConversation, CachedMessage};
-use crate::sync::engine::{SyncConfig, SyncEngine, SyncEvent, SyncState, SyncStatus};
+use crate::sync::engine::{SyncConfig, SyncEngine, SyncState, SyncStatus};
 use crate::types::error::HimalayaError;
 
-/// Sync engine manager state
+/// Sync engine manager state - manages engines for multiple accounts
 pub struct SyncManager {
     engines: RwLock<HashMap<String, Arc<SyncEngine>>>,
     default_db_dir: PathBuf,
@@ -31,6 +32,8 @@ impl SyncManager {
 
         // Ensure directory exists
         let _ = std::fs::create_dir_all(&db_dir);
+
+        info!("Sync database directory: {:?}", db_dir);
 
         Self {
             engines: RwLock::new(HashMap::new()),
@@ -49,21 +52,29 @@ impl SyncManager {
         }
 
         // Create new engine
-        let config = config::get_config()?;
-        let (name, account) = config
+        info!("Creating sync engine for account: {}", account_id);
+
+        let app_config = config::get_config()?;
+        let (name, account) = app_config
             .get_account(Some(account_id))
             .ok_or_else(|| HimalayaError::AccountNotFound(account_id.to_string()))?;
 
         let db_path = self.default_db_dir.join(format!("{}.db", name));
+        info!("Database path: {:?}", db_path);
 
         let sync_config = SyncConfig {
             db_path,
-            ..Default::default()
+            initial_sync_days: 365,
+            max_cache_age_days: 365,
+            auto_classify: true,
+            sync_folders: vec![],
+            fetch_page_size: 1000,
         };
 
         let (engine, _event_rx) = SyncEngine::new(
             name.to_string(),
             account.email.clone(),
+            account.clone(),
             sync_config,
         )?;
 
@@ -90,6 +101,12 @@ impl SyncManager {
         if let Some(engine) = engines.remove(account_id) {
             engine.shutdown();
         }
+    }
+
+    /// Get all engine account IDs
+    pub async fn get_account_ids(&self) -> Vec<String> {
+        let engines = self.engines.read().await;
+        engines.keys().cloned().collect()
     }
 }
 
@@ -122,8 +139,6 @@ impl From<SyncStatus> for SyncStatusResponse {
                 SyncState::Connecting => "connecting".to_string(),
                 SyncState::Syncing => "syncing".to_string(),
                 SyncState::InitialSync => "initial_sync".to_string(),
-                SyncState::BackgroundSync => "background_sync".to_string(),
-                SyncState::ReplayingActions => "replaying_actions".to_string(),
                 SyncState::Error => "error".to_string(),
             },
             account_id: s.account_id,
@@ -225,15 +240,27 @@ impl From<CachedMessage> for CachedMessageResponse {
 
 // ========== Tauri Commands ==========
 
-/// Initialize sync engine for an account
+/// Initialize sync engine for an account and start syncing
 #[tauri::command]
 pub async fn init_sync_engine(
     manager: State<'_, SyncManager>,
     account: Option<String>,
 ) -> Result<SyncStatusResponse, String> {
     let account_id = get_account_id(account)?;
-    let engine = manager.get_or_create(&account_id).await
+    info!("Initializing sync engine for: {}", account_id);
+
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
         .map_err(|e| e.to_string())?;
+
+    // Start full sync in background
+    let engine_clone = engine.clone();
+    tokio::spawn(async move {
+        if let Err(e) = engine_clone.full_sync().await {
+            error!("Background sync failed: {}", e);
+        }
+    });
 
     let status = engine.status().await;
     Ok(status.into())
@@ -251,7 +278,19 @@ pub async fn get_sync_status(
         let status = engine.status().await;
         Ok(status.into())
     } else {
-        Err("Sync engine not initialized".to_string())
+        // Return idle status if not initialized
+        Ok(SyncStatusResponse {
+            state: "idle".to_string(),
+            account_id,
+            current_folder: None,
+            progress_current: None,
+            progress_total: None,
+            progress_message: None,
+            last_sync: None,
+            error: None,
+            is_online: false,
+            pending_actions: 0,
+        })
     }
 }
 
@@ -265,32 +304,39 @@ pub async fn sync_folder(
     let account_id = get_account_id(account)?;
     let folder = folder.unwrap_or_else(|| "INBOX".to_string());
 
-    let engine = manager.get_or_create(&account_id).await
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
         .map_err(|e| e.to_string())?;
 
-    engine.sync_folder(&folder).await.map_err(|e| e.to_string())?;
+    engine
+        .sync_folder(&folder)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
-/// Perform initial sync for a new account
+/// Perform full sync for an account
 #[tauri::command]
 pub async fn initial_sync(
     manager: State<'_, SyncManager>,
     account: Option<String>,
 ) -> Result<(), String> {
     let account_id = get_account_id(account)?;
+    info!("Starting initial sync for: {}", account_id);
 
-    let engine = manager.get_or_create(&account_id).await
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
         .map_err(|e| e.to_string())?;
 
-    // Sync INBOX and Sent folder
-    engine.initial_sync("INBOX").await.map_err(|e| e.to_string())?;
+    engine.full_sync().await.map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
-/// Get cached conversations
+/// Get cached conversations from SQLite
 #[tauri::command]
 pub async fn get_cached_conversations(
     manager: State<'_, SyncManager>,
@@ -300,10 +346,13 @@ pub async fn get_cached_conversations(
     let account_id = get_account_id(account)?;
     let include_hidden = include_hidden.unwrap_or(false);
 
-    let engine = manager.get_or_create(&account_id).await
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
         .map_err(|e| e.to_string())?;
 
-    let conversations = engine.get_conversations(include_hidden)
+    let conversations = engine
+        .get_conversations(include_hidden)
         .map_err(|e| e.to_string())?;
 
     Ok(conversations.into_iter().map(|c| c.into()).collect())
@@ -318,13 +367,38 @@ pub async fn get_cached_conversation_messages(
 ) -> Result<Vec<CachedMessageResponse>, String> {
     let account_id = get_account_id(account)?;
 
-    let engine = manager.get_or_create(&account_id).await
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
         .map_err(|e| e.to_string())?;
 
-    let messages = engine.get_conversation_messages(conversation_id)
+    let messages = engine
+        .get_conversation_messages(conversation_id)
         .map_err(|e| e.to_string())?;
 
     Ok(messages.into_iter().map(|m| m.into()).collect())
+}
+
+/// Fetch message body (on-demand, if not cached)
+#[tauri::command]
+pub async fn fetch_message_body(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+    message_id: i64,
+) -> Result<CachedMessageResponse, String> {
+    let account_id = get_account_id(account)?;
+
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let message = engine
+        .fetch_message_body(message_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(message.into())
 }
 
 /// Queue an action for offline support
@@ -340,7 +414,9 @@ pub async fn queue_sync_action(
 ) -> Result<i64, String> {
     let account_id = get_account_id(account)?;
 
-    let engine = manager.get_or_create(&account_id).await
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
         .map_err(|e| e.to_string())?;
 
     let action = match action_type.as_str() {
@@ -354,10 +430,7 @@ pub async fn queue_sync_action(
             uids,
             flags: flags.unwrap_or_default(),
         },
-        "delete" => ActionType::Delete {
-            folder,
-            uids,
-        },
+        "delete" => ActionType::Delete { folder, uids },
         "move" => ActionType::Move {
             source_folder: folder,
             target_folder: target_folder.ok_or("target_folder required for move")?,
@@ -385,13 +458,11 @@ pub async fn set_sync_online(
 
     if let Some(engine) = manager.get(&account_id).await {
         engine.set_online(online);
-        Ok(())
-    } else {
-        Err("Sync engine not initialized".to_string())
     }
+    Ok(())
 }
 
-/// Check if there are pending actions
+/// Check if there are pending sync actions
 #[tauri::command]
 pub async fn has_pending_sync_actions(
     manager: State<'_, SyncManager>,
@@ -399,10 +470,14 @@ pub async fn has_pending_sync_actions(
 ) -> Result<bool, String> {
     let account_id = get_account_id(account)?;
 
-    let engine = manager.get_or_create(&account_id).await
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
         .map_err(|e| e.to_string())?;
 
-    engine.action_queue().has_pending(&account_id)
+    engine
+        .action_queue()
+        .has_pending(&account_id)
         .map_err(|e| e.to_string())
 }
 
@@ -422,8 +497,8 @@ fn get_account_id(account: Option<String>) -> Result<String, String> {
     if let Some(id) = account {
         Ok(id)
     } else {
-        let config = config::get_config().map_err(|e| e.to_string())?;
-        config
+        let app_config = config::get_config().map_err(|e| e.to_string())?;
+        app_config
             .default_account_name()
             .map(|s| s.to_string())
             .ok_or_else(|| "No default account configured".to_string())

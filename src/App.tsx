@@ -57,7 +57,7 @@ function App() {
     loading: messagesLoading,
     error: messagesError,
   } = useConversationMessages(
-    selectedConversation?.message_ids || [],
+    selectedConversation,
     currentAccount || undefined
   );
 
