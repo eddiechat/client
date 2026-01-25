@@ -8,6 +8,7 @@ interface ChatListProps {
   loading?: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  currentAccountEmail?: string;
 }
 
 // Generate a consistent color from a string (name/email)
@@ -146,12 +147,6 @@ function getConversationNameParts(conversation: Conversation): { name: string; i
   return parts;
 }
 
-// Get plain display name for conversation (for avatar)
-function getConversationName(conversation: Conversation): string {
-  const parts = getConversationNameParts(conversation);
-  return parts.map(p => p.name).join(", ");
-}
-
 // Get tooltip text showing full names and emails
 function getAvatarTooltip(conversation: Conversation): string {
   return conversation.participants.map((email, index) => {
@@ -163,22 +158,6 @@ function getAvatarTooltip(conversation: Conversation): string {
   }).join("\n");
 }
 
-// Get the primary email for a conversation (first non-user participant)
-function getPrimaryEmail(conversation: Conversation): string | null {
-  // Get the first participant's email
-  if (conversation.participants.length === 0) {
-    return null;
-  }
-
-  // If user is in conversation and there are other participants, use the second one
-  if (conversation.user_in_conversation && conversation.participants.length > 1) {
-    return extractEmail(conversation.participants[1]);
-  }
-
-  // Otherwise use the first participant
-  return extractEmail(conversation.participants[0]);
-}
-
 export function ChatList({
   conversations,
   selectedId,
@@ -186,6 +165,7 @@ export function ChatList({
   loading,
   searchQuery,
   onSearchChange,
+  currentAccountEmail,
 }: ChatListProps) {
   // Filter conversations by search query
   const filteredConversations = searchQuery
@@ -234,16 +214,24 @@ export function ChatList({
           </div>
         ) : (
           filteredConversations.map((conversation) => {
-            const displayName = getConversationName(conversation);
             const nameParts = getConversationNameParts(conversation);
-            // Use display name without user for avatar color/initials (skip user part)
-            const otherPartsName = nameParts.filter(p => !p.isUser).map(p => p.name).join(", ") || displayName;
-            const avatarColor = getAvatarColor(otherPartsName);
-            const initials = getInitials(otherPartsName);
             const isSelected = selectedId === conversation.id;
             const avatarTooltip = getAvatarTooltip(conversation);
-            const primaryEmail = getPrimaryEmail(conversation);
-            const gravatarUrl = primaryEmail ? getGravatarUrl(primaryEmail) : null;
+
+            // Get participants excluding the user for avatars
+            const userEmail = currentAccountEmail?.toLowerCase() || extractEmail(conversation.user_name);
+
+            // Map participants with their metadata, then filter
+            const participantData = conversation.participants.map((p, idx) => ({
+              participant: p,
+              email: extractEmail(p),
+              name: conversation.participant_names[idx] || extractEmail(p),
+            }));
+
+            const otherParticipantData = participantData.filter(pd => pd.email !== userEmail);
+
+            // Limit to 2 avatars for cleaner display
+            const avatarsToShow = otherParticipantData.slice(0, 2);
 
             return (
               <div
@@ -253,40 +241,49 @@ export function ChatList({
                 }`}
                 onClick={() => onSelect(conversation)}
               >
-                <div
-                  className="chat-avatar"
-                  style={{ backgroundColor: avatarColor }}
-                  title={avatarTooltip}
-                >
-                  {gravatarUrl ? (
-                    <img
-                      src={gravatarUrl}
-                      alt={displayName}
-                      className="chat-avatar-img"
-                      onError={(e) => {
-                        // On error, hide image and show initials
-                        const avatar = e.currentTarget.parentElement;
-                        if (avatar) {
-                          e.currentTarget.style.display = 'none';
-                          const initials = avatar.querySelector('.chat-avatar-initials');
-                          if (initials) {
-                            (initials as HTMLElement).style.display = 'block';
-                          }
-                        }
-                      }}
-                      onLoad={(e) => {
-                        // On success, hide initials
-                        const avatar = e.currentTarget.parentElement;
-                        if (avatar) {
-                          const initials = avatar.querySelector('.chat-avatar-initials');
-                          if (initials) {
-                            (initials as HTMLElement).style.display = 'none';
-                          }
-                        }
-                      }}
-                    />
-                  ) : null}
-                  <span className="chat-avatar-initials">{initials}</span>
+                <div className="chat-avatar-group" title={avatarTooltip}>
+                  {avatarsToShow.map((participantData, index) => {
+                    const { email, name } = participantData;
+                    const avatarColor = getAvatarColor(name);
+                    const initials = getInitials(name);
+                    const gravatarUrl = email ? getGravatarUrl(email, 48) : null;
+
+                    return (
+                      <div
+                        key={index}
+                        className={`chat-avatar ${avatarsToShow.length > 1 ? `chat-avatar-stacked chat-avatar-pos-${index}` : ''}`}
+                        style={{ backgroundColor: avatarColor }}
+                      >
+                        {gravatarUrl ? (
+                          <img
+                            src={gravatarUrl}
+                            alt={name}
+                            className="chat-avatar-img"
+                            onError={(e) => {
+                              const avatar = e.currentTarget.parentElement;
+                              if (avatar) {
+                                e.currentTarget.style.display = 'none';
+                                const initials = avatar.querySelector('.chat-avatar-initials');
+                                if (initials) {
+                                  (initials as HTMLElement).style.display = 'block';
+                                }
+                              }
+                            }}
+                            onLoad={(e) => {
+                              const avatar = e.currentTarget.parentElement;
+                              if (avatar) {
+                                const initials = avatar.querySelector('.chat-avatar-initials');
+                                if (initials) {
+                                  (initials as HTMLElement).style.display = 'none';
+                                }
+                              }
+                            }}
+                          />
+                        ) : null}
+                        <span className="chat-avatar-initials">{initials}</span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="chat-content">

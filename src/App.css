@@ -237,6 +237,16 @@ body {
   font-weight: 500;
 }
 
+/* Chat avatar group for overlapping avatars */
+.chat-avatar-group {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  min-width: var(--avatar-size);
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 /* Chat avatar */
 .chat-avatar {
   width: var(--avatar-size);
@@ -252,6 +262,26 @@ body {
   text-transform: uppercase;
   position: relative;
   overflow: hidden;
+}
+
+/* Stacked avatars (overlapping) */
+.chat-avatar-stacked {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  font-size: 12px;
+  border: 2px solid var(--bg-secondary);
+  position: absolute;
+}
+
+.chat-avatar-pos-0 {
+  left: 0;
+  z-index: 2;
+}
+
+.chat-avatar-pos-1 {
+  left: 16px;
+  z-index: 1;
 }
 
 .chat-avatar-img {
@@ -423,9 +453,18 @@ body {
   color: var(--text-primary);
 }
 
+.header-avatar-group {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .header-avatar {
   width: 40px;
   height: 40px;
+  min-width: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -436,6 +475,25 @@ body {
   text-transform: uppercase;
   position: relative;
   overflow: hidden;
+}
+
+.header-avatar-stacked {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  font-size: 11px;
+  border: 2px solid var(--bg-secondary);
+  position: absolute;
+}
+
+.header-avatar-pos-0 {
+  left: 0;
+  z-index: 2;
+}
+
+.header-avatar-pos-1 {
+  left: 12px;
+  z-index: 1;
 }
 
 .header-info {

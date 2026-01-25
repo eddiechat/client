@@ -198,6 +198,7 @@ function App() {
           loading={conversationsLoading}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          currentAccountEmail={currentAccountEmail}
         />
       </aside>
 

@@ -68,21 +68,6 @@ function getGravatarUrl(email: string, size: number = 40): string {
   return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
 }
 
-// Get the primary email for a conversation (first non-user participant)
-function getPrimaryEmail(conversation: Conversation): string | null {
-  if (conversation.participants.length === 0) {
-    return null;
-  }
-
-  // If user is in conversation and there are other participants, use the second one
-  if (conversation.user_in_conversation && conversation.participants.length > 1) {
-    return extractEmail(conversation.participants[1]);
-  }
-
-  // Otherwise use the first participant
-  return extractEmail(conversation.participants[0]);
-}
-
 // Format time for message bubbles
 function formatMessageTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -276,15 +261,22 @@ export function ConversationView({
   }
 
   const conversationName = getConversationName(conversation);
-  const nameParts = getConversationNameParts(conversation);
-  const primaryEmail = getPrimaryEmail(conversation);
-
-  // Use same logic as sidebar: color/initials based on other participants (not user)
-  const otherPartsName = nameParts.filter(p => !p.isUser).map(p => p.name).join(", ") || conversationName;
-  const avatarColor = getAvatarColor(otherPartsName);
-  const initials = getInitials(otherPartsName);
   const headerTooltip = getHeaderAvatarTooltip(conversation);
-  const headerGravatarUrl = primaryEmail ? getGravatarUrl(primaryEmail, 40) : null;
+
+  // Get participants excluding the user for avatars
+  const userEmail = currentAccountEmail?.toLowerCase() || extractEmail(conversation.user_name);
+
+  // Map participants with their metadata, then filter
+  const participantData = conversation.participants.map((p, idx) => ({
+    participant: p,
+    email: extractEmail(p),
+    name: conversation.participant_names[idx] || extractEmail(p),
+  }));
+
+  const otherParticipantData = participantData.filter(pd => pd.email !== userEmail);
+
+  // Limit to 2 avatars for header
+  const headerAvatarsToShow = otherParticipantData.slice(0, 2);
 
   return (
     <div className="conversation-view">
@@ -298,36 +290,49 @@ export function ConversationView({
           </button>
         )}
 
-        <div className="header-avatar" style={{ backgroundColor: avatarColor }} title={headerTooltip}>
-          {headerGravatarUrl ? (
-            <img
-              src={headerGravatarUrl}
-              alt={conversationName}
-              className="chat-avatar-img"
-              onError={(e) => {
-                // On error, hide image and show initials
-                const avatar = e.currentTarget.parentElement;
-                if (avatar) {
-                  e.currentTarget.style.display = 'none';
-                  const initials = avatar.querySelector('.chat-avatar-initials');
-                  if (initials) {
-                    (initials as HTMLElement).style.display = 'block';
-                  }
-                }
-              }}
-              onLoad={(e) => {
-                // On success, hide initials
-                const avatar = e.currentTarget.parentElement;
-                if (avatar) {
-                  const initials = avatar.querySelector('.chat-avatar-initials');
-                  if (initials) {
-                    (initials as HTMLElement).style.display = 'none';
-                  }
-                }
-              }}
-            />
-          ) : null}
-          <span className="chat-avatar-initials">{initials}</span>
+        <div className="header-avatar-group" title={headerTooltip}>
+          {headerAvatarsToShow.map((participantData, index) => {
+            const { email, name } = participantData;
+            const avatarColor = getAvatarColor(name);
+            const initials = getInitials(name);
+            const gravatarUrl = email ? getGravatarUrl(email, 40) : null;
+
+            return (
+              <div
+                key={index}
+                className={`header-avatar ${headerAvatarsToShow.length > 1 ? `header-avatar-stacked header-avatar-pos-${index}` : ''}`}
+                style={{ backgroundColor: avatarColor }}
+              >
+                {gravatarUrl ? (
+                  <img
+                    src={gravatarUrl}
+                    alt={name}
+                    className="chat-avatar-img"
+                    onError={(e) => {
+                      const avatar = e.currentTarget.parentElement;
+                      if (avatar) {
+                        e.currentTarget.style.display = 'none';
+                        const initials = avatar.querySelector('.chat-avatar-initials');
+                        if (initials) {
+                          (initials as HTMLElement).style.display = 'block';
+                        }
+                      }
+                    }}
+                    onLoad={(e) => {
+                      const avatar = e.currentTarget.parentElement;
+                      if (avatar) {
+                        const initials = avatar.querySelector('.chat-avatar-initials');
+                        if (initials) {
+                          (initials as HTMLElement).style.display = 'none';
+                        }
+                      }
+                    }}
+                  />
+                ) : null}
+                <span className="chat-avatar-initials">{initials}</span>
+              </div>
+            );
+          })}
         </div>
 
         <div className="header-info">
