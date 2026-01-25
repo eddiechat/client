@@ -12,7 +12,8 @@ interface AvatarProps {
 export function Avatar({ email, name, size = 40, className = "", title }: AvatarProps) {
   const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const gravatarUrl = email ? getGravatarUrl(email, size) : null;
-  const avatarColor = getAvatarColor(name);
+  // Use email for consistent color across different name variations
+  const avatarColor = getAvatarColor(email || name);
   const initials = getInitials(name);
 
   // Reset status when email changes

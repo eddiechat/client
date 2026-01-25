@@ -3,8 +3,8 @@ import md5 from "md5";
 import EmailReplyParser from "email-reply-parser-browser";
 import type { Conversation } from "../types";
 
-// Generate a consistent color from a string (name/email)
-export function getAvatarColor(name: string): string {
+// Generate a consistent color from a string, using email for consistency
+export function getAvatarColor(nameOrEmail: string): string {
   const colors = [
     "#e91e63", // pink
     "#9c27b0", // purple
@@ -20,9 +20,18 @@ export function getAvatarColor(name: string): string {
     "#ff5722", // deep orange
   ];
 
+  // Extract email if present (e.g., "John Doe <john@example.com>")
+  // Use email for consistent colors across different display name variations
+  const emailMatch = nameOrEmail.match(/<([^>]+)>/);
+  const key = emailMatch
+    ? emailMatch[1].toLowerCase()
+    : nameOrEmail.includes("@")
+      ? nameOrEmail.toLowerCase()
+      : nameOrEmail;
+
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < key.length; i++) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash);
   }
   return colors[Math.abs(hash) % colors.length];
 }

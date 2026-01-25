@@ -165,7 +165,7 @@ export function ChatList({
                 <div className="chat-avatar-group" title={avatarTooltip}>
                   {avatarsToShow.map((participantData, index) => {
                     const { email, name } = participantData;
-                    const avatarColor = getAvatarColor(name);
+                    const avatarColor = getAvatarColor(email || name);
                     const initials = getInitials(name);
                     const gravatarUrl = email ? getGravatarUrl(email, 48) : null;
 
