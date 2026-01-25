@@ -96,27 +96,6 @@ pub struct ReadMessageRequest {
     pub preview: bool,
 }
 
-/// Compose message request
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ComposeMessageRequest {
-    pub account: Option<String>,
-    pub from: Option<String>,
-    pub to: Vec<String>,
-    pub cc: Vec<String>,
-    pub bcc: Vec<String>,
-    pub subject: String,
-    pub body: String,
-    pub reply_to: Option<String>,
-    pub in_reply_to: Option<String>,
-}
-
-/// Send message request
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendMessageRequest {
-    pub account: Option<String>,
-    pub message: String,
-}
-
 /// Flag operation request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlagRequest {
@@ -126,41 +105,3 @@ pub struct FlagRequest {
     pub flags: Vec<String>,
 }
 
-/// Move/Copy message request
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveMessageRequest {
-    pub account: Option<String>,
-    pub source_folder: Option<String>,
-    pub target_folder: String,
-    pub ids: Vec<String>,
-}
-
-/// API response wrapper
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "status")]
-pub enum ApiResponse<T> {
-    #[serde(rename = "success")]
-    Success { data: T },
-    #[serde(rename = "error")]
-    Error { message: String, code: Option<String> },
-}
-
-impl<T> ApiResponse<T> {
-    pub fn success(data: T) -> Self {
-        ApiResponse::Success { data }
-    }
-
-    pub fn error(message: impl Into<String>) -> Self {
-        ApiResponse::Error {
-            message: message.into(),
-            code: None,
-        }
-    }
-
-    pub fn error_with_code(message: impl Into<String>, code: impl Into<String>) -> Self {
-        ApiResponse::Error {
-            message: message.into(),
-            code: Some(code.into()),
-        }
-    }
-}
