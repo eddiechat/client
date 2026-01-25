@@ -30,7 +30,8 @@
       "Bash(bun install)",
       "Bash(bun run build:*)",
       "Bash(bun tauri dev:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run check:*)"
     ]
   }
 }

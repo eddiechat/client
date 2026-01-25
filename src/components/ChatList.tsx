@@ -170,14 +170,14 @@ export function ChatList({
   // Filter conversations by search query
   const filteredConversations = searchQuery
     ? conversations.filter((conv) => {
-        const searchLower = searchQuery.toLowerCase();
-        return (
-          conv.participant_names.some((name) =>
-            name.toLowerCase().includes(searchLower)
-          ) ||
-          conv.last_message_preview.toLowerCase().includes(searchLower)
-        );
-      })
+      const searchLower = searchQuery.toLowerCase();
+      return (
+        conv.participant_names.some((name) =>
+          name.toLowerCase().includes(searchLower)
+        ) ||
+        conv.last_message_preview.toLowerCase().includes(searchLower)
+      );
+    })
     : conversations;
 
   return (
@@ -236,9 +236,8 @@ export function ChatList({
             return (
               <div
                 key={conversation.id}
-                className={`chat-item ${isSelected ? "selected" : ""} ${
-                  conversation.unread_count > 0 ? "unread" : ""
-                }`}
+                className={`chat-item ${isSelected ? "selected" : ""} ${conversation.unread_count > 0 ? "unread" : ""
+                  }`}
                 onClick={() => onSelect(conversation)}
               >
                 <div className="chat-avatar-group" title={avatarTooltip}>

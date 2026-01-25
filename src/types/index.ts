@@ -12,11 +12,6 @@ export interface Envelope {
   has_attachment: boolean;
 }
 
-export interface Folder {
-  name: string;
-  desc?: string;
-}
-
 export interface Message {
   id: string;
   envelope: Envelope;
@@ -51,35 +46,6 @@ export interface AccountDetails {
   smtp_tls: boolean;
   smtp_tls_cert?: string;
   username: string;
-}
-
-export interface ListEnvelopesRequest {
-  account?: string;
-  folder?: string;
-  page?: number;
-  page_size?: number;
-  query?: string;
-}
-
-export interface ListEnvelopesResponse {
-  envelopes: Envelope[];
-  page: number;
-  page_size: number;
-  total?: number;
-}
-
-export interface ReadMessageRequest {
-  account?: string;
-  folder?: string;
-  id: string;
-  preview: boolean;
-}
-
-export interface FlagRequest {
-  account?: string;
-  folder?: string;
-  ids: string[];
-  flags: string[];
 }
 
 export interface ComposeMessageData {
@@ -124,25 +90,3 @@ export interface Conversation {
   user_name: string;
   user_in_conversation: boolean;
 }
-
-// Request/response types for conversations
-export interface ListConversationsRequest {
-  account?: string;
-  force_refresh?: boolean;
-}
-
-export interface ConversationMessagesRequest {
-  account?: string;
-  conversation_id: string;
-}
-
-// Common flag names
-export const FLAGS = {
-  SEEN: 'seen',
-  ANSWERED: 'answered',
-  FLAGGED: 'flagged',
-  DELETED: 'deleted',
-  DRAFT: 'draft',
-} as const;
-
-export type FlagName = typeof FLAGS[keyof typeof FLAGS];
