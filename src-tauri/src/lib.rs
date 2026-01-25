@@ -10,7 +10,7 @@ pub fn run() {
     // Initialize tracing for logging
     tracing_subscriber::fmt::init();
 
-    info!("Starting Himalaya Tauri application");
+    info!("Starting eddie ...");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

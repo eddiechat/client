@@ -29,7 +29,8 @@
       "Bash(tree:*)",
       "Bash(bun install)",
       "Bash(bun run build:*)",
-      "Bash(bun tauri dev:*)"
+      "Bash(bun tauri dev:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

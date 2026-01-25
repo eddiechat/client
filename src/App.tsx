@@ -176,7 +176,7 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-title">
-            <h1>Himalaya</h1>
+            <h1>eddie</h1>
             {accounts.length > 0 && (
               <span className="account-badge" onClick={handleEditAccount}>
                 {currentAccount || "No account"}

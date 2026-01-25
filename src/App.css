@@ -250,6 +250,23 @@ body {
   font-weight: 600;
   color: white;
   text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
+}
+
+.chat-avatar-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.chat-avatar-initials {
+  position: relative;
+  z-index: 0;
 }
 
 /* Chat content */
@@ -417,6 +434,8 @@ body {
   font-weight: 600;
   color: white;
   text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
 }
 
 .header-info {
@@ -537,6 +556,8 @@ body {
   color: white;
   text-transform: uppercase;
   align-self: flex-end;
+  position: relative;
+  overflow: hidden;
 }
 
 .message-bubble-wrapper {

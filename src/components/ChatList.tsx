@@ -1,4 +1,5 @@
 import type { Conversation } from "../types";
+import md5 from "md5";
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -52,6 +53,22 @@ function getInitials(name: string): string {
   }
 
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+// Extract email from a participant string (handles both "Name <email>" and "email" formats)
+function extractEmail(participant: string): string {
+  const match = participant.match(/<([^>]+)>/);
+  if (match) {
+    return match[1].trim().toLowerCase();
+  }
+  return participant.trim().toLowerCase();
+}
+
+// Generate Gravatar URL from email
+function getGravatarUrl(email: string, size: number = 40): string {
+  const hash = md5(email.trim().toLowerCase());
+  // Use 404 as default to get a 404 if no gravatar exists (we'll handle fallback)
+  return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
 }
 
 // Format date for display
@@ -146,6 +163,22 @@ function getAvatarTooltip(conversation: Conversation): string {
   }).join("\n");
 }
 
+// Get the primary email for a conversation (first non-user participant)
+function getPrimaryEmail(conversation: Conversation): string | null {
+  // Get the first participant's email
+  if (conversation.participants.length === 0) {
+    return null;
+  }
+
+  // If user is in conversation and there are other participants, use the second one
+  if (conversation.user_in_conversation && conversation.participants.length > 1) {
+    return extractEmail(conversation.participants[1]);
+  }
+
+  // Otherwise use the first participant
+  return extractEmail(conversation.participants[0]);
+}
+
 export function ChatList({
   conversations,
   selectedId,
@@ -209,6 +242,8 @@ export function ChatList({
             const initials = getInitials(otherPartsName);
             const isSelected = selectedId === conversation.id;
             const avatarTooltip = getAvatarTooltip(conversation);
+            const primaryEmail = getPrimaryEmail(conversation);
+            const gravatarUrl = primaryEmail ? getGravatarUrl(primaryEmail) : null;
 
             return (
               <div
@@ -223,7 +258,35 @@ export function ChatList({
                   style={{ backgroundColor: avatarColor }}
                   title={avatarTooltip}
                 >
-                  {initials}
+                  {gravatarUrl ? (
+                    <img
+                      src={gravatarUrl}
+                      alt={displayName}
+                      className="chat-avatar-img"
+                      onError={(e) => {
+                        // On error, hide image and show initials
+                        const avatar = e.currentTarget.parentElement;
+                        if (avatar) {
+                          e.currentTarget.style.display = 'none';
+                          const initials = avatar.querySelector('.chat-avatar-initials');
+                          if (initials) {
+                            (initials as HTMLElement).style.display = 'block';
+                          }
+                        }
+                      }}
+                      onLoad={(e) => {
+                        // On success, hide initials
+                        const avatar = e.currentTarget.parentElement;
+                        if (avatar) {
+                          const initials = avatar.querySelector('.chat-avatar-initials');
+                          if (initials) {
+                            (initials as HTMLElement).style.display = 'none';
+                          }
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <span className="chat-avatar-initials">{initials}</span>
                 </div>
 
                 <div className="chat-content">
