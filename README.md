@@ -2,23 +2,22 @@
   <img src="public/eddie-swirl-green.svg" alt="eddie logo" width="120" height="120">
 </p>
 
-# eddie.chat
+# eddie
 
-**eddie** is an open source, privacy-first, collaborative conversational interface built on top of email. eddie has a client-centric and fully transparent AI infrastructure, and a marketplace of community-driven, remixable agent skills.
+**eddie** is a modern, lightweight desktop email client that reimagines email as a conversation-first experience. Inspired by the clean aesthetics of Signal, eddie groups your emails into threaded conversations by participant, making email feel as natural as messaging.
 
-[Read the Manifesto →](https://eddie.chat)
-
----
-
-## Overview
-
-eddie.chat is a modern, lightweight desktop email client that reimagines email as a conversation-first experience. Inspired by the clean aesthetics of Signal, eddie groups your emails into threaded conversations by participant, making email feel as natural as messaging.
-
-Built with a Rust backend and React frontend using Tauri v2, eddie prioritizes:
+Built on standard email protocols, eddie brings the simplicity of modern chat to your inbox, without locking you into another platform.
 
 - **Privacy**: Your data stays on your machine. No cloud sync, no tracking, no middleman.
 - **Transparency**: Fully open source with a client-centric architecture.
-- **Simplicity**: A Signal-inspired interface that cuts through inbox noise.
+- **Simplicity**:  Signal-inspired interface that cuts through inbox noise with smart, personalized filters, and zero onboarding.
+- **Openness**: Works with anyone who has an email address. No new accounts, no walled gardens.
+
+But it doesn't stop there. We want to augment communication with a client-centric and fully transparent AI infrastructure.
+
+We believe that an open and shared repository of agent skills, and the ability for anyone to easily use, improve, and reshare skills, will help humanity communicate better, spark creativity, learn faster, and automate repetitive processes.
+
+[Read the Manifesto →](https://eddie.chat)
 
 ---
 
@@ -43,7 +42,7 @@ Built with a Rust backend and React frontend using Tauri v2, eddie prioritizes:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Desktop Application                     │
+│                      Desktop Application                    │
 ├─────────────────────────┬───────────────────────────────────┤
 │     React Frontend      │           Rust Backend            │
 │     (TypeScript)        │            (Tauri v2)             │
