@@ -5,6 +5,7 @@ mod sync;
 mod types;
 
 use commands::SyncManager;
+use tauri::Manager;
 use tracing::info;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

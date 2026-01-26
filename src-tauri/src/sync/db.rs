@@ -360,34 +360,81 @@ impl SyncDatabase {
         Ok(())
     }
 
+    /// Get the stored UIDVALIDITY for a folder
+    pub fn get_folder_uidvalidity(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+    ) -> Result<Option<u32>, HimalayaError> {
+        let conn = self.connection()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT uidvalidity FROM folder_sync_state WHERE account_id = ?1 AND folder_name = ?2",
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let result = stmt
+            .query_row(params![account_id, folder_name], |row| row.get(0))
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Set/update the UIDVALIDITY for a folder
+    pub fn set_folder_uidvalidity(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        uidvalidity: u32,
+    ) -> Result<(), HimalayaError> {
+        let conn = self.connection()?;
+        conn.execute(
+            "INSERT INTO folder_sync_state (account_id, folder_name, uidvalidity)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(account_id, folder_name) DO UPDATE SET
+                uidvalidity = excluded.uidvalidity",
+            params![account_id, folder_name, uidvalidity],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
     /// Invalidate folder cache (when UIDVALIDITY changes)
     pub fn invalidate_folder_cache(
         &self,
         account_id: &str,
         folder_name: &str,
     ) -> Result<(), HimalayaError> {
-        let conn = self.connection()?;
+        let mut conn = self.connection()?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         // Delete all messages in this folder
-        conn.execute(
+        tx.execute(
             "DELETE FROM messages WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
         )
         .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         // Reset sync state
-        conn.execute(
+        tx.execute(
             "DELETE FROM folder_sync_state WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
         )
         .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         // Reset sync progress
-        conn.execute(
+        tx.execute(
             "DELETE FROM sync_progress WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
         )
         .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        tx.commit()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -497,7 +544,7 @@ impl SyncDatabase {
         Ok(result)
     }
 
-    /// Update flags for a message
+    /// Update flags for a message (replaces all flags)
     pub fn update_message_flags(
         &self,
         account_id: &str,
@@ -514,6 +561,108 @@ impl SyncDatabase {
         .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// Add flags to a message (preserves existing flags)
+    pub fn add_message_flags(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        uid: u32,
+        flags_to_add: &[String],
+    ) -> Result<(), HimalayaError> {
+        let conn = self.connection()?;
+
+        // Get current flags
+        let current_flags: Option<String> = conn
+            .query_row(
+                "SELECT flags FROM messages WHERE account_id = ?1 AND folder_name = ?2 AND uid = ?3",
+                params![account_id, folder_name, uid],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .flatten();
+
+        let mut flags: Vec<String> = current_flags
+            .as_ref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+
+        // Add new flags (avoid duplicates)
+        for flag in flags_to_add {
+            if !flags.contains(flag) {
+                flags.push(flag.clone());
+            }
+        }
+
+        let flags_json =
+            serde_json::to_string(&flags).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        conn.execute(
+            "UPDATE messages SET flags = ?1, updated_at = datetime('now')
+             WHERE account_id = ?2 AND folder_name = ?3 AND uid = ?4",
+            params![flags_json, account_id, folder_name, uid],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Remove flags from a message
+    pub fn remove_message_flags(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        uid: u32,
+        flags_to_remove: &[String],
+    ) -> Result<(), HimalayaError> {
+        let conn = self.connection()?;
+
+        // Get current flags
+        let current_flags: Option<String> = conn
+            .query_row(
+                "SELECT flags FROM messages WHERE account_id = ?1 AND folder_name = ?2 AND uid = ?3",
+                params![account_id, folder_name, uid],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .flatten();
+
+        let mut flags: Vec<String> = current_flags
+            .as_ref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+
+        // Remove specified flags
+        flags.retain(|f| !flags_to_remove.contains(f));
+
+        let flags_json =
+            serde_json::to_string(&flags).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        conn.execute(
+            "UPDATE messages SET flags = ?1, updated_at = datetime('now')
+             WHERE account_id = ?2 AND folder_name = ?3 AND uid = ?4",
+            params![flags_json, account_id, folder_name, uid],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Set flags on a message (replaces existing flags with new set)
+    pub fn set_message_flags_vec(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        uid: u32,
+        flags: &[String],
+    ) -> Result<(), HimalayaError> {
+        let flags_json =
+            serde_json::to_string(flags).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        self.update_message_flags(account_id, folder_name, uid, &flags_json)
     }
 
     /// Delete messages by UIDs
@@ -794,6 +943,120 @@ impl SyncDatabase {
         Ok(messages)
     }
 
+    /// Insert a new conversation if it doesn't exist (atomic, no-op if exists)
+    /// Returns the conversation ID
+    pub fn insert_conversation_if_not_exists(
+        &self,
+        conv: &CachedConversation,
+    ) -> Result<i64, HimalayaError> {
+        let conn = self.connection()?;
+
+        // INSERT OR IGNORE - creates if not exists, does nothing if exists
+        conn.execute(
+            "INSERT OR IGNORE INTO conversations
+             (account_id, participant_key, participants, last_message_date, last_message_preview,
+              last_message_from, message_count, unread_count, is_outgoing, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7, datetime('now'), datetime('now'))",
+            params![
+                conv.account_id,
+                conv.participant_key,
+                conv.participants,
+                conv.last_message_date.map(|dt| dt.to_rfc3339()),
+                conv.last_message_preview,
+                conv.last_message_from,
+                conv.is_outgoing as i32,
+            ],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        // Get the ID (works whether we just inserted or it already existed)
+        let id = conn
+            .query_row(
+                "SELECT id FROM conversations WHERE account_id = ?1 AND participant_key = ?2",
+                params![conv.account_id, conv.participant_key],
+                |row| row.get(0),
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(id)
+    }
+
+    /// Atomically increment conversation counters using SQL
+    /// This avoids read-modify-write race conditions
+    pub fn increment_conversation_counters(
+        &self,
+        conversation_id: i64,
+        increment_unread: bool,
+        new_last_message_date: Option<DateTime<Utc>>,
+        new_last_message_preview: Option<&str>,
+        new_last_message_from: Option<&str>,
+        new_is_outgoing: bool,
+    ) -> Result<(), HimalayaError> {
+        let conn = self.connection()?;
+
+        // Atomically increment counters and conditionally update last message info
+        // The last_message fields are only updated if the new date is >= current date
+        conn.execute(
+            "UPDATE conversations SET
+                message_count = message_count + 1,
+                unread_count = unread_count + CASE WHEN ?1 THEN 1 ELSE 0 END,
+                last_message_date = CASE
+                    WHEN ?2 IS NOT NULL AND (?2 >= COALESCE(last_message_date, '') OR last_message_date IS NULL)
+                    THEN ?2
+                    ELSE last_message_date
+                END,
+                last_message_preview = CASE
+                    WHEN ?2 IS NOT NULL AND (?2 >= COALESCE(last_message_date, '') OR last_message_date IS NULL)
+                    THEN ?3
+                    ELSE last_message_preview
+                END,
+                last_message_from = CASE
+                    WHEN ?2 IS NOT NULL AND (?2 >= COALESCE(last_message_date, '') OR last_message_date IS NULL)
+                    THEN ?4
+                    ELSE last_message_from
+                END,
+                is_outgoing = CASE
+                    WHEN ?2 IS NOT NULL AND (?2 >= COALESCE(last_message_date, '') OR last_message_date IS NULL)
+                    THEN ?5
+                    ELSE is_outgoing
+                END,
+                updated_at = datetime('now')
+             WHERE id = ?6",
+            params![
+                increment_unread as i32,
+                new_last_message_date.map(|dt| dt.to_rfc3339()),
+                new_last_message_preview,
+                new_last_message_from,
+                new_is_outgoing as i32,
+                conversation_id,
+            ],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Atomically adjust unread count (for flag changes)
+    pub fn adjust_conversation_unread_count(
+        &self,
+        conversation_id: i64,
+        delta: i32,
+    ) -> Result<(), HimalayaError> {
+        let conn = self.connection()?;
+
+        // Use MAX(0, ...) to prevent negative unread counts
+        conn.execute(
+            "UPDATE conversations SET
+                unread_count = MAX(0, CAST(unread_count AS INTEGER) + ?1),
+                updated_at = datetime('now')
+             WHERE id = ?2",
+            params![delta, conversation_id],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
     /// Delete empty conversations
     pub fn delete_empty_conversations(&self, account_id: &str) -> Result<u64, HimalayaError> {
         let conn = self.connection()?;
@@ -882,7 +1145,7 @@ impl SyncDatabase {
         Ok(actions)
     }
 
-    /// Update action status
+    /// Update action status (increments retry_count)
     pub fn update_action_status(
         &self,
         id: i64,
@@ -894,6 +1157,22 @@ impl SyncDatabase {
             "UPDATE action_queue SET status = ?1, last_error = ?2, retry_count = retry_count + 1
              WHERE id = ?3",
             params![status, error, id],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Update action status without incrementing retry_count (for marking as processing)
+    pub fn update_action_status_no_retry_increment(
+        &self,
+        id: i64,
+        status: &str,
+    ) -> Result<(), HimalayaError> {
+        let conn = self.connection()?;
+        conn.execute(
+            "UPDATE action_queue SET status = ?1 WHERE id = ?2",
+            params![status, id],
         )
         .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
@@ -1188,5 +1467,61 @@ mod tests {
 
         assert_eq!(retrieved.uidvalidity, Some(12345));
         assert_eq!(retrieved.highestmodseq, Some(67890));
+    }
+
+    #[test]
+    fn test_uidvalidity_operations() {
+        let db = SyncDatabase::in_memory().expect("Failed to create database");
+
+        // Initially, no UIDVALIDITY stored
+        let uidvalidity = db
+            .get_folder_uidvalidity("test@example.com", "INBOX")
+            .expect("Failed to get uidvalidity");
+        assert_eq!(uidvalidity, None);
+
+        // Set UIDVALIDITY
+        db.set_folder_uidvalidity("test@example.com", "INBOX", 12345)
+            .expect("Failed to set uidvalidity");
+
+        // Verify it was stored
+        let uidvalidity = db
+            .get_folder_uidvalidity("test@example.com", "INBOX")
+            .expect("Failed to get uidvalidity");
+        assert_eq!(uidvalidity, Some(12345));
+
+        // Update UIDVALIDITY
+        db.set_folder_uidvalidity("test@example.com", "INBOX", 67890)
+            .expect("Failed to update uidvalidity");
+
+        // Verify update
+        let uidvalidity = db
+            .get_folder_uidvalidity("test@example.com", "INBOX")
+            .expect("Failed to get uidvalidity");
+        assert_eq!(uidvalidity, Some(67890));
+    }
+
+    #[test]
+    fn test_invalidate_folder_cache() {
+        let db = SyncDatabase::in_memory().expect("Failed to create database");
+
+        // Set up UIDVALIDITY
+        db.set_folder_uidvalidity("test@example.com", "INBOX", 12345)
+            .expect("Failed to set uidvalidity");
+
+        // Verify it exists
+        let uidvalidity = db
+            .get_folder_uidvalidity("test@example.com", "INBOX")
+            .expect("Failed to get uidvalidity");
+        assert_eq!(uidvalidity, Some(12345));
+
+        // Invalidate the cache
+        db.invalidate_folder_cache("test@example.com", "INBOX")
+            .expect("Failed to invalidate cache");
+
+        // UIDVALIDITY should be cleared (folder_sync_state deleted)
+        let uidvalidity = db
+            .get_folder_uidvalidity("test@example.com", "INBOX")
+            .expect("Failed to get uidvalidity");
+        assert_eq!(uidvalidity, None);
     }
 }

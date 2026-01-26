@@ -5,6 +5,7 @@
 //! "the same group of people talking".
 
 use chrono::{DateTime, Utc};
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -186,6 +187,12 @@ impl ConversationGrouper {
     }
 
     /// Assign a message to a conversation (creates if needed)
+    ///
+    /// This method uses atomic SQL operations to avoid race conditions when
+    /// multiple threads process messages for the same conversation concurrently.
+    /// Instead of read-modify-write in Rust, it:
+    /// 1. Uses INSERT OR IGNORE to create the conversation if it doesn't exist
+    /// 2. Uses atomic SQL UPDATE to increment counters
     pub fn assign_to_conversation(
         &self,
         account_id: &str,
@@ -237,10 +244,263 @@ impl ConversationGrouper {
             .iter()
             .any(|f| f.to_lowercase() == "\\seen" || f.to_lowercase() == "seen");
 
-        // Get or create conversation
-        let existing = self
-            .db
-            .get_conversation_by_key(account_id, &participant_key)?;
+        // Prepare last message info
+        let last_message_preview = message
+            .text_body
+            .as_ref()
+            .or(message.subject.as_ref())
+            .map(|s| {
+                let trimmed = s.trim();
+                if trimmed.len() > 100 {
+                    format!("{}...", &trimmed.chars().take(100).collect::<String>())
+                } else {
+                    trimmed.to_string()
+                }
+            });
+
+        let last_message_from = message
+            .from_name
+            .clone()
+            .or_else(|| Some(from_participant.email.clone()));
+
+        // Step 1: Ensure conversation exists (atomic INSERT OR IGNORE)
+        // This creates the conversation with initial values if it doesn't exist,
+        // or does nothing if it already exists
+        let initial_conv = CachedConversation {
+            id: 0,
+            account_id: account_id.to_string(),
+            participant_key: participant_key.clone(),
+            participants: participants_json,
+            last_message_date: message.date,
+            last_message_preview: last_message_preview.clone(),
+            last_message_from: last_message_from.clone(),
+            message_count: 0, // Will be incremented atomically
+            unread_count: 0,  // Will be incremented atomically
+            is_outgoing,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        let conv_id = self.db.insert_conversation_if_not_exists(&initial_conv)?;
+
+        // Step 2: Atomically increment counters using SQL
+        // This avoids the read-modify-write race condition
+        let increment_unread = !is_seen && !is_outgoing;
+
+        self.db.increment_conversation_counters(
+            conv_id,
+            increment_unread,
+            message.date,
+            last_message_preview.as_deref(),
+            last_message_from.as_deref(),
+            is_outgoing,
+        )?;
+
+        // Step 3: Link message to conversation
+        self.db.link_message_to_conversation(conv_id, message.id)?;
+
+        Ok(conv_id)
+    }
+
+    /// Rebuild conversations for an account
+    ///
+    /// This is useful after initial sync or when fixing data issues.
+    /// Uses a transaction to ensure atomicity - either all conversations are rebuilt
+    /// or none are (on error, the database remains unchanged).
+    pub fn rebuild_conversations(
+        &self,
+        account_id: &str,
+        user_email: &str,
+    ) -> Result<u32, HimalayaError> {
+        // Get all messages for the account across all folders
+        let mut conn = self.db.connection()?;
+
+        // Start a transaction to ensure atomicity
+        let tx = conn
+            .transaction()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        // First, clear existing conversations
+        tx.execute(
+            "DELETE FROM conversations WHERE account_id = ?1",
+            rusqlite::params![account_id],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        // Get messages grouped by participant key
+        let mut stmt = tx.prepare(
+            "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
+                    from_address, from_name, to_addresses, cc_addresses, subject, date, flags,
+                    has_attachment, body_cached, text_body, html_body, raw_size, created_at, updated_at
+             FROM messages WHERE account_id = ?1
+             ORDER BY date ASC"
+        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let messages: Vec<CachedMessage> = stmt
+            .query_map(rusqlite::params![account_id], |row| {
+                Ok(CachedMessage {
+                    id: row.get(0)?,
+                    account_id: row.get(1)?,
+                    folder_name: row.get(2)?,
+                    uid: row.get(3)?,
+                    message_id: row.get(4)?,
+                    in_reply_to: row.get(5)?,
+                    references: row.get(6)?,
+                    from_address: row.get(7)?,
+                    from_name: row.get(8)?,
+                    to_addresses: row.get(9)?,
+                    cc_addresses: row.get(10)?,
+                    subject: row.get(11)?,
+                    date: row
+                        .get::<_, Option<String>>(12)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    flags: row.get(13)?,
+                    has_attachment: row.get::<_, i32>(14)? != 0,
+                    body_cached: row.get::<_, i32>(15)? != 0,
+                    text_body: row.get(16)?,
+                    html_body: row.get(17)?,
+                    raw_size: row.get(18)?,
+                    created_at: row
+                        .get::<_, String>(19)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    updated_at: row
+                        .get::<_, String>(20)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                })
+            })
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        drop(stmt);
+
+        // Rebuild conversations within the transaction
+        let mut count = 0;
+        for message in &messages {
+            if self
+                .assign_to_conversation_with_tx(&tx, account_id, user_email, message)
+                .is_ok()
+            {
+                count += 1;
+            }
+        }
+
+        // Clean up empty conversations within the transaction
+        tx.execute(
+            "DELETE FROM conversations WHERE account_id = ?1 AND id NOT IN (
+                SELECT DISTINCT conversation_id FROM conversation_messages
+            )",
+            rusqlite::params![account_id],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        // Commit the transaction
+        tx.commit()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(count)
+    }
+
+    /// Assign a message to a conversation within an existing transaction
+    fn assign_to_conversation_with_tx(
+        &self,
+        tx: &rusqlite::Transaction,
+        account_id: &str,
+        user_email: &str,
+        message: &CachedMessage,
+    ) -> Result<i64, HimalayaError> {
+        // Parse addresses
+        let to_addresses: Vec<String> =
+            serde_json::from_str(&message.to_addresses).unwrap_or_default();
+        let cc_addresses: Option<Vec<String>> = message
+            .cc_addresses
+            .as_ref()
+            .and_then(|s| serde_json::from_str(s).ok());
+
+        // Generate participant key
+        let participant_key = Self::generate_participant_key(
+            user_email,
+            &message.from_address,
+            &to_addresses,
+            cc_addresses.as_deref(),
+        );
+
+        // Skip messages with no other participants (self-sent only)
+        if participant_key.is_empty() {
+            return Err(HimalayaError::Backend(
+                "Message has no participants other than user".to_string(),
+            ));
+        }
+
+        // Extract participant info
+        let participants = Self::extract_participants(
+            user_email,
+            &message.from_address,
+            &to_addresses,
+            cc_addresses.as_deref(),
+        );
+
+        let participants_json = serde_json::to_string(&participants)
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        // Check if message is from user (outgoing)
+        let user_normalized = Participant::normalize_email(user_email);
+        let from_participant = Participant::from_address(&message.from_address);
+        let is_outgoing = Participant::normalize_email(&from_participant.email) == user_normalized;
+
+        // Parse flags to check for \Seen
+        let flags: Vec<String> = serde_json::from_str(&message.flags).unwrap_or_default();
+        let is_seen = flags
+            .iter()
+            .any(|f| f.to_lowercase() == "\\seen" || f.to_lowercase() == "seen");
+
+        // Get or create conversation using the transaction
+        let existing: Option<CachedConversation> = {
+            let mut stmt = tx.prepare(
+                "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
+                        last_message_from, message_count, unread_count, is_outgoing, created_at, updated_at
+                 FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
+            ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+            stmt.query_row(rusqlite::params![account_id, participant_key], |row| {
+                Ok(CachedConversation {
+                    id: row.get(0)?,
+                    account_id: row.get(1)?,
+                    participant_key: row.get(2)?,
+                    participants: row.get(3)?,
+                    last_message_date: row
+                        .get::<_, Option<String>>(4)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    last_message_preview: row.get(5)?,
+                    last_message_from: row.get(6)?,
+                    message_count: row.get(7)?,
+                    unread_count: row.get(8)?,
+                    is_outgoing: row.get::<_, i32>(9)? != 0,
+                    created_at: row
+                        .get::<_, String>(10)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    updated_at: row
+                        .get::<_, String>(11)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                })
+            })
+            .optional()
+            .map_err(|e: rusqlite::Error| HimalayaError::Backend(e.to_string()))?
+        };
 
         let conversation = if let Some(mut conv) = existing {
             // Update existing conversation
@@ -307,102 +567,48 @@ impl ConversationGrouper {
             }
         };
 
-        // Save conversation
-        let conv_id = self.db.upsert_conversation(&conversation)?;
-
-        // Link message to conversation
-        self.db.link_message_to_conversation(conv_id, message.id)?;
-
-        Ok(conv_id)
-    }
-
-    /// Rebuild conversations for an account
-    ///
-    /// This is useful after initial sync or when fixing data issues.
-    pub fn rebuild_conversations(
-        &self,
-        account_id: &str,
-        user_email: &str,
-    ) -> Result<u32, HimalayaError> {
-        // Get all messages for the account across all folders
-        let conn = self.db.connection()?;
-
-        // First, clear existing conversations
-        conn.execute(
-            "DELETE FROM conversations WHERE account_id = ?1",
-            rusqlite::params![account_id],
-        )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        // Get messages grouped by participant key
-        let mut stmt = conn.prepare(
-            "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
-                    from_address, from_name, to_addresses, cc_addresses, subject, date, flags,
-                    has_attachment, body_cached, text_body, html_body, raw_size, created_at, updated_at
-             FROM messages WHERE account_id = ?1
-             ORDER BY date ASC"
+        // Save conversation using the transaction
+        tx.execute(
+            "INSERT INTO conversations (account_id, participant_key, participants, last_message_date,
+                last_message_preview, last_message_from, message_count, unread_count, is_outgoing, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))
+             ON CONFLICT(account_id, participant_key) DO UPDATE SET
+                participants = excluded.participants,
+                last_message_date = excluded.last_message_date,
+                last_message_preview = excluded.last_message_preview,
+                last_message_from = excluded.last_message_from,
+                message_count = excluded.message_count,
+                unread_count = excluded.unread_count,
+                is_outgoing = excluded.is_outgoing,
+                updated_at = datetime('now')",
+            rusqlite::params![
+                conversation.account_id,
+                conversation.participant_key,
+                conversation.participants,
+                conversation.last_message_date.map(|dt: DateTime<Utc>| dt.to_rfc3339()),
+                conversation.last_message_preview,
+                conversation.last_message_from,
+                conversation.message_count,
+                conversation.unread_count,
+                conversation.is_outgoing as i32,
+            ],
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let messages: Vec<CachedMessage> = stmt
-            .query_map(rusqlite::params![account_id], |row| {
-                Ok(CachedMessage {
-                    id: row.get(0)?,
-                    account_id: row.get(1)?,
-                    folder_name: row.get(2)?,
-                    uid: row.get(3)?,
-                    message_id: row.get(4)?,
-                    in_reply_to: row.get(5)?,
-                    references: row.get(6)?,
-                    from_address: row.get(7)?,
-                    from_name: row.get(8)?,
-                    to_addresses: row.get(9)?,
-                    cc_addresses: row.get(10)?,
-                    subject: row.get(11)?,
-                    date: row
-                        .get::<_, Option<String>>(12)?
-                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                        .map(|dt| dt.with_timezone(&Utc)),
-                    flags: row.get(13)?,
-                    has_attachment: row.get::<_, i32>(14)? != 0,
-                    body_cached: row.get::<_, i32>(15)? != 0,
-                    text_body: row.get(16)?,
-                    html_body: row.get(17)?,
-                    raw_size: row.get(18)?,
-                    created_at: row
-                        .get::<_, String>(19)
-                        .ok()
-                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(Utc::now),
-                    updated_at: row
-                        .get::<_, String>(20)
-                        .ok()
-                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(Utc::now),
-                })
-            })
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
-            .filter_map(|r| r.ok())
-            .collect();
+        let conv_id: i64 = tx
+            .query_row(
+                "SELECT id FROM conversations WHERE account_id = ?1 AND participant_key = ?2",
+                rusqlite::params![account_id, participant_key],
+                |row| row.get(0),
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        drop(stmt);
-        drop(conn);
+        // Link message to conversation using the transaction
+        tx.execute(
+            "INSERT OR IGNORE INTO conversation_messages (conversation_id, message_id) VALUES (?1, ?2)",
+            rusqlite::params![conv_id, message.id],
+        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let mut count = 0;
-        for message in messages {
-            if self
-                .assign_to_conversation(account_id, user_email, &message)
-                .is_ok()
-            {
-                count += 1;
-            }
-        }
-
-        // Clean up empty conversations
-        self.db.delete_empty_conversations(account_id)?;
-
-        Ok(count)
+        Ok(conv_id)
     }
 
     /// Update conversation when a message is deleted
@@ -449,27 +655,33 @@ impl ConversationGrouper {
             cc_addresses.as_deref(),
         );
 
-        if let Some(mut conv) = self
+        // Check if this is an incoming message
+        let user_normalized = Participant::normalize_email(user_email);
+        let from_participant = Participant::from_address(&message.from_address);
+        let is_outgoing =
+            Participant::normalize_email(&from_participant.email) == user_normalized;
+
+        // Only adjust unread count for incoming messages
+        if is_outgoing {
+            return Ok(());
+        }
+
+        // Get the conversation ID
+        if let Some(conv) = self
             .db
             .get_conversation_by_key(account_id, &participant_key)?
         {
-            // Check if this is an incoming message
-            let user_normalized = Participant::normalize_email(user_email);
-            let from_participant = Participant::from_address(&message.from_address);
-            let is_outgoing =
-                Participant::normalize_email(&from_participant.email) == user_normalized;
+            // Use atomic SQL update to adjust unread count
+            // This avoids read-modify-write race conditions
+            let delta = if is_seen && !was_seen {
+                // Message was marked as read - decrement
+                -1
+            } else {
+                // Message was marked as unread - increment
+                1
+            };
 
-            if !is_outgoing {
-                if is_seen && !was_seen {
-                    // Message was marked as read
-                    conv.unread_count = conv.unread_count.saturating_sub(1);
-                } else if !is_seen && was_seen {
-                    // Message was marked as unread
-                    conv.unread_count += 1;
-                }
-
-                self.db.upsert_conversation(&conv)?;
-            }
+            self.db.adjust_conversation_unread_count(conv.id, delta)?;
         }
 
         Ok(())

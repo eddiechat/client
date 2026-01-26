@@ -6,7 +6,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing::{error, info, warn};
 
+use crate::backend::EmailBackend;
 use crate::sync::db::{QueuedActionRecord, SyncDatabase};
 use crate::types::error::HimalayaError;
 
@@ -348,14 +350,16 @@ impl ActionQueue {
         Ok(!actions.is_empty())
     }
 
-    /// Mark an action as processing
+    /// Mark an action as processing (does not increment retry_count)
     pub fn mark_processing(&self, id: i64) -> Result<(), HimalayaError> {
-        self.db.update_action_status(id, "processing", None)
+        self.db
+            .update_action_status_no_retry_increment(id, "processing")
     }
 
-    /// Mark an action as completed
+    /// Mark an action as completed (does not increment retry_count)
     pub fn mark_completed(&self, id: i64) -> Result<(), HimalayaError> {
-        self.db.update_action_status(id, "completed", None)
+        self.db
+            .update_action_status_no_retry_increment(id, "completed")
     }
 
     /// Mark an action as failed
@@ -406,6 +410,187 @@ impl ActionQueue {
         }
 
         Ok(())
+    }
+
+    /// Replay all pending actions for an account
+    ///
+    /// Executes each pending action on the IMAP server via the EmailBackend.
+    /// Actions are marked as processing before execution to prevent double-execution.
+    /// On success, actions are marked as completed. On failure, retry_count is incremented
+    /// and the action is marked as failed if max retries exceeded, otherwise reset to pending.
+    pub async fn replay_pending(
+        &self,
+        account_id: &str,
+        backend: &EmailBackend,
+    ) -> Result<Vec<ReplayResult>, HimalayaError> {
+        let pending = self.get_pending(account_id)?;
+
+        if pending.is_empty() {
+            info!("No pending actions to replay for account {}", account_id);
+            return Ok(vec![]);
+        }
+
+        info!(
+            "Replaying {} pending actions for account {}",
+            pending.len(),
+            account_id
+        );
+
+        let mut results = Vec::with_capacity(pending.len());
+
+        for action in pending {
+            let action_id = match action.id {
+                Some(id) => id,
+                None => {
+                    warn!("Action missing ID, skipping");
+                    continue;
+                }
+            };
+
+            // Mark as processing to prevent double-execution
+            if let Err(e) = self.mark_processing(action_id) {
+                error!("Failed to mark action {} as processing: {}", action_id, e);
+                continue;
+            }
+
+            // Execute the action
+            let result = self.execute_action(backend, &action.action).await;
+
+            match result {
+                Ok(()) => {
+                    info!("Action {} completed successfully", action_id);
+                    if let Err(e) = self.mark_completed(action_id) {
+                        error!("Failed to mark action {} as completed: {}", action_id, e);
+                    }
+                    results.push(ReplayResult::Success);
+                }
+                Err(e) => {
+                    let error_msg = e.to_string();
+                    warn!("Action {} failed: {}", action_id, error_msg);
+
+                    // Check if we should retry or discard
+                    if self.should_retry(&action) {
+                        // Mark as failed (increments retry_count) but leave for retry
+                        if let Err(mark_err) = self.mark_failed(action_id, &error_msg) {
+                            error!("Failed to mark action {} as failed: {}", action_id, mark_err);
+                        }
+                        // Reset to pending for next retry
+                        if let Err(retry_err) = self.retry(action_id) {
+                            error!("Failed to reset action {} to pending: {}", action_id, retry_err);
+                        }
+                        results.push(ReplayResult::Retry(error_msg));
+                    } else {
+                        // Max retries exceeded, mark as permanently failed
+                        error!(
+                            "Action {} exceeded max retries ({}), marking as failed",
+                            action_id, self.max_retries
+                        );
+                        if let Err(mark_err) = self.mark_failed(action_id, &error_msg) {
+                            error!("Failed to mark action {} as failed: {}", action_id, mark_err);
+                        }
+                        results.push(ReplayResult::Discard(error_msg));
+                    }
+                }
+            }
+        }
+
+        // Clean up completed actions
+        if let Ok(cleaned) = self.cleanup_completed(account_id) {
+            if cleaned > 0 {
+                info!("Cleaned up {} completed actions", cleaned);
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Execute a single action on the IMAP server
+    async fn execute_action(
+        &self,
+        backend: &EmailBackend,
+        action: &ActionType,
+    ) -> Result<(), HimalayaError> {
+        match action {
+            ActionType::AddFlags { folder, uids, flags } => {
+                info!(
+                    "Executing AddFlags: folder={}, uids={:?}, flags={:?}",
+                    folder, uids, flags
+                );
+                let uid_strs: Vec<String> = uids.iter().map(|u| u.to_string()).collect();
+                let uid_refs: Vec<&str> = uid_strs.iter().map(|s| s.as_str()).collect();
+                let flag_refs: Vec<&str> = flags.iter().map(|s| s.as_str()).collect();
+                backend.add_flags(Some(folder), &uid_refs, &flag_refs).await
+            }
+
+            ActionType::RemoveFlags { folder, uids, flags } => {
+                info!(
+                    "Executing RemoveFlags: folder={}, uids={:?}, flags={:?}",
+                    folder, uids, flags
+                );
+                let uid_strs: Vec<String> = uids.iter().map(|u| u.to_string()).collect();
+                let uid_refs: Vec<&str> = uid_strs.iter().map(|s| s.as_str()).collect();
+                let flag_refs: Vec<&str> = flags.iter().map(|s| s.as_str()).collect();
+                backend
+                    .remove_flags(Some(folder), &uid_refs, &flag_refs)
+                    .await
+            }
+
+            ActionType::Delete { folder, uids } => {
+                info!("Executing Delete: folder={}, uids={:?}", folder, uids);
+                let uid_strs: Vec<String> = uids.iter().map(|u| u.to_string()).collect();
+                let uid_refs: Vec<&str> = uid_strs.iter().map(|s| s.as_str()).collect();
+                backend.delete_messages(Some(folder), &uid_refs).await
+            }
+
+            ActionType::Move {
+                source_folder,
+                target_folder,
+                uids,
+            } => {
+                info!(
+                    "Executing Move: source={}, target={}, uids={:?}",
+                    source_folder, target_folder, uids
+                );
+                let uid_strs: Vec<String> = uids.iter().map(|u| u.to_string()).collect();
+                let uid_refs: Vec<&str> = uid_strs.iter().map(|s| s.as_str()).collect();
+                backend
+                    .move_messages(Some(source_folder), target_folder, &uid_refs)
+                    .await
+            }
+
+            ActionType::Copy {
+                source_folder,
+                target_folder,
+                uids,
+            } => {
+                info!(
+                    "Executing Copy: source={}, target={}, uids={:?}",
+                    source_folder, target_folder, uids
+                );
+                let uid_strs: Vec<String> = uids.iter().map(|u| u.to_string()).collect();
+                let uid_refs: Vec<&str> = uid_strs.iter().map(|s| s.as_str()).collect();
+                backend
+                    .copy_messages(Some(source_folder), target_folder, &uid_refs)
+                    .await
+            }
+
+            ActionType::Send {
+                raw_message,
+                save_to_sent,
+            } => {
+                info!("Executing Send: save_to_sent={}", save_to_sent);
+                // Note: send_message already handles saving to Sent folder based on find_sent_folder
+                // If save_to_sent is false, we'd need a different approach, but for now we use the default
+                backend.send_message(raw_message).await?;
+                Ok(())
+            }
+
+            ActionType::Save { folder, raw_message } => {
+                info!("Executing Save: folder={}", folder);
+                backend.save_message(Some(folder), raw_message).await?;
+                Ok(())
+            }
+        }
     }
 }
 

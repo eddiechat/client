@@ -36,7 +36,8 @@
       "Bash(npm run typecheck:*)",
       "Bash(npm search:*)",
       "Bash(npm uninstall:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)"
     ]
   }
 }

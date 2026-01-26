@@ -14,14 +14,11 @@ use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
 use crate::backend::EmailBackend;
-use crate::config::{self, AccountConfig};
-use crate::sync::action_queue::{ActionQueue, ActionType, QueuedAction, ReplayResult};
-use crate::sync::capability::{CapabilityDetector, CapabilityInfo, ServerCapability};
+use crate::config::AccountConfig;
+use crate::sync::action_queue::{ActionQueue, ActionType, ReplayResult};
 use crate::sync::classifier::MessageClassifier;
 use crate::sync::conversation::ConversationGrouper;
-use crate::sync::db::{
-    CachedConversation, CachedMessage, FolderSyncState, SyncDatabase, SyncProgress,
-};
+use crate::sync::db::{CachedConversation, CachedMessage, SyncDatabase};
 use crate::types::error::HimalayaError;
 use crate::types::Envelope;
 
@@ -284,6 +281,33 @@ impl SyncEngine {
     async fn do_full_sync(&self) -> Result<SyncResult, HimalayaError> {
         let backend = self.create_backend().await?;
 
+        // Replay any pending offline actions first
+        self.update_status(|s| {
+            s.progress = Some(SyncProgressInfo {
+                phase: "replaying".to_string(),
+                current: 0,
+                total: None,
+                message: "Replaying pending actions...".to_string(),
+            });
+        })
+        .await;
+
+        match self.action_queue.replay_pending(&self.account_id, &backend).await {
+            Ok(results) => {
+                let success_count = results.iter().filter(|r| matches!(r, ReplayResult::Success)).count();
+                let retry_count = results.iter().filter(|r| matches!(r, ReplayResult::Retry(_))).count();
+                let discard_count = results.iter().filter(|r| matches!(r, ReplayResult::Discard(_))).count();
+                info!(
+                    "Replayed {} actions: {} success, {} retry, {} discarded",
+                    results.len(), success_count, retry_count, discard_count
+                );
+            }
+            Err(e) => {
+                warn!("Failed to replay pending actions: {}", e);
+                // Continue with sync even if replay fails
+            }
+        }
+
         // Get folders to sync
         let folders_to_sync = self.get_folders_to_sync(&backend).await?;
         info!("Will sync folders: {:?}", folders_to_sync);
@@ -386,6 +410,18 @@ impl SyncEngine {
     ) -> Result<Vec<i64>, HimalayaError> {
         info!("Syncing folder: {}", folder);
 
+        // Check UIDVALIDITY before processing envelopes
+        // TODO: The EmailBackend does not currently expose UIDVALIDITY from the IMAP server.
+        // When the backend is updated to provide UIDVALIDITY (e.g., via a get_folder_status method),
+        // uncomment and update the following code:
+        //
+        // if let Some(server_uidvalidity) = backend.get_folder_uidvalidity(folder).await? {
+        //     self.check_uidvalidity(folder, server_uidvalidity)?;
+        // }
+        //
+        // For now, the UIDVALIDITY checking infrastructure is in place and ready to use
+        // once the backend provides this information.
+
         // Fetch envelopes from IMAP
         let envelopes = backend
             .list_envelopes(Some(folder), 0, self.config.fetch_page_size)
@@ -427,6 +463,44 @@ impl SyncEngine {
         info!("Stored {} messages from {}", message_ids.len(), folder);
 
         Ok(message_ids)
+    }
+
+    /// Check UIDVALIDITY and invalidate cache if it has changed.
+    ///
+    /// IMAP UIDs are only valid within a UIDVALIDITY epoch. If UIDVALIDITY changes
+    /// (e.g., after mailbox reconstruction), all cached UIDs are invalid and must
+    /// be discarded.
+    ///
+    /// Returns Ok(true) if the cache was invalidated, Ok(false) if UIDVALIDITY matches.
+    fn check_uidvalidity(&self, folder: &str, server_uidvalidity: u32) -> Result<bool, HimalayaError> {
+        let stored_uidvalidity = self.db.get_folder_uidvalidity(&self.account_id, folder)?;
+
+        match stored_uidvalidity {
+            Some(stored) if stored != server_uidvalidity => {
+                // UIDVALIDITY changed - all cached UIDs are now invalid
+                warn!(
+                    "UIDVALIDITY changed for folder '{}': {} -> {}. Invalidating cache.",
+                    folder, stored, server_uidvalidity
+                );
+                self.db.invalidate_folder_cache(&self.account_id, folder)?;
+                // Store the new UIDVALIDITY
+                self.db.set_folder_uidvalidity(&self.account_id, folder, server_uidvalidity)?;
+                Ok(true)
+            }
+            Some(_) => {
+                // UIDVALIDITY matches - cache is still valid
+                Ok(false)
+            }
+            None => {
+                // First sync for this folder - store the UIDVALIDITY
+                info!(
+                    "Storing initial UIDVALIDITY {} for folder '{}'",
+                    server_uidvalidity, folder
+                );
+                self.db.set_folder_uidvalidity(&self.account_id, folder, server_uidvalidity)?;
+                Ok(false)
+            }
+        }
     }
 
     /// Convert an Envelope to a CachedMessage
@@ -547,6 +621,25 @@ impl SyncEngine {
     /// Queue a user action
     pub fn queue_action(&self, action: ActionType) -> Result<i64, HimalayaError> {
         self.action_queue.queue(&self.account_id, action)
+    }
+
+    /// Replay pending actions from the action queue
+    ///
+    /// Executes all pending actions on the IMAP server. This is typically called
+    /// at the start of a sync to flush any offline actions before syncing.
+    pub async fn replay_actions(&self) -> Result<Vec<ReplayResult>, HimalayaError> {
+        info!("Replaying pending actions for account: {}", self.account_id);
+
+        let backend = self.create_backend().await?;
+        let results = self.action_queue.replay_pending(&self.account_id, &backend).await?;
+
+        // Update pending actions count in status
+        let pending_count = self.action_queue.get_pending(&self.account_id)?.len() as u32;
+        self.update_status(|s| {
+            s.pending_actions = pending_count;
+        }).await;
+
+        Ok(results)
     }
 
     /// Fetch full message body and cache it

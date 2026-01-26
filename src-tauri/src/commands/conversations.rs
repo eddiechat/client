@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::backend;
 use crate::types::conversation::{extract_name, normalize_email, Conversation};
@@ -145,8 +145,13 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
     conversations
 }
 
+/// List conversations for an account
+///
+/// **DEPRECATED**: This command fetches directly from IMAP.
+/// Use `get_cached_conversations` instead for better performance and offline support.
 #[tauri::command]
 pub async fn list_conversations(account: Option<String>) -> Result<Vec<Conversation>, String> {
+    warn!("DEPRECATED: list_conversations called - migrate to get_cached_conversations");
     info!("Tauri command: list_conversations - account: {:?}", account);
 
     let backend = backend::get_backend(account.as_deref())
@@ -227,12 +232,17 @@ fn parse_qualified_id(qualified_id: &str) -> Option<(String, String)> {
     None
 }
 
+/// Get messages for a conversation by message IDs
+///
+/// **DEPRECATED**: This command fetches directly from IMAP.
+/// Use sync engine and read from SQLite cache for better performance and offline support.
 #[tauri::command]
 #[allow(non_snake_case)]
 pub async fn get_conversation_messages(
     account: Option<String>,
     messageIds: Vec<String>,
 ) -> Result<Vec<crate::types::Message>, String> {
+    warn!("DEPRECATED: get_conversation_messages called - migrate to sync engine equivalent");
     info!(
         "Tauri command: get_conversation_messages - {} messages",
         messageIds.len()

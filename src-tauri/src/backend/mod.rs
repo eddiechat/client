@@ -281,10 +281,10 @@ impl EmailBackend {
             .into_iter()
             .map(|e| {
                 info!(
-                    "Fetched envelope: from={}, to={}, date={}, subject={}",
+                    "Fetched envelope: [{}] {} >> {}: {}",
+                    e.date.to_rfc3339(),
                     e.from.to_string(),
                     e.to.to_string(),
-                    e.date.to_rfc3339(),
                     e.subject
                 );
                 Envelope {
@@ -399,23 +399,9 @@ impl EmailBackend {
         let message_id = parsed.message_id().map(|s| s.to_string());
         let in_reply_to = parsed.in_reply_to().as_text().map(|s| s.to_string());
 
-        // Log message metadata with body preview
-        let body_preview = text_body
-            .as_ref()
-            .or(html_body.as_ref())
-            .map(|b| {
-                let trimmed = b.trim();
-                if trimmed.len() > 50 {
-                    format!("{}...", &trimmed.chars().take(50).collect::<String>())
-                } else {
-                    trimmed.to_string()
-                }
-            })
-            .unwrap_or_else(|| "<no body>".to_string());
-
         info!(
-            "Fetched message: from={}, to={:?}, date={}, subject={}, body_preview={}",
-            from, to, date, subject, body_preview
+            "Fetched message: [{}] {} >> {:?}: {}",
+            date, from, to, subject
         );
 
         Ok(Message {
