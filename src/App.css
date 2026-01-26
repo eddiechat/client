@@ -1178,4 +1178,28 @@ body {
   .message-bubble-container {
     max-width: 85%;
   }
+
+  /* Full-screen modal for mobile with virtual keyboard support */
+  .compose-modal-overlay {
+    align-items: flex-start;
+  }
+
+  .account-config-modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .account-config-modal .compose-form {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 40px;
+  }
+
+  .account-config-modal .compose-footer {
+    flex-shrink: 0;
+  }
 }

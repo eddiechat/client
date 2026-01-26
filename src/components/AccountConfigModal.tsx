@@ -214,6 +214,7 @@ export function AccountConfigModal({
               <input
                 id="email"
                 type="email"
+                inputMode="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -249,6 +250,7 @@ export function AccountConfigModal({
                 <input
                   id="imapPort"
                   type="number"
+                  inputMode="numeric"
                   value={imapPort}
                   onChange={(e) => setImapPort(parseInt(e.target.value) || 993)}
                 />
@@ -294,6 +296,7 @@ export function AccountConfigModal({
                 <input
                   id="smtpPort"
                   type="number"
+                  inputMode="numeric"
                   value={smtpPort}
                   onChange={(e) => setSmtpPort(parseInt(e.target.value) || 465)}
                 />
