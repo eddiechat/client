@@ -53,3 +53,5 @@ fabric.properties
 
 dist
 node_modules
+.claude
+.vscode
