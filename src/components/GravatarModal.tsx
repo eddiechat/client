@@ -12,19 +12,17 @@ export function GravatarModal({ email, isOpen, onClose }: GravatarModalProps) {
   const hash = md5(email.trim().toLowerCase());
   const cardUrl = `https://gravatar.com/${hash}.card`;
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    // Close only when clicking the overlay, not the modal content
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   return (
-    <div className="gravatar-modal-overlay" onClick={handleOverlayClick}>
-      <div className="gravatar-modal">
-        <button className="gravatar-modal-close" onClick={onClose} title="Close">
-          &times;
+    <div className="gravatar-panel">
+      <div className="gravatar-panel-header">
+        <h2 className="gravatar-panel-title">Profile</h2>
+        <button className="gravatar-panel-close" onClick={onClose} title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
         </button>
+      </div>
+      <div className="gravatar-panel-content">
         <iframe
           src={cardUrl}
           width="415"

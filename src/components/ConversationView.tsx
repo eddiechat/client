@@ -401,22 +401,31 @@ export function ConversationView({
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="conversation-messages">
-        {loading ? (
-          <div className="messages-loading">
-            <div className="loading-spinner" />
-            <span>Loading messages...</span>
-          </div>
-        ) : error ? (
-          <div className="messages-error">
-            <span>Error loading messages: {error}</span>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="messages-empty">
-            <p>No messages yet. Start the conversation!</p>
-          </div>
-        ) : (
+      {/* Gravatar Panel or Messages */}
+      {gravatarModalEmail ? (
+        <GravatarModal
+          email={gravatarModalEmail}
+          isOpen={!!gravatarModalEmail}
+          onClose={() => setGravatarModalEmail(null)}
+        />
+      ) : (
+        <>
+          {/* Messages */}
+          <div className="conversation-messages">
+            {loading ? (
+              <div className="messages-loading">
+                <div className="loading-spinner" />
+                <span>Loading messages...</span>
+              </div>
+            ) : error ? (
+              <div className="messages-error">
+                <span>Error loading messages: {error}</span>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="messages-empty">
+                <p>No messages yet. Start the conversation!</p>
+              </div>
+            ) : (
           <>
             {messages.map((message, index) => {
               const isOut = isOutgoing(message, currentAccountEmail);
@@ -555,13 +564,8 @@ export function ConversationView({
           </button>
         </div>
       </form>
-
-      {/* Gravatar Modal */}
-      <GravatarModal
-        email={gravatarModalEmail}
-        isOpen={!!gravatarModalEmail}
-        onClose={() => setGravatarModalEmail(null)}
-      />
+        </>
+      )}
     </div>
   );
 }
