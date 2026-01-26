@@ -1,11 +1,17 @@
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::backend;
 use crate::types::{Envelope, ListEnvelopesRequest, ListEnvelopesResponse};
 
 /// List envelopes (email metadata) for a folder
+///
+/// **DEPRECATED**: Fetches directly from IMAP.
+/// Use sync engine and read from SQLite cache for better performance.
 #[tauri::command]
-pub async fn list_envelopes(request: ListEnvelopesRequest) -> Result<ListEnvelopesResponse, String> {
+pub async fn list_envelopes(
+    request: ListEnvelopesRequest,
+) -> Result<ListEnvelopesResponse, String> {
+    warn!("DEPRECATED: list_envelopes called - migrate to sync engine equivalent");
     info!("Tauri command: list_envelopes - {:?}", request);
 
     let backend = backend::get_backend(request.account.as_deref())
@@ -30,6 +36,9 @@ pub async fn list_envelopes(request: ListEnvelopesRequest) -> Result<ListEnvelop
 }
 
 /// Thread envelopes (group by conversation)
+///
+/// **DEPRECATED**: Fetches directly from IMAP.
+/// Use sync engine and read from SQLite cache for better performance.
 #[tauri::command]
 pub async fn thread_envelopes(
     account: Option<String>,
@@ -37,6 +46,7 @@ pub async fn thread_envelopes(
     _envelope_id: Option<String>,
     _query: Option<String>,
 ) -> Result<Vec<Envelope>, String> {
+    warn!("DEPRECATED: thread_envelopes called - migrate to sync engine equivalent");
     info!(
         "Tauri command: thread_envelopes - account: {:?}, folder: {:?}",
         account, folder

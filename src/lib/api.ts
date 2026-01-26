@@ -28,8 +28,13 @@ export async function getAccountDetails(name: string): Promise<AccountDetails> {
 }
 
 // Message commands
-// Returns the message ID in the Sent folder, or null if no Sent folder was found
-export async function sendMessage(message: string, account?: string): Promise<string | null> {
+export interface SendMessageResult {
+  message_id: string;
+  sent_folder: string;
+}
+
+// Returns the message ID and sent folder name, or null if no Sent folder was found
+export async function sendMessage(message: string, account?: string): Promise<SendMessageResult | null> {
   return invoke("send_message", { account, message });
 }
 
@@ -52,4 +57,127 @@ export async function getConversationMessages(
 ): Promise<Message[]> {
   if (messageIds.length === 0) return [];
   return invoke("get_conversation_messages", { account, messageIds });
+}
+
+// ========== Sync Engine Commands ==========
+
+export interface SyncStatus {
+  state: string;
+  account_id: string;
+  current_folder: string | null;
+  progress_current: number | null;
+  progress_total: number | null;
+  progress_message: string | null;
+  last_sync: string | null;
+  error: string | null;
+  is_online: boolean;
+  pending_actions: number;
+}
+
+export interface CachedConversation {
+  id: number;
+  participant_key: string;
+  participants: { email: string; name: string | null }[];
+  last_message_date: string | null;
+  last_message_preview: string | null;
+  last_message_from: string | null;
+  message_count: number;
+  unread_count: number;
+  is_outgoing: boolean;
+}
+
+export interface CachedMessage {
+  id: number;
+  folder: string;
+  uid: number;
+  message_id: string | null;
+  from_address: string;
+  from_name: string | null;
+  to_addresses: string[];
+  cc_addresses: string[];
+  subject: string | null;
+  date: string | null;
+  flags: string[];
+  has_attachment: boolean;
+  text_body: string | null;
+  html_body: string | null;
+  body_cached: boolean;
+}
+
+/** Initialize the sync engine for an account */
+export async function initSyncEngine(account?: string): Promise<SyncStatus> {
+  return invoke("init_sync_engine", { account });
+}
+
+/** Get the current sync status */
+export async function getSyncStatus(account?: string): Promise<SyncStatus> {
+  return invoke("get_sync_status", { account });
+}
+
+/** Trigger a sync for a folder */
+export async function syncFolder(folder?: string, account?: string): Promise<void> {
+  return invoke("sync_folder", { account, folder });
+}
+
+/** Perform initial sync for a new account */
+export async function initialSync(account?: string): Promise<void> {
+  return invoke("initial_sync", { account });
+}
+
+/** Get cached conversations from SQLite */
+export async function getCachedConversations(
+  includeHidden?: boolean,
+  account?: string
+): Promise<CachedConversation[]> {
+  return invoke("get_cached_conversations", { account, includeHidden });
+}
+
+/** Get cached messages for a conversation */
+export async function getCachedConversationMessages(
+  conversationId: number,
+  account?: string
+): Promise<CachedMessage[]> {
+  return invoke("get_cached_conversation_messages", { account, conversationId });
+}
+
+/** Fetch message body on demand (if not already cached) */
+export async function fetchMessageBody(
+  messageId: number,
+  account?: string
+): Promise<CachedMessage> {
+  return invoke("fetch_message_body", { account, messageId });
+}
+
+/** Queue a sync action for offline support */
+export async function queueSyncAction(
+  actionType: "add_flags" | "remove_flags" | "delete" | "move" | "copy",
+  folder: string,
+  uids: number[],
+  flags?: string[],
+  targetFolder?: string,
+  account?: string
+): Promise<number> {
+  return invoke("queue_sync_action", {
+    account,
+    actionType,
+    folder,
+    uids,
+    flags,
+    targetFolder,
+  });
+}
+
+/** Set online status for the sync engine */
+export async function setSyncOnline(online: boolean, account?: string): Promise<void> {
+  return invoke("set_sync_online", { account, online });
+}
+
+/** Check if there are pending sync actions */
+export async function hasPendingSyncActions(account?: string): Promise<boolean> {
+  return invoke("has_pending_sync_actions", { account });
+}
+
+/** Shutdown the sync engine */
+export async function shutdownSyncEngine(account?: string): Promise<void> {
+  return invoke("shutdown_sync_engine", { account });
 }

@@ -17,17 +17,24 @@ use email::folder::{
 use email::imap::config::{ImapAuthConfig, ImapConfig as EmailImapConfig};
 use email::message::{
     add::AddMessage, copy::CopyMessages, delete::DeleteMessages, get::GetMessages,
-    r#move::MoveMessages, peek::PeekMessages, send::SendMessage,
+    peek::PeekMessages, r#move::MoveMessages, send::SendMessage,
 };
 use email::smtp::config::{SmtpAuthConfig, SmtpConfig as EmailSmtpConfig};
 use email::tls::{Encryption, Tls};
-use std::path::PathBuf;
 use secret::Secret;
+use std::path::PathBuf;
 use tracing::info;
 
 use crate::config::{self, AccountConfig, AuthConfig, PasswordSource};
 use crate::types::error::HimalayaError;
 use crate::types::{Attachment, Envelope, Folder, Message};
+
+/// Result of sending a message - contains the message ID and sent folder name
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SendMessageResult {
+    pub message_id: String,
+    pub sent_folder: String,
+}
 
 /// Backend service for email operations
 pub struct EmailBackend {
@@ -114,7 +121,9 @@ impl EmailBackend {
                 ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
             }
             AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config("OAuth2 not yet supported".to_string()));
+                return Err(HimalayaError::Config(
+                    "OAuth2 not yet supported".to_string(),
+                ));
             }
         };
 
@@ -156,7 +165,9 @@ impl EmailBackend {
                 SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
             }
             AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config("OAuth2 not yet supported".to_string()));
+                return Err(HimalayaError::Config(
+                    "OAuth2 not yet supported".to_string(),
+                ));
             }
         };
 
@@ -198,7 +209,8 @@ impl EmailBackend {
                 || name_lower.contains("envoy")      // French
                 || name_lower.contains("gesendet")   // German
                 || name_lower.contains("enviados")   // Spanish
-                || name_lower.contains("inviati")    // Italian
+                || name_lower.contains("inviati")
+            // Italian
             {
                 info!("Found sent folder: {}", folder.name);
                 return Ok(Some(folder.name.clone()));
@@ -276,8 +288,11 @@ impl EmailBackend {
             .into_iter()
             .map(|e| {
                 info!(
-                    "Fetched envelope: from={}, to={}, date={}, subject={}",
-                    e.from.to_string(), e.to.to_string(), e.date.to_rfc3339(), e.subject
+                    "Fetched envelope: [{}] {} >> {}: {}",
+                    e.date.to_rfc3339(),
+                    e.from.to_string(),
+                    e.to.to_string(),
+                    e.subject
                 );
                 Envelope {
                     id: e.id.clone(),
@@ -387,30 +402,13 @@ impl EmailBackend {
             .unwrap_or_default();
 
         let subject = parsed.subject().map(|s| s.to_string()).unwrap_or_default();
-        let date = parsed
-            .date()
-            .map(|d| d.to_rfc3339())
-            .unwrap_or_default();
+        let date = parsed.date().map(|d| d.to_rfc3339()).unwrap_or_default();
         let message_id = parsed.message_id().map(|s| s.to_string());
         let in_reply_to = parsed.in_reply_to().as_text().map(|s| s.to_string());
 
-        // Log message metadata with body preview
-        let body_preview = text_body
-            .as_ref()
-            .or(html_body.as_ref())
-            .map(|b| {
-                let trimmed = b.trim();
-                if trimmed.len() > 50 {
-                    format!("{}...", &trimmed.chars().take(50).collect::<String>())
-                } else {
-                    trimmed.to_string()
-                }
-            })
-            .unwrap_or_else(|| "<no body>".to_string());
-
         info!(
-            "Fetched message: from={}, to={:?}, date={}, subject={}, body_preview={}",
-            from, to, date, subject, body_preview
+            "Fetched message: [{}] {} >> {:?}: {}",
+            date, from, to, subject
         );
 
         Ok(Message {
@@ -429,7 +427,12 @@ impl EmailBackend {
             headers: parsed
                 .headers()
                 .iter()
-                .map(|h| (h.name().to_string(), h.value().as_text().unwrap_or("").to_string()))
+                .map(|h| {
+                    (
+                        h.name().to_string(),
+                        h.value().as_text().unwrap_or("").to_string(),
+                    )
+                })
                 .collect(),
             text_body,
             html_body,
@@ -665,7 +668,11 @@ impl EmailBackend {
     }
 
     /// Send a message via SMTP and save to Sent folder
-    pub async fn send_message(&self, raw_message: &[u8]) -> Result<Option<String>, HimalayaError> {
+    /// Returns the message ID and sent folder name, or None if no Sent folder was found
+    pub async fn send_message(
+        &self,
+        raw_message: &[u8],
+    ) -> Result<Option<SendMessageResult>, HimalayaError> {
         // First, send via SMTP
         let smtp_config = self.build_smtp_config().await?;
 
@@ -693,7 +700,10 @@ impl EmailBackend {
             info!("Saving sent message to folder: {}", folder);
             let id = self.save_message(Some(&folder), raw_message).await?;
             info!("Message saved to Sent folder with id: {}", id);
-            Ok(Some(id))
+            Ok(Some(SendMessageResult {
+                message_id: id,
+                sent_folder: folder,
+            }))
         } else {
             info!("No Sent folder found, message not saved to IMAP");
             Ok(None)
