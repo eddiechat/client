@@ -66,7 +66,15 @@ function App() {
     setSelectedConversation(conversation);
     setIsComposing(false);
     setComposeParticipants([]);
-  }, []);
+
+    // Mark messages as read when opening conversation
+    const cachedId = (conversation as { _cached_id?: number })._cached_id;
+    if (cachedId !== undefined && conversation.unread_count > 0) {
+      api.markConversationRead(cachedId, currentAccount || undefined).catch((err) => {
+        console.error("Failed to mark conversation as read:", err);
+      });
+    }
+  }, [currentAccount]);
 
   const handleCompose = useCallback(() => {
     setSelectedConversation(null);
