@@ -452,6 +452,8 @@ impl SyncEngine {
 
         // Filter by date
         let cutoff = Utc::now() - Duration::days(self.config.initial_sync_days as i64);
+        // Epoch date indicates parsing failure - don't filter these out
+        let epoch = chrono::DateTime::from_timestamp(0, 0).unwrap().with_timezone(&Utc);
         let mut message_ids: Vec<i64> = Vec::new();
 
         for envelope in envelopes {
@@ -461,7 +463,8 @@ impl SyncEngine {
                 .map(|d| d.with_timezone(&Utc));
 
             if let Some(date) = msg_date {
-                if date < cutoff {
+                // Don't filter out epoch dates (indicates date parsing failure upstream)
+                if date != epoch && date < cutoff {
                     continue; // Skip old messages
                 }
             }

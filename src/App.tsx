@@ -56,6 +56,7 @@ function App() {
     messages,
     loading: messagesLoading,
     error: messagesError,
+    refresh: refreshMessages,
   } = useConversationMessages(
     selectedConversation,
     currentAccount || undefined
@@ -93,6 +94,7 @@ function App() {
       await api.syncFolder(result.sent_folder, currentAccount || undefined);
     }
     refreshConversations();
+    refreshMessages();
   };
 
   const handleSaveDraft = async (data: ComposeMessageData) => {
@@ -139,8 +141,9 @@ function App() {
         await api.syncFolder(result.sent_folder, currentAccount || undefined);
       }
       refreshConversations();
+      refreshMessages();
     },
-    [selectedConversation, currentAccount, refreshConversations]
+    [selectedConversation, currentAccount, refreshConversations, refreshMessages]
   );
 
   const handleEditAccount = useCallback(async () => {
