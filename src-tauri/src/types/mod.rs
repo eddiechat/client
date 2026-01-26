@@ -104,4 +104,3 @@ pub struct FlagRequest {
     pub ids: Vec<String>,
     pub flags: Vec<String>,
 }
-

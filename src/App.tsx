@@ -56,8 +56,9 @@ function App() {
     messages,
     loading: messagesLoading,
     error: messagesError,
+    refresh: refreshMessages,
   } = useConversationMessages(
-    selectedConversation?.message_ids || [],
+    selectedConversation,
     currentAccount || undefined
   );
 
@@ -87,8 +88,13 @@ function App() {
       .join("\r\n");
 
     const rawMessage = `${headers}\r\n\r\n${data.body}`;
-    await api.sendMessage(rawMessage, currentAccount || undefined);
+    const result = await api.sendMessage(rawMessage, currentAccount || undefined);
+    // Sync the sent folder to pull the message into local database
+    if (result?.sent_folder) {
+      await api.syncFolder(result.sent_folder, currentAccount || undefined);
+    }
     refreshConversations();
+    refreshMessages();
   };
 
   const handleSaveDraft = async (data: ComposeMessageData) => {
@@ -129,10 +135,15 @@ function App() {
       ].join("\r\n");
 
       const rawMessage = `${headers}\r\n\r\n${text}`;
-      await api.sendMessage(rawMessage, currentAccount || undefined);
+      const result = await api.sendMessage(rawMessage, currentAccount || undefined);
+      // Sync the sent folder to pull the message into local database
+      if (result?.sent_folder) {
+        await api.syncFolder(result.sent_folder, currentAccount || undefined);
+      }
       refreshConversations();
+      refreshMessages();
     },
-    [selectedConversation, currentAccount, refreshConversations]
+    [selectedConversation, currentAccount, refreshConversations, refreshMessages]
   );
 
   const handleEditAccount = useCallback(async () => {

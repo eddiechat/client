@@ -72,16 +72,24 @@ function getSenderName(from: string): string {
   return cleanName;
 }
 
-// Get tooltip text for avatar (name and email)
-function getAvatarTooltip(from: string): string {
+// Get tooltip text for avatar (name and email, plus message ID in dev mode)
+function getAvatarTooltip(from: string, messageId?: string): string {
   const name = getSenderName(from);
   const emailMatch = from.match(/<([^>]+)>/);
   const email = emailMatch ? emailMatch[1] : from.replace(/^[^<]*/, "").trim();
 
+  let tooltip: string;
   if (name && email && name !== email && !name.includes("@")) {
-    return `${name} <${email}>`;
+    tooltip = `${name} <${email}>`;
+  } else {
+    tooltip = email || from;
   }
-  return email || from;
+
+  if (import.meta.env.DEV && messageId) {
+    tooltip += `\nID: ${messageId}`;
+  }
+
+  return tooltip;
 }
 
 // Check if message is from current user
@@ -276,7 +284,7 @@ export function ConversationView({
                             message.envelope.from
                           ),
                         }}
-                        title={getAvatarTooltip(message.envelope.from)}
+                        title={getAvatarTooltip(message.envelope.from, message.id)}
                       >
                         {(() => {
                           const messageEmail = extractEmail(message.envelope.from);

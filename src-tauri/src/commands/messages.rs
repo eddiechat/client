@@ -1,13 +1,33 @@
 use std::fs;
 use std::path::PathBuf;
-use tracing::info;
+use tauri::State;
+use tracing::{info, warn};
 
-use crate::backend;
+use crate::backend::{self, SendMessageResult};
+use crate::commands::sync::SyncManager;
+use crate::config;
 use crate::types::{Message, ReadMessageRequest};
 
+/// Helper to get account ID from optional parameter
+fn get_account_id(account: Option<&str>) -> Result<String, String> {
+    if let Some(id) = account {
+        Ok(id.to_string())
+    } else {
+        let app_config = config::get_config().map_err(|e| e.to_string())?;
+        app_config
+            .default_account_name()
+            .map(|s| s.to_string())
+            .ok_or_else(|| "No default account configured".to_string())
+    }
+}
+
 /// Read a message by ID
+///
+/// **DEPRECATED**: Fetches directly from IMAP.
+/// Use `fetch_message_body` from sync commands for cached access.
 #[tauri::command]
 pub async fn read_message(request: ReadMessageRequest) -> Result<Message, String> {
+    warn!("DEPRECATED: read_message called - migrate to fetch_message_body");
     info!("Tauri command: read_message - {:?}", request);
 
     let backend = backend::get_backend(request.account.as_deref())
@@ -26,6 +46,7 @@ pub async fn delete_messages(
     account: Option<String>,
     folder: Option<String>,
     ids: Vec<String>,
+    sync_manager: State<'_, SyncManager>,
 ) -> Result<(), String> {
     info!(
         "Tauri command: delete_messages - account: {:?}, folder: {:?}, ids: {:?}",
@@ -37,13 +58,36 @@ pub async fn delete_messages(
         .map_err(|e| e.to_string())?;
 
     let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+
+    // Execute on server
     backend
         .delete_messages(folder.as_deref(), &id_refs)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Update cache after successful server operation
+    let account_id = get_account_id(account.as_deref())?;
+    let folder_name = folder.as_deref().unwrap_or("INBOX");
+
+    if let Some(engine) = sync_manager.get(&account_id).await {
+        let db = engine.read().await.database();
+
+        // Parse UIDs and delete from cache
+        let uids: Vec<u32> = ids.iter().filter_map(|id| id.parse::<u32>().ok()).collect();
+
+        if !uids.is_empty() {
+            if let Err(e) = db.delete_messages_by_uids(&account_id, folder_name, &uids) {
+                warn!("Failed to delete messages from cache: {}", e);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Copy messages to another folder
+///
+/// Note: Cache update is skipped - the next sync will pick up the copied messages.
 #[tauri::command]
 pub async fn copy_messages(
     account: Option<String>,
@@ -65,6 +109,9 @@ pub async fn copy_messages(
         .copy_messages(source_folder.as_deref(), &target_folder, &id_refs)
         .await
         .map_err(|e| e.to_string())
+
+    // Note: We don't update the cache here because copy creates new messages
+    // with new UIDs in the target folder. The next sync will pick them up.
 }
 
 /// Move messages to another folder
@@ -74,6 +121,7 @@ pub async fn move_messages(
     source_folder: Option<String>,
     target_folder: String,
     ids: Vec<String>,
+    sync_manager: State<'_, SyncManager>,
 ) -> Result<(), String> {
     info!(
         "Tauri command: move_messages - account: {:?}, source: {:?}, target: {}",
@@ -85,16 +133,42 @@ pub async fn move_messages(
         .map_err(|e| e.to_string())?;
 
     let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+
+    // Execute on server
     backend
         .move_messages(source_folder.as_deref(), &target_folder, &id_refs)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Update cache after successful server operation
+    // For move operations, we delete from source folder cache.
+    // The messages in target folder will have new UIDs, so the next sync will pick them up.
+    let account_id = get_account_id(account.as_deref())?;
+    let folder_name = source_folder.as_deref().unwrap_or("INBOX");
+
+    if let Some(engine) = sync_manager.get(&account_id).await {
+        let db = engine.read().await.database();
+
+        // Parse UIDs and delete from source folder cache
+        let uids: Vec<u32> = ids.iter().filter_map(|id| id.parse::<u32>().ok()).collect();
+
+        if !uids.is_empty() {
+            if let Err(e) = db.delete_messages_by_uids(&account_id, folder_name, &uids) {
+                warn!("Failed to delete moved messages from cache: {}", e);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Send a message via SMTP and save to Sent folder
-/// Returns the message ID in the Sent folder, or None if no Sent folder was found
+/// Returns the message ID and sent folder name, or None if no Sent folder was found
 #[tauri::command]
-pub async fn send_message(account: Option<String>, message: String) -> Result<Option<String>, String> {
+pub async fn send_message(
+    account: Option<String>,
+    message: String,
+) -> Result<Option<SendMessageResult>, String> {
     info!(
         "Tauri command: send_message - account: {:?}, len: {}",
         account,
