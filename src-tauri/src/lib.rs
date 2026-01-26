@@ -29,6 +29,7 @@ pub fn run() {
     info!("Starting eddie ...");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(SyncManager::new())
         .setup(|app| {
@@ -73,6 +74,7 @@ pub fn run() {
             commands::copy_messages,
             commands::move_messages,
             commands::send_message,
+            commands::send_message_with_attachments,
             commands::save_message,
             commands::get_message_attachments,
             commands::download_attachment,

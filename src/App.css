@@ -828,6 +828,68 @@ body {
   height: 18px;
 }
 
+/* ===== Attachment Preview ===== */
+.conversation-input {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachments-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-hover);
+  border-radius: 16px;
+  padding: 6px 8px 6px 12px;
+  max-width: 200px;
+}
+
+.attachment-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background var(--transition-fast);
+}
+
+.attachment-remove:hover {
+  background: var(--bg-secondary);
+}
+
+.attachment-remove svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
 /* ===== Compose Mode (Messenger-style) ===== */
 .compose-header-mode {
   flex-wrap: wrap;
@@ -1039,6 +1101,42 @@ body {
 
 .footer-spacer {
   flex: 1;
+}
+
+/* ===== Compose Modal Attachments ===== */
+.attachments-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.add-attachment-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.add-attachment-btn:hover {
+  background: var(--bg-hover);
+}
+
+.add-attachment-btn svg {
+  color: var(--text-muted);
+}
+
+.compose-attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
 }
 
 .delete-confirm-text {
