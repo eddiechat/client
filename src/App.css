@@ -1248,8 +1248,8 @@ body {
   }
 }
 
-/* Tablet and small desktop (481px to 768px) */
-@media (min-width: 481px) and (max-width: 768px) {
+/* Tablet and small desktop (481px to 768px) or narrow aspect ratio */
+@media (min-width: 481px) and (max-width: 768px), (max-aspect-ratio: 3/4) {
   .sidebar {
     position: absolute;
     left: 0;
