@@ -253,6 +253,35 @@ Built applications will be in `src-tauri/target/release/bundle/`.
 
 ---
 
+## Releases
+
+This project uses automated builds via GitHub Actions.
+
+### Development Builds
+
+Every push to `main` (including merged PRs) automatically creates a **pre-release** build. These builds are not thoroughly tested and are intended for development and testing purposes only.
+
+### Stable Releases
+
+Stable releases are created by pushing a version tag:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+### Downloads
+
+| Platform | Architectures | Formats |
+|----------|---------------|---------|
+| Windows | x64 | `.msi`, `.exe` |
+| macOS | Apple Silicon, Intel | `.dmg` |
+| Linux | x64 | `.deb`, `.AppImage` |
+
+Download the latest stable release or development builds from the [Releases](../../releases) page.
+
+---
+
 ## Configuration
 
 eddie.chat stores configuration at:
