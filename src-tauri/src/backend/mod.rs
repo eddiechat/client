@@ -440,6 +440,174 @@ impl EmailBackend {
         })
     }
 
+    /// Get attachment info for a message without content
+    pub async fn get_attachment_info(
+        &self,
+        folder: Option<&str>,
+        id: &str,
+    ) -> Result<Vec<Attachment>, HimalayaError> {
+        let imap_config = self.build_imap_config().await?;
+        let folder = folder.unwrap_or(INBOX);
+        let msg_id = Id::single(id);
+
+        let ctx = email::imap::ImapContextBuilder::new(
+            self.email_account_config.clone(),
+            Arc::new(imap_config),
+        );
+
+        let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
+            .build()
+            .await
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let messages = backend
+            .peek_messages(folder, &msg_id)
+            .await
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let msg = messages
+            .first()
+            .ok_or_else(|| HimalayaError::MessageNotFound(id.to_string()))?;
+
+        let attachments: Vec<Attachment> = msg
+            .attachments()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .into_iter()
+            .map(|a| Attachment {
+                filename: a.filename,
+                mime_type: a.mime.to_string(),
+                size: a.body.len(),
+            })
+            .collect();
+
+        Ok(attachments)
+    }
+
+    /// Download a specific attachment and save to disk
+    pub async fn download_attachment(
+        &self,
+        folder: Option<&str>,
+        id: &str,
+        attachment_index: usize,
+        download_dir: &std::path::Path,
+    ) -> Result<PathBuf, HimalayaError> {
+        let imap_config = self.build_imap_config().await?;
+        let folder = folder.unwrap_or(INBOX);
+        let msg_id = Id::single(id);
+
+        let ctx = email::imap::ImapContextBuilder::new(
+            self.email_account_config.clone(),
+            Arc::new(imap_config),
+        );
+
+        let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
+            .build()
+            .await
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let messages = backend
+            .peek_messages(folder, &msg_id)
+            .await
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let msg = messages
+            .first()
+            .ok_or_else(|| HimalayaError::MessageNotFound(id.to_string()))?;
+
+        let attachments: Vec<_> = msg
+            .attachments()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .into_iter()
+            .collect();
+
+        let attachment = attachments
+            .get(attachment_index)
+            .ok_or_else(|| HimalayaError::Backend(format!("Attachment index {} not found", attachment_index)))?;
+
+        let filename = attachment
+            .filename
+            .clone()
+            .unwrap_or_else(|| format!("attachment_{}", attachment_index));
+
+        // Sanitize filename to prevent path traversal
+        let safe_filename = std::path::Path::new(&filename)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| format!("attachment_{}", attachment_index));
+
+        let file_path = download_dir.join(&safe_filename);
+
+        // Write the attachment content to disk
+        std::fs::write(&file_path, &attachment.body)
+            .map_err(|e| HimalayaError::Backend(format!("Failed to write attachment: {}", e)))?;
+
+        info!("Downloaded attachment: {}", file_path.display());
+        Ok(file_path)
+    }
+
+    /// Download all attachments and save to disk
+    pub async fn download_all_attachments(
+        &self,
+        folder: Option<&str>,
+        id: &str,
+        download_dir: &std::path::Path,
+    ) -> Result<Vec<PathBuf>, HimalayaError> {
+        let imap_config = self.build_imap_config().await?;
+        let folder = folder.unwrap_or(INBOX);
+        let msg_id = Id::single(id);
+
+        let ctx = email::imap::ImapContextBuilder::new(
+            self.email_account_config.clone(),
+            Arc::new(imap_config),
+        );
+
+        let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
+            .build()
+            .await
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let messages = backend
+            .peek_messages(folder, &msg_id)
+            .await
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let msg = messages
+            .first()
+            .ok_or_else(|| HimalayaError::MessageNotFound(id.to_string()))?;
+
+        let attachments: Vec<_> = msg
+            .attachments()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .into_iter()
+            .collect();
+
+        let mut saved_files = Vec::new();
+
+        for (index, attachment) in attachments.iter().enumerate() {
+            let filename = attachment
+                .filename
+                .clone()
+                .unwrap_or_else(|| format!("attachment_{}", index));
+
+            // Sanitize filename to prevent path traversal
+            let safe_filename = std::path::Path::new(&filename)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| format!("attachment_{}", index));
+
+            let file_path = download_dir.join(&safe_filename);
+
+            // Write the attachment content to disk
+            std::fs::write(&file_path, &attachment.body)
+                .map_err(|e| HimalayaError::Backend(format!("Failed to write attachment: {}", e)))?;
+
+            info!("Downloaded attachment: {}", file_path.display());
+            saved_files.push(file_path);
+        }
+
+        Ok(saved_files)
+    }
+
     /// Add flags to messages
     pub async fn add_flags(
         &self,
