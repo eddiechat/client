@@ -7,11 +7,24 @@ mod types;
 use commands::SyncManager;
 use tauri::Manager;
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize tracing for logging
-    tracing_subscriber::fmt::init();
+    // In debug builds, default to debug level for our crate
+    // Can be overridden with RUST_LOG environment variable
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if cfg!(debug_assertions) {
+            // Debug build: show debug logs for our crate, info for others
+            EnvFilter::new("eddie_chat_lib=debug,info")
+        } else {
+            // Release build: show info and above
+            EnvFilter::new("info")
+        }
+    });
+
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     info!("Starting eddie ...");
 
@@ -83,6 +96,8 @@ pub fn run() {
             commands::queue_sync_action,
             commands::set_sync_online,
             commands::has_pending_sync_actions,
+            commands::start_monitoring,
+            commands::stop_monitoring,
             commands::shutdown_sync_engine,
         ])
         .run(tauri::generate_context!())

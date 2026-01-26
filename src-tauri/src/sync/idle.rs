@@ -1,7 +1,9 @@
 //! IMAP IDLE and Polling for Change Monitoring
 //!
-//! Desktop: Maintains persistent connection with IDLE command
-//! Mobile: Polls at configurable intervals
+//! Desktop: Maintains persistent connection with IDLE command (when available)
+//! Mobile/Fallback: Polls at configurable intervals
+//!
+//! The monitoring system detects mailbox changes and triggers sync operations.
 
 use chrono::{DateTime, Duration, Utc};
 use flume::{Receiver, Sender};
@@ -9,104 +11,161 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::interval;
+use tracing::{debug, error, info, warn};
 
 /// IDLE/polling configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdleConfig {
+pub struct MonitorConfig {
     /// Whether to use IDLE (if available) vs polling
-    pub use_idle: bool,
+    pub prefer_idle: bool,
     /// IDLE timeout in minutes (re-issue before NAT timeout)
     pub idle_timeout_minutes: u64,
     /// Poll interval in seconds (when IDLE not available/disabled)
     pub poll_interval_seconds: u64,
-    /// Quick-check optimization: skip full sync if UIDNEXT/HIGHESTMODSEQ unchanged
+    /// Quick-check optimization: skip full sync if message count unchanged
     pub use_quick_check: bool,
 }
 
-impl Default for IdleConfig {
+impl Default for MonitorConfig {
     fn default() -> Self {
         Self {
-            use_idle: true,
+            prefer_idle: true,
             idle_timeout_minutes: 20, // Re-issue before 29-minute NAT timeout
-            poll_interval_seconds: 60 * 15, // 15 minutes for polling
+            poll_interval_seconds: 60, // 1 minute for polling
             use_quick_check: true,
         }
     }
 }
 
-/// Change notification types from IDLE
+/// Change notification types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChangeNotification {
-    /// New message(s) arrived (EXISTS)
-    NewMessages { folder: String, count: u32 },
-    /// Message(s) expunged (EXPUNGE)
-    MessagesExpunged { folder: String, count: u32 },
-    /// Flags changed (FETCH)
-    FlagsChanged { folder: String, uid: u32 },
-    /// Folder selected state changed (UIDNEXT, HIGHESTMODSEQ, etc.)
-    FolderStateChanged { folder: String },
-    /// IDLE connection needs to be re-established
-    IdleRefresh,
+    /// New message(s) may have arrived - trigger sync
+    NewMessages { folder: String },
+    /// Message(s) may have been expunged - trigger sync
+    MessagesExpunged { folder: String },
+    /// Flags may have changed - trigger sync
+    FlagsChanged { folder: String },
+    /// General folder state change detected
+    FolderChanged { folder: String },
     /// Time for a poll check
     PollTrigger,
-    /// Connection lost
+    /// Connection lost - need to reconnect
     ConnectionLost { error: String },
+    /// Monitor is stopping
+    Shutdown,
 }
 
-/// IDLE state
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IdleState {
-    /// Not connected
-    Disconnected,
-    /// Connecting to server
-    Connecting,
-    /// Selecting folder
-    Selecting,
-    /// In IDLE mode, waiting for notifications
-    Idling,
-    /// Processing a notification
-    Processing,
-    /// Temporarily paused (for other operations)
-    Paused,
+/// Monitoring mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MonitorMode {
+    /// Using IMAP IDLE for push notifications
+    Idle,
+    /// Using periodic polling
+    Polling,
+    /// Not monitoring (stopped)
+    Stopped,
 }
 
-/// IDLE monitor for a single folder
-pub struct IdleMonitor {
+/// State tracked for quick-check optimization
+#[derive(Debug, Clone, Default)]
+pub struct FolderState {
+    pub folder: String,
+    pub message_count: Option<u32>,
+    pub last_check: Option<DateTime<Utc>>,
+}
+
+impl FolderState {
+    pub fn new(folder: String) -> Self {
+        Self {
+            folder,
+            message_count: None,
+            last_check: None,
+        }
+    }
+
+    /// Check if the message count changed
+    pub fn has_changes(&self, new_count: u32) -> bool {
+        match self.message_count {
+            Some(old_count) => {
+                if old_count != new_count {
+                    info!(
+                        "Folder '{}' message count changed: {} -> {}",
+                        self.folder, old_count, new_count
+                    );
+                    true
+                } else {
+                    debug!(
+                        "Folder '{}' message count unchanged: {}",
+                        self.folder, old_count
+                    );
+                    false
+                }
+            }
+            None => {
+                info!(
+                    "Folder '{}' initial message count: {}",
+                    self.folder, new_count
+                );
+                true // First check, assume changes
+            }
+        }
+    }
+
+    /// Update the tracked state
+    pub fn update(&mut self, message_count: u32) {
+        self.message_count = Some(message_count);
+        self.last_check = Some(Utc::now());
+    }
+}
+
+/// Mailbox monitor that uses polling (with IDLE-ready structure)
+///
+/// Currently implements polling-based monitoring. The structure is ready
+/// for native IMAP IDLE support when/if email-lib exposes it.
+pub struct MailboxMonitor {
     account_id: String,
-    folder: String,
-    config: IdleConfig,
-    state: Arc<RwLock<IdleState>>,
+    folders: Vec<String>,
+    config: MonitorConfig,
+    mode: Arc<RwLock<MonitorMode>>,
     running: Arc<AtomicBool>,
     notification_tx: Sender<ChangeNotification>,
-    last_idle_time: Arc<RwLock<DateTime<Utc>>>,
+    folder_states: Arc<RwLock<Vec<FolderState>>>,
+    supports_idle: bool,
 }
 
-impl IdleMonitor {
-    /// Create a new IDLE monitor
+impl MailboxMonitor {
+    /// Create a new mailbox monitor
     pub fn new(
         account_id: String,
-        folder: String,
-        config: IdleConfig,
+        folders: Vec<String>,
+        config: MonitorConfig,
+        supports_idle: bool,
     ) -> (Self, Receiver<ChangeNotification>) {
         let (tx, rx) = flume::unbounded();
 
+        let folder_states: Vec<FolderState> = folders
+            .iter()
+            .map(|f| FolderState::new(f.clone()))
+            .collect();
+
         let monitor = Self {
             account_id,
-            folder,
+            folders,
             config,
-            state: Arc::new(RwLock::new(IdleState::Disconnected)),
+            mode: Arc::new(RwLock::new(MonitorMode::Stopped)),
             running: Arc::new(AtomicBool::new(false)),
             notification_tx: tx,
-            last_idle_time: Arc::new(RwLock::new(Utc::now())),
+            folder_states: Arc::new(RwLock::new(folder_states)),
+            supports_idle,
         };
 
         (monitor, rx)
     }
 
-    /// Get current state
-    pub async fn state(&self) -> IdleState {
-        *self.state.read().await
+    /// Get current monitoring mode
+    pub async fn mode(&self) -> MonitorMode {
+        *self.mode.read().await
     }
 
     /// Check if monitor is running
@@ -116,155 +175,151 @@ impl IdleMonitor {
 
     /// Stop the monitor
     pub fn stop(&self) {
+        info!(
+            "Stopping mailbox monitor for account: {}",
+            self.account_id
+        );
         self.running.store(false, Ordering::SeqCst);
+        let _ = self.notification_tx.send(ChangeNotification::Shutdown);
     }
 
-    /// Pause IDLE temporarily (for other operations)
-    pub async fn pause(&self) {
-        let mut state = self.state.write().await;
-        if *state == IdleState::Idling {
-            *state = IdleState::Paused;
+    /// Get the notification sender (for external triggers)
+    pub fn notification_sender(&self) -> Sender<ChangeNotification> {
+        self.notification_tx.clone()
+    }
+
+    /// Start the monitoring loop
+    ///
+    /// This runs in a background task and sends notifications when changes are detected.
+    /// Currently uses polling; structured to support IDLE in the future.
+    pub async fn start(&self) {
+        if self.running.swap(true, Ordering::SeqCst) {
+            warn!("Monitor already running for account: {}", self.account_id);
+            return;
         }
-    }
 
-    /// Resume IDLE after pause
-    pub async fn resume(&self) {
-        let mut state = self.state.write().await;
-        if *state == IdleState::Paused {
-            *state = IdleState::Idling;
-        }
-    }
-
-    /// Send a notification
-    fn notify(&self, notification: ChangeNotification) {
-        let _ = self.notification_tx.send(notification);
-    }
-
-    /// Check if IDLE needs to be refreshed
-    pub async fn needs_refresh(&self) -> bool {
-        let last_time = *self.last_idle_time.read().await;
-        let elapsed = Utc::now() - last_time;
-        elapsed > Duration::minutes(self.config.idle_timeout_minutes as i64)
-    }
-
-    /// Update last IDLE time
-    pub async fn update_idle_time(&self) {
-        let mut last_time = self.last_idle_time.write().await;
-        *last_time = Utc::now();
-    }
-}
-
-/// Poll-based change monitor (for when IDLE is not available)
-pub struct PollMonitor {
-    account_id: String,
-    folders: Vec<String>,
-    config: IdleConfig,
-    running: Arc<AtomicBool>,
-    notification_tx: Sender<ChangeNotification>,
-    last_poll_time: Arc<RwLock<DateTime<Utc>>>,
-}
-
-impl PollMonitor {
-    /// Create a new poll monitor
-    pub fn new(
-        account_id: String,
-        folders: Vec<String>,
-        config: IdleConfig,
-    ) -> (Self, Receiver<ChangeNotification>) {
-        let (tx, rx) = flume::unbounded();
-
-        let monitor = Self {
-            account_id,
-            folders,
-            config,
-            running: Arc::new(AtomicBool::new(false)),
-            notification_tx: tx,
-            last_poll_time: Arc::new(RwLock::new(Utc::now())),
+        // Determine monitoring mode
+        let mode = if self.supports_idle && self.config.prefer_idle {
+            // TODO: When email-lib supports IDLE, implement native IDLE here
+            // For now, fall back to polling even if server supports IDLE
+            info!(
+                "Server supports IDLE but using polling (IDLE not yet implemented in backend)"
+            );
+            MonitorMode::Polling
+        } else {
+            info!(
+                "Using polling mode for account: {} (interval: {}s)",
+                self.account_id, self.config.poll_interval_seconds
+            );
+            MonitorMode::Polling
         };
 
-        (monitor, rx)
+        {
+            let mut mode_lock = self.mode.write().await;
+            *mode_lock = mode;
+        }
+
+        match mode {
+            MonitorMode::Idle => {
+                self.run_idle_loop().await;
+            }
+            MonitorMode::Polling => {
+                self.run_poll_loop().await;
+            }
+            MonitorMode::Stopped => {}
+        }
+
+        // Cleanup
+        {
+            let mut mode_lock = self.mode.write().await;
+            *mode_lock = MonitorMode::Stopped;
+        }
+        info!("Monitor stopped for account: {}", self.account_id);
     }
 
-    /// Start the poll loop
-    pub async fn start(&self) {
-        self.running.store(true, Ordering::SeqCst);
+    /// Run the polling loop
+    async fn run_poll_loop(&self) {
+        let interval = tokio::time::Duration::from_secs(self.config.poll_interval_seconds);
+        let mut poll_interval = tokio::time::interval(interval);
 
-        let interval_duration = tokio::time::Duration::from_secs(self.config.poll_interval_seconds);
-        let mut poll_interval = interval(interval_duration);
+        info!(
+            "Starting poll loop for account: {} (folders: {:?}, interval: {:?})",
+            self.account_id, self.folders, interval
+        );
 
         while self.running.load(Ordering::SeqCst) {
             poll_interval.tick().await;
 
-            if self.running.load(Ordering::SeqCst) {
-                // Update last poll time
-                {
-                    let mut last_time = self.last_poll_time.write().await;
-                    *last_time = Utc::now();
-                }
+            if !self.running.load(Ordering::SeqCst) {
+                break;
+            }
 
-                // Notify that it's time to poll
-                let _ = self.notification_tx.send(ChangeNotification::PollTrigger);
+            debug!("Poll tick for account: {}", self.account_id);
+
+            // Send poll trigger notification
+            if let Err(e) = self.notification_tx.send(ChangeNotification::PollTrigger) {
+                error!("Failed to send poll trigger: {}", e);
+                break;
             }
         }
     }
 
-    /// Stop the poll loop
-    pub fn stop(&self) {
-        self.running.store(false, Ordering::SeqCst);
+    /// Run the IDLE loop (placeholder for future implementation)
+    async fn run_idle_loop(&self) {
+        // TODO: Implement native IMAP IDLE when email-lib supports it
+        //
+        // The implementation would:
+        // 1. Open a persistent IMAP connection
+        // 2. SELECT the folder
+        // 3. Send IDLE command
+        // 4. Parse untagged responses for EXISTS, EXPUNGE, FETCH
+        // 5. Break IDLE before timeout (29 min NAT, use 20 min)
+        // 6. Re-issue IDLE command
+        //
+        // For now, fall back to polling
+        warn!("IDLE mode requested but not implemented, falling back to polling");
+        self.run_poll_loop().await;
     }
 
-    /// Check if monitor is running
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::SeqCst)
+    /// Update folder state after a sync
+    pub async fn update_folder_state(&self, folder: &str, message_count: u32) {
+        let mut states = self.folder_states.write().await;
+        if let Some(state) = states.iter_mut().find(|s| s.folder == folder) {
+            state.update(message_count);
+            debug!(
+                "Updated folder state for '{}': {} messages",
+                folder, message_count
+            );
+        }
     }
 
-    /// Get time until next poll
-    pub async fn time_until_next_poll(&self) -> Duration {
-        let last_time = *self.last_poll_time.read().await;
-        let elapsed = Utc::now() - last_time;
-        let interval = Duration::seconds(self.config.poll_interval_seconds as i64);
-
-        if elapsed >= interval {
-            Duration::zero()
+    /// Check if a folder has changes based on message count
+    pub async fn check_folder_changes(&self, folder: &str, new_count: u32) -> bool {
+        let states = self.folder_states.read().await;
+        if let Some(state) = states.iter().find(|s| s.folder == folder) {
+            state.has_changes(new_count)
         } else {
-            interval - elapsed
+            true // Unknown folder, assume changes
         }
     }
 
-    /// Trigger an immediate poll
-    pub fn trigger_poll(&self) {
-        let _ = self.notification_tx.send(ChangeNotification::PollTrigger);
-    }
-}
-
-/// Quick-check state for optimizing polls
-#[derive(Debug, Clone, Default)]
-pub struct QuickCheckState {
-    pub uidnext: Option<u32>,
-    pub highestmodseq: Option<u64>,
-    pub exists: Option<u32>,
-}
-
-impl QuickCheckState {
-    /// Check if anything changed
-    pub fn changed(&self, other: &QuickCheckState) -> bool {
-        // If any value changed, we need a full sync
-        if self.uidnext != other.uidnext {
-            return true;
-        }
-        if self.highestmodseq != other.highestmodseq {
-            return true;
-        }
-        if self.exists != other.exists {
-            return true;
-        }
-        false
+    /// Get time since last check for a folder
+    pub async fn time_since_last_check(&self, folder: &str) -> Option<Duration> {
+        let states = self.folder_states.read().await;
+        states
+            .iter()
+            .find(|s| s.folder == folder)
+            .and_then(|s| s.last_check)
+            .map(|t| Utc::now() - t)
     }
 }
 
 /// Parse IMAP untagged response for change notifications
+///
+/// Used when we have access to raw IMAP responses (e.g., from IDLE)
 pub fn parse_untagged_response(line: &str, folder: &str) -> Option<ChangeNotification> {
     let line = line.trim();
+    debug!("Parsing IMAP response: {}", line);
 
     // Handle EXISTS response: "* 42 EXISTS"
     if line.ends_with(" EXISTS") {
@@ -272,10 +327,10 @@ pub fn parse_untagged_response(line: &str, folder: &str) -> Option<ChangeNotific
             .strip_prefix("* ")
             .and_then(|s| s.strip_suffix(" EXISTS"))
         {
-            if let Ok(count) = count_str.parse::<u32>() {
+            if count_str.parse::<u32>().is_ok() {
+                info!("Detected EXISTS response for folder '{}'", folder);
                 return Some(ChangeNotification::NewMessages {
                     folder: folder.to_string(),
-                    count,
                 });
             }
         }
@@ -283,29 +338,20 @@ pub fn parse_untagged_response(line: &str, folder: &str) -> Option<ChangeNotific
 
     // Handle EXPUNGE response: "* 42 EXPUNGE"
     if line.ends_with(" EXPUNGE") {
-        if let Some(_) = line
-            .strip_prefix("* ")
-            .and_then(|s| s.strip_suffix(" EXPUNGE"))
-        {
+        if line.strip_prefix("* ").is_some() {
+            info!("Detected EXPUNGE response for folder '{}'", folder);
             return Some(ChangeNotification::MessagesExpunged {
                 folder: folder.to_string(),
-                count: 1, // EXPUNGE is per-message
             });
         }
     }
 
     // Handle FETCH response for flag changes: "* 42 FETCH (FLAGS (...))"
     if line.contains(" FETCH ") && line.contains("FLAGS") {
-        if let Some(num_str) = line.strip_prefix("* ") {
-            if let Some(space_pos) = num_str.find(' ') {
-                if let Ok(uid) = num_str[..space_pos].parse::<u32>() {
-                    return Some(ChangeNotification::FlagsChanged {
-                        folder: folder.to_string(),
-                        uid,
-                    });
-                }
-            }
-        }
+        info!("Detected FLAGS change for folder '{}'", folder);
+        return Some(ChangeNotification::FlagsChanged {
+            folder: folder.to_string(),
+        });
     }
 
     None
@@ -319,9 +365,8 @@ mod tests {
     fn test_parse_exists() {
         let result = parse_untagged_response("* 42 EXISTS", "INBOX");
         match result {
-            Some(ChangeNotification::NewMessages { folder, count }) => {
+            Some(ChangeNotification::NewMessages { folder }) => {
                 assert_eq!(folder, "INBOX");
-                assert_eq!(count, 42);
             }
             _ => panic!("Expected NewMessages"),
         }
@@ -331,7 +376,7 @@ mod tests {
     fn test_parse_expunge() {
         let result = parse_untagged_response("* 15 EXPUNGE", "INBOX");
         match result {
-            Some(ChangeNotification::MessagesExpunged { folder, .. }) => {
+            Some(ChangeNotification::MessagesExpunged { folder }) => {
                 assert_eq!(folder, "INBOX");
             }
             _ => panic!("Expected MessagesExpunged"),
@@ -342,36 +387,29 @@ mod tests {
     fn test_parse_fetch_flags() {
         let result = parse_untagged_response("* 42 FETCH (FLAGS (\\Seen \\Flagged))", "INBOX");
         match result {
-            Some(ChangeNotification::FlagsChanged { folder, uid }) => {
+            Some(ChangeNotification::FlagsChanged { folder }) => {
                 assert_eq!(folder, "INBOX");
-                assert_eq!(uid, 42);
             }
             _ => panic!("Expected FlagsChanged"),
         }
     }
 
     #[test]
-    fn test_quick_check_changed() {
-        let state1 = QuickCheckState {
-            uidnext: Some(100),
-            highestmodseq: Some(500),
-            exists: Some(50),
-        };
+    fn test_folder_state_changes() {
+        let mut state = FolderState::new("INBOX".to_string());
 
-        let state2 = QuickCheckState {
-            uidnext: Some(101), // New message
-            highestmodseq: Some(500),
-            exists: Some(51),
-        };
+        // First check - no previous state
+        assert!(state.has_changes(10));
+        state.update(10);
 
-        assert!(state1.changed(&state2));
+        // Same count - no changes
+        assert!(!state.has_changes(10));
 
-        let state3 = QuickCheckState {
-            uidnext: Some(100),
-            highestmodseq: Some(500),
-            exists: Some(50),
-        };
+        // Different count - changes
+        assert!(state.has_changes(15));
+        state.update(15);
 
-        assert!(!state1.changed(&state3));
+        // Same new count - no changes
+        assert!(!state.has_changes(15));
     }
 }

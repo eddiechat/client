@@ -45,7 +45,7 @@ pub async fn add_flags(
     let folder = request.folder.as_deref().unwrap_or("INBOX");
 
     if let Some(engine) = sync_manager.get(&account_id).await {
-        let db = engine.database();
+        let db = engine.read().await.database();
         for id in &request.ids {
             if let Ok(uid) = id.parse::<u32>() {
                 if let Err(e) = db.add_message_flags(&account_id, folder, uid, &request.flags) {
@@ -84,7 +84,7 @@ pub async fn remove_flags(
     let folder = request.folder.as_deref().unwrap_or("INBOX");
 
     if let Some(engine) = sync_manager.get(&account_id).await {
-        let db = engine.database();
+        let db = engine.read().await.database();
         for id in &request.ids {
             if let Ok(uid) = id.parse::<u32>() {
                 if let Err(e) = db.remove_message_flags(&account_id, folder, uid, &request.flags) {
@@ -123,7 +123,7 @@ pub async fn set_flags(
     let folder = request.folder.as_deref().unwrap_or("INBOX");
 
     if let Some(engine) = sync_manager.get(&account_id).await {
-        let db = engine.database();
+        let db = engine.read().await.database();
         for id in &request.ids {
             if let Ok(uid) = id.parse::<u32>() {
                 if let Err(e) = db.set_message_flags_vec(&account_id, folder, uid, &request.flags) {

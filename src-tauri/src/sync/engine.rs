@@ -2,8 +2,14 @@
 //!
 //! Maintains a local SQLite cache of email messages synchronized with IMAP servers.
 //! The local database is a cache of server state, not the source of truth.
+//!
+//! Features:
+//! - Background monitoring via polling (IDLE support ready for future)
+//! - Automatic sync on detected changes
+//! - Offline action queue with replay
 
 use chrono::{DateTime, Duration, Utc};
+use flume::Receiver;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -11,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::backend::EmailBackend;
 use crate::config::AccountConfig;
@@ -19,6 +25,7 @@ use crate::sync::action_queue::{ActionQueue, ActionType, ReplayResult};
 use crate::sync::classifier::MessageClassifier;
 use crate::sync::conversation::ConversationGrouper;
 use crate::sync::db::{CachedConversation, CachedMessage, SyncDatabase};
+use crate::sync::idle::{ChangeNotification, MailboxMonitor, MonitorConfig, MonitorMode};
 use crate::types::error::HimalayaError;
 use crate::types::Envelope;
 
@@ -37,6 +44,10 @@ pub struct SyncConfig {
     pub sync_folders: Vec<String>,
     /// Page size for fetching envelopes
     pub fetch_page_size: usize,
+    /// Enable background monitoring for changes
+    pub enable_monitoring: bool,
+    /// Monitoring configuration
+    pub monitor_config: MonitorConfig,
 }
 
 impl Default for SyncConfig {
@@ -55,6 +66,8 @@ impl Default for SyncConfig {
             auto_classify: true,
             sync_folders: vec![],
             fetch_page_size: 500,
+            enable_monitoring: true,
+            monitor_config: MonitorConfig::default(),
         }
     }
 }
@@ -70,6 +83,7 @@ pub struct SyncStatus {
     pub error: Option<String>,
     pub is_online: bool,
     pub pending_actions: u32,
+    pub monitor_mode: Option<String>,
 }
 
 /// Sync state
@@ -126,6 +140,10 @@ pub struct SyncEngine {
     is_online: Arc<AtomicBool>,
     app_handle: Option<tauri::AppHandle>,
     shutdown: Arc<AtomicBool>,
+    /// Mailbox monitor for detecting changes
+    monitor: Option<Arc<MailboxMonitor>>,
+    /// Receiver for monitor notifications
+    monitor_rx: Option<Receiver<ChangeNotification>>,
 }
 
 impl SyncEngine {
@@ -157,6 +175,7 @@ impl SyncEngine {
             error: None,
             is_online: false,
             pending_actions: 0,
+            monitor_mode: None,
         };
 
         let engine = Self {
@@ -172,6 +191,8 @@ impl SyncEngine {
             is_online: Arc::new(AtomicBool::new(false)),
             app_handle,
             shutdown: Arc::new(AtomicBool::new(false)),
+            monitor: None,
+            monitor_rx: None,
         };
 
         Ok(engine)
@@ -676,8 +697,250 @@ impl SyncEngine {
         Ok(updated)
     }
 
+    /// Start background monitoring for mailbox changes
+    ///
+    /// This creates a monitor that polls for changes and triggers syncs when needed.
+    /// The monitor runs in a background task and sends notifications via the channel.
+    pub async fn start_monitoring(&mut self) -> Result<(), HimalayaError> {
+        if !self.config.enable_monitoring {
+            info!("Monitoring disabled in config, skipping");
+            return Ok(());
+        }
+
+        if self.monitor.is_some() {
+            warn!("Monitor already started for account: {}", self.account_id);
+            return Ok(());
+        }
+
+        info!(
+            "Starting mailbox monitoring for account: {} (poll interval: {}s)",
+            self.account_id, self.config.monitor_config.poll_interval_seconds
+        );
+
+        // Get folders to monitor
+        let backend = self.create_backend().await?;
+        let folders = self.get_folders_to_sync(&backend).await?;
+        info!("Will monitor folders: {:?}", folders);
+
+        // TODO: Detect IDLE capability from server
+        // For now, assume no IDLE support until email-lib exposes it
+        let supports_idle = false;
+        if supports_idle {
+            info!("Server supports IDLE - will use push notifications");
+        } else {
+            info!("Server does not support IDLE - using polling");
+        }
+
+        // Create the monitor
+        let (monitor, rx) = MailboxMonitor::new(
+            self.account_id.clone(),
+            folders,
+            self.config.monitor_config.clone(),
+            supports_idle,
+        );
+
+        let monitor = Arc::new(monitor);
+        self.monitor = Some(monitor.clone());
+        self.monitor_rx = Some(rx);
+
+        // Update status with monitoring mode
+        self.update_status(|s| {
+            s.monitor_mode = Some("polling".to_string());
+        })
+        .await;
+
+        // Start the monitor in a background task
+        let monitor_clone = monitor.clone();
+        tokio::spawn(async move {
+            monitor_clone.start().await;
+        });
+
+        info!("Mailbox monitor started for account: {}", self.account_id);
+        Ok(())
+    }
+
+    /// Process notifications from the monitor
+    ///
+    /// This should be called in a loop to handle incoming change notifications.
+    /// Returns true if a notification was processed, false if the channel is empty/closed.
+    pub async fn process_monitor_notification(&self) -> bool {
+        let rx = match &self.monitor_rx {
+            Some(rx) => rx,
+            None => {
+                debug!("No monitor receiver available");
+                return false;
+            }
+        };
+
+        // Try to receive a notification (non-blocking)
+        match rx.try_recv() {
+            Ok(notification) => {
+                self.handle_notification(notification).await;
+                true
+            }
+            Err(flume::TryRecvError::Empty) => false,
+            Err(flume::TryRecvError::Disconnected) => {
+                warn!("Monitor channel disconnected");
+                false
+            }
+        }
+    }
+
+    /// Handle a single notification from the monitor
+    async fn handle_notification(&self, notification: ChangeNotification) {
+        match notification {
+            ChangeNotification::PollTrigger => {
+                debug!("Poll trigger received, checking for changes...");
+                self.handle_poll_trigger().await;
+            }
+            ChangeNotification::NewMessages { folder } => {
+                info!("New messages detected in folder: {}", folder);
+                self.emit_event(SyncEvent::NewMessages {
+                    folder: folder.clone(),
+                    count: 0, // Unknown count
+                });
+                // Trigger a folder sync
+                if let Err(e) = self.sync_folder(&folder).await {
+                    error!("Failed to sync folder after new messages: {}", e);
+                }
+            }
+            ChangeNotification::MessagesExpunged { folder } => {
+                info!("Messages expunged in folder: {}", folder);
+                // Trigger a folder sync
+                if let Err(e) = self.sync_folder(&folder).await {
+                    error!("Failed to sync folder after expunge: {}", e);
+                }
+            }
+            ChangeNotification::FlagsChanged { folder } => {
+                info!("Flags changed in folder: {}", folder);
+                // Trigger a folder sync
+                if let Err(e) = self.sync_folder(&folder).await {
+                    error!("Failed to sync folder after flag change: {}", e);
+                }
+            }
+            ChangeNotification::FolderChanged { folder } => {
+                info!("Folder changed: {}", folder);
+                if let Err(e) = self.sync_folder(&folder).await {
+                    error!("Failed to sync changed folder: {}", e);
+                }
+            }
+            ChangeNotification::ConnectionLost { error } => {
+                error!("Monitor connection lost: {}", error);
+                self.set_online(false);
+                self.update_status(|s| {
+                    s.is_online = false;
+                    s.error = Some(format!("Connection lost: {}", error));
+                })
+                .await;
+            }
+            ChangeNotification::Shutdown => {
+                info!("Monitor shutdown notification received");
+            }
+        }
+    }
+
+    /// Handle a poll trigger - check if folders have changed
+    async fn handle_poll_trigger(&self) {
+        info!("Processing poll trigger for account: {}", self.account_id);
+
+        // Create backend for checking
+        let backend = match self.create_backend().await {
+            Ok(b) => b,
+            Err(e) => {
+                error!("Failed to create backend for poll check: {}", e);
+                self.set_online(false);
+                return;
+            }
+        };
+
+        // Mark as online since we connected successfully
+        if !self.is_online() {
+            info!("Connection restored for account: {}", self.account_id);
+            self.set_online(true);
+            self.update_status(|s| {
+                s.is_online = true;
+                s.error = None;
+            })
+            .await;
+        }
+
+        // Get folders and check each one
+        let folders = match self.get_folders_to_sync(&backend).await {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to get folders for poll check: {}", e);
+                return;
+            }
+        };
+
+        let mut any_changes = false;
+
+        for folder in &folders {
+            debug!("Checking folder for changes: {}", folder);
+
+            // Fetch current envelope count
+            match backend.list_envelopes(Some(folder), 0, 1).await {
+                Ok(envelopes) => {
+                    // Use envelope count as a proxy for changes
+                    // A more accurate check would use UIDNEXT or message count from SELECT
+                    let count = envelopes.len() as u32;
+
+                    if let Some(monitor) = &self.monitor {
+                        if monitor.check_folder_changes(folder, count).await {
+                            info!(
+                                "Changes detected in folder '{}', triggering sync",
+                                folder
+                            );
+                            any_changes = true;
+                            monitor.update_folder_state(folder, count).await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to check folder '{}': {}", folder, e);
+                }
+            }
+        }
+
+        if any_changes {
+            info!("Changes detected, triggering full sync");
+            if let Err(e) = self.full_sync().await {
+                error!("Failed to sync after poll detected changes: {}", e);
+            }
+        } else {
+            debug!("No changes detected in poll check");
+        }
+    }
+
+    /// Get the current monitoring mode
+    pub async fn monitor_mode(&self) -> Option<MonitorMode> {
+        if let Some(monitor) = &self.monitor {
+            Some(monitor.mode().await)
+        } else {
+            None
+        }
+    }
+
+    /// Check if monitoring is active
+    pub fn is_monitoring(&self) -> bool {
+        self.monitor
+            .as_ref()
+            .map(|m| m.is_running())
+            .unwrap_or(false)
+    }
+
+    /// Stop the monitor
+    pub fn stop_monitoring(&self) {
+        if let Some(monitor) = &self.monitor {
+            info!("Stopping monitor for account: {}", self.account_id);
+            monitor.stop();
+        }
+    }
+
     /// Shutdown the sync engine
     pub fn shutdown(&self) {
+        info!("Shutting down sync engine for account: {}", self.account_id);
+        self.stop_monitoring();
         self.shutdown.store(true, Ordering::SeqCst);
     }
 }

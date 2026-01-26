@@ -70,7 +70,7 @@ pub async fn delete_messages(
     let folder_name = folder.as_deref().unwrap_or("INBOX");
 
     if let Some(engine) = sync_manager.get(&account_id).await {
-        let db = engine.database();
+        let db = engine.read().await.database();
 
         // Parse UIDs and delete from cache
         let uids: Vec<u32> = ids.iter().filter_map(|id| id.parse::<u32>().ok()).collect();
@@ -147,7 +147,7 @@ pub async fn move_messages(
     let folder_name = source_folder.as_deref().unwrap_or("INBOX");
 
     if let Some(engine) = sync_manager.get(&account_id).await {
-        let db = engine.database();
+        let db = engine.read().await.database();
 
         // Parse UIDs and delete from source folder cache
         let uids: Vec<u32> = ids.iter().filter_map(|id| id.parse::<u32>().ok()).collect();

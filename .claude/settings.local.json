@@ -37,7 +37,10 @@
       "Bash(npm search:*)",
       "Bash(npm uninstall:*)",
       "Bash(cargo build:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(cargo search:*)",
+      "Read(//Users/bp/.cargo/registry/src/**)",
+      "Bash(find:*)"
     ]
   }
 }

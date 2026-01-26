@@ -9,17 +9,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::config;
 use crate::sync::action_queue::ActionType;
 use crate::sync::db::{CachedConversation, CachedMessage};
 use crate::sync::engine::{SyncConfig, SyncEngine, SyncState, SyncStatus};
+use crate::sync::idle::MonitorConfig;
 use crate::types::error::HimalayaError;
 
 /// Sync engine manager state - manages engines for multiple accounts
 pub struct SyncManager {
-    engines: RwLock<HashMap<String, Arc<SyncEngine>>>,
+    engines: RwLock<HashMap<String, Arc<RwLock<SyncEngine>>>>,
     default_db_dir: PathBuf,
     app_handle: RwLock<Option<tauri::AppHandle>>,
 }
@@ -55,7 +56,7 @@ impl SyncManager {
     }
 
     /// Get or create sync engine for an account
-    pub async fn get_or_create(&self, account_id: &str) -> Result<Arc<SyncEngine>, HimalayaError> {
+    pub async fn get_or_create(&self, account_id: &str) -> Result<Arc<RwLock<SyncEngine>>, HimalayaError> {
         // Check if engine exists
         {
             let engines = self.engines.read().await;
@@ -82,6 +83,13 @@ impl SyncManager {
             auto_classify: true,
             sync_folders: vec![],
             fetch_page_size: 1000,
+            enable_monitoring: true,
+            monitor_config: MonitorConfig {
+                prefer_idle: true,
+                idle_timeout_minutes: 20,
+                poll_interval_seconds: 60, // Poll every minute
+                use_quick_check: true,
+            },
         };
 
         // Get app handle for event emission
@@ -95,7 +103,7 @@ impl SyncManager {
             app_handle,
         )?;
 
-        let engine = Arc::new(engine);
+        let engine = Arc::new(RwLock::new(engine));
 
         // Store engine
         {
@@ -107,7 +115,7 @@ impl SyncManager {
     }
 
     /// Get sync engine for account (if exists)
-    pub async fn get(&self, account_id: &str) -> Option<Arc<SyncEngine>> {
+    pub async fn get(&self, account_id: &str) -> Option<Arc<RwLock<SyncEngine>>> {
         let engines = self.engines.read().await;
         engines.get(account_id).cloned()
     }
@@ -116,7 +124,7 @@ impl SyncManager {
     pub async fn remove(&self, account_id: &str) {
         let mut engines = self.engines.write().await;
         if let Some(engine) = engines.remove(account_id) {
-            engine.shutdown();
+            engine.read().await.shutdown();
         }
     }
 
@@ -146,6 +154,7 @@ pub struct SyncStatusResponse {
     pub error: Option<String>,
     pub is_online: bool,
     pub pending_actions: u32,
+    pub monitor_mode: Option<String>,
 }
 
 impl From<SyncStatus> for SyncStatusResponse {
@@ -167,6 +176,7 @@ impl From<SyncStatus> for SyncStatusResponse {
             error: s.error,
             is_online: s.is_online,
             pending_actions: s.pending_actions,
+            monitor_mode: s.monitor_mode,
         }
     }
 }
@@ -272,15 +282,46 @@ pub async fn init_sync_engine(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Start full sync in background
+    // Start full sync and then start monitoring
     let engine_clone = engine.clone();
     tokio::spawn(async move {
-        if let Err(e) = engine_clone.full_sync().await {
-            error!("Background sync failed: {}", e);
+        // Perform initial sync
+        {
+            let engine_guard = engine_clone.read().await;
+            if let Err(e) = engine_guard.full_sync().await {
+                error!("Background sync failed: {}", e);
+                return;
+            }
+        }
+
+        // Start monitoring after successful sync
+        info!("Initial sync complete, starting monitoring...");
+        {
+            let mut engine_guard = engine_clone.write().await;
+            if let Err(e) = engine_guard.start_monitoring().await {
+                error!("Failed to start monitoring: {}", e);
+            }
+        }
+
+        // Run the notification processing loop
+        info!("Starting notification processing loop...");
+        loop {
+            let engine_guard = engine_clone.read().await;
+            if !engine_guard.is_monitoring() {
+                debug!("Monitoring stopped, exiting notification loop");
+                break;
+            }
+
+            // Process any pending notifications
+            if !engine_guard.process_monitor_notification().await {
+                // No notification, sleep briefly
+                drop(engine_guard);
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
         }
     });
 
-    let status = engine.status().await;
+    let status = engine.read().await.status().await;
     Ok(status.into())
 }
 
@@ -293,7 +334,7 @@ pub async fn get_sync_status(
     let account_id = get_account_id(account)?;
 
     if let Some(engine) = manager.get(&account_id).await {
-        let status = engine.status().await;
+        let status = engine.read().await.status().await;
         Ok(status.into())
     } else {
         // Return idle status if not initialized
@@ -308,6 +349,7 @@ pub async fn get_sync_status(
             error: None,
             is_online: false,
             pending_actions: 0,
+            monitor_mode: None,
         })
     }
 }
@@ -328,6 +370,8 @@ pub async fn sync_folder(
         .map_err(|e| e.to_string())?;
 
     engine
+        .read()
+        .await
         .sync_folder(&folder)
         .await
         .map_err(|e| e.to_string())?;
@@ -349,7 +393,7 @@ pub async fn initial_sync(
         .await
         .map_err(|e| e.to_string())?;
 
-    engine.full_sync().await.map_err(|e| e.to_string())?;
+    engine.read().await.full_sync().await.map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -370,6 +414,8 @@ pub async fn get_cached_conversations(
         .map_err(|e| e.to_string())?;
 
     let conversations = engine
+        .read()
+        .await
         .get_conversations(include_hidden)
         .map_err(|e| e.to_string())?;
 
@@ -391,6 +437,8 @@ pub async fn get_cached_conversation_messages(
         .map_err(|e| e.to_string())?;
 
     let messages = engine
+        .read()
+        .await
         .get_conversation_messages(conversation_id)
         .map_err(|e| e.to_string())?;
 
@@ -412,6 +460,8 @@ pub async fn fetch_message_body(
         .map_err(|e| e.to_string())?;
 
     let message = engine
+        .read()
+        .await
         .fetch_message_body(message_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -462,7 +512,8 @@ pub async fn queue_sync_action(
         _ => return Err(format!("Unknown action type: {}", action_type)),
     };
 
-    engine.queue_action(action).map_err(|e| e.to_string())
+    let result = engine.read().await.queue_action(action).map_err(|e| e.to_string());
+    result
 }
 
 /// Set online status
@@ -475,7 +526,7 @@ pub async fn set_sync_online(
     let account_id = get_account_id(account)?;
 
     if let Some(engine) = manager.get(&account_id).await {
-        engine.set_online(online);
+        engine.read().await.set_online(online);
     }
     Ok(())
 }
@@ -493,10 +544,75 @@ pub async fn has_pending_sync_actions(
         .await
         .map_err(|e| e.to_string())?;
 
-    engine
+    let result = engine
+        .read()
+        .await
         .action_queue()
         .has_pending(&account_id)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string());
+    result
+}
+
+/// Start monitoring for mailbox changes
+#[tauri::command]
+pub async fn start_monitoring(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+) -> Result<(), String> {
+    let account_id = get_account_id(account)?;
+    info!("Starting monitoring for: {}", account_id);
+
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Start monitoring
+    {
+        let mut engine_guard = engine.write().await;
+        engine_guard
+            .start_monitoring()
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Spawn the notification processing loop
+    let engine_clone = engine.clone();
+    tokio::spawn(async move {
+        info!("Starting notification processing loop for monitoring...");
+        loop {
+            let engine_guard = engine_clone.read().await;
+            if !engine_guard.is_monitoring() {
+                debug!("Monitoring stopped, exiting notification loop");
+                break;
+            }
+
+            // Process any pending notifications
+            if !engine_guard.process_monitor_notification().await {
+                // No notification, sleep briefly
+                drop(engine_guard);
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Stop monitoring for mailbox changes
+#[tauri::command]
+pub async fn stop_monitoring(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+) -> Result<(), String> {
+    let account_id = get_account_id(account)?;
+    info!("Stopping monitoring for: {}", account_id);
+
+    if let Some(engine) = manager.get(&account_id).await {
+        engine.read().await.stop_monitoring();
+    }
+
+    Ok(())
 }
 
 /// Shutdown sync engine for an account
@@ -506,6 +622,7 @@ pub async fn shutdown_sync_engine(
     account: Option<String>,
 ) -> Result<(), String> {
     let account_id = get_account_id(account)?;
+    info!("Shutting down sync engine for: {}", account_id);
     manager.remove(&account_id).await;
     Ok(())
 }
