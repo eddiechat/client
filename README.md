@@ -280,6 +280,12 @@ git push origin v1.0.0
 
 Download the latest stable release or development builds from the [Releases](../../releases) page.
 
+Note that the builds aren't signed, for iOS run the following command after installation.
+
+`xattr -cr /Applications/eddie.chat.app`
+
+More info: https://claude.ai/share/6a5cdec1-f6ba-4152-8c36-7347eddab9f1
+
 ---
 
 ## Configuration
