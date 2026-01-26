@@ -181,3 +181,11 @@ export async function hasPendingSyncActions(account?: string): Promise<boolean> 
 export async function shutdownSyncEngine(account?: string): Promise<void> {
   return invoke("shutdown_sync_engine", { account });
 }
+
+/** Mark all unread messages in a conversation as read */
+export async function markConversationRead(
+  conversationId: number,
+  account?: string
+): Promise<void> {
+  return invoke("mark_conversation_read", { account, conversationId });
+}

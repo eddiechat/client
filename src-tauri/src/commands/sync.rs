@@ -627,6 +627,96 @@ pub async fn shutdown_sync_engine(
     Ok(())
 }
 
+/// Mark all unread messages in a conversation as read
+#[tauri::command]
+pub async fn mark_conversation_read(
+    manager: State<'_, SyncManager>,
+    app_handle: tauri::AppHandle,
+    account: Option<String>,
+    conversation_id: i64,
+) -> Result<(), String> {
+    use crate::sync::engine::SyncEvent;
+    use tauri::Emitter;
+
+    let account_id = get_account_id(account)?;
+    debug!(
+        "Marking conversation {} as read for account: {}",
+        conversation_id, account_id
+    );
+
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let engine_guard = engine.read().await;
+    let db = engine_guard.database();
+
+    // Get all messages in the conversation
+    let messages = db
+        .get_conversation_messages(conversation_id)
+        .map_err(|e| e.to_string())?;
+
+    // Find unread messages (those without \Seen flag)
+    let mut unread_by_folder: std::collections::HashMap<String, Vec<u32>> =
+        std::collections::HashMap::new();
+    let mut total_unread = 0i32;
+
+    for msg in &messages {
+        let flags: Vec<String> = serde_json::from_str(&msg.flags).unwrap_or_default();
+        if !flags.iter().any(|f| f == "\\Seen") {
+            unread_by_folder
+                .entry(msg.folder_name.clone())
+                .or_default()
+                .push(msg.uid);
+            total_unread += 1;
+        }
+    }
+
+    if unread_by_folder.is_empty() {
+        debug!("No unread messages in conversation {}", conversation_id);
+        return Ok(());
+    }
+
+    info!(
+        "Marking {} unread messages as read in conversation {}",
+        total_unread, conversation_id
+    );
+
+    // Update local database flags and queue actions for each folder
+    for (folder, uids) in &unread_by_folder {
+        // Update local database flags
+        for uid in uids {
+            db.add_message_flags(&account_id, folder, *uid, &["\\Seen".to_string()])
+                .map_err(|e| e.to_string())?;
+        }
+
+        // Queue the action for IMAP server sync
+        let action = ActionType::AddFlags {
+            folder: folder.clone(),
+            uids: uids.clone(),
+            flags: vec!["\\Seen".to_string()],
+        };
+        engine_guard
+            .queue_action(action)
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Update conversation unread count (decrease by total unread)
+    db.adjust_conversation_unread_count(conversation_id, -total_unread)
+        .map_err(|e| e.to_string())?;
+
+    // Emit sync event so UI refreshes
+    let _ = app_handle.emit(
+        "sync-event",
+        SyncEvent::ConversationsUpdated {
+            conversation_ids: vec![conversation_id],
+        },
+    );
+
+    Ok(())
+}
+
 // Helper function to get account ID
 fn get_account_id(account: Option<String>) -> Result<String, String> {
     if let Some(id) = account {
