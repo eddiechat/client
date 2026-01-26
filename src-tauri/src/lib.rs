@@ -17,11 +17,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(SyncManager::new())
-        .setup(|_app| {
+        .setup(|app| {
             // Try to initialize config on startup
             if let Err(e) = config::init_config() {
                 tracing::warn!("Could not load config on startup: {}", e);
             }
+
+            // Set app handle on sync manager for event emission
+            let sync_manager = app.state::<SyncManager>();
+            let handle = app.handle().clone();
+            tauri::async_runtime::block_on(async {
+                sync_manager.set_app_handle(handle).await;
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

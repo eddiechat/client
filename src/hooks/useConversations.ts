@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import * as api from "../lib/api";
 import type { Conversation, Message } from "../types";
+
+/** Sync event payload from Tauri backend */
+interface SyncEventPayload {
+  StatusChanged?: api.SyncStatus;
+  NewMessages?: { folder: string; count: number };
+  MessagesDeleted?: { folder: string; uids: number[] };
+  FlagsChanged?: { folder: string; uids: number[] };
+  ConversationsUpdated?: { conversation_ids: number[] };
+  Error?: { message: string };
+  SyncComplete?: null;
+}
 
 /**
  * Hook for managing conversations using the sync engine.
@@ -101,15 +113,57 @@ export function useConversations(account?: string) {
     }
   }, [initializeSync]);
 
-  // Poll for status while syncing
+  // Listen for Tauri sync events instead of polling
   useEffect(() => {
-    if (syncing) {
-      // Poll every 500ms while syncing
-      pollRef.current = window.setInterval(pollSyncStatus, 500);
-    } else {
-      // Poll every 30 seconds when idle
-      pollRef.current = window.setInterval(pollSyncStatus, 30000);
-    }
+    let unlisten: UnlistenFn | null = null;
+
+    const setupListener = async () => {
+      unlisten = await listen<SyncEventPayload>("sync-event", (event) => {
+        const payload = event.payload;
+
+        // Handle different event types
+        if ("StatusChanged" in payload && payload.StatusChanged) {
+          const status = payload.StatusChanged;
+          setSyncStatus(status);
+
+          const isSyncing = status.state === "syncing" || status.state === "initial_sync";
+          setSyncing(isSyncing);
+
+          if (status.error) {
+            setError(status.error);
+          }
+        }
+
+        if ("ConversationsUpdated" in payload) {
+          // Refresh conversations when they're updated
+          refreshConversations();
+        }
+
+        if ("SyncComplete" in payload) {
+          setSyncing(false);
+          setLoading(false);
+          refreshConversations();
+        }
+
+        if ("Error" in payload && payload.Error) {
+          setError(payload.Error.message);
+        }
+      });
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [refreshConversations]);
+
+  // Fallback: poll infrequently in case events are missed
+  useEffect(() => {
+    // Poll every 60 seconds as a fallback
+    pollRef.current = window.setInterval(pollSyncStatus, 60000);
 
     return () => {
       if (pollRef.current) {
@@ -117,7 +171,7 @@ export function useConversations(account?: string) {
         pollRef.current = null;
       }
     };
-  }, [syncing, pollSyncStatus]);
+  }, [pollSyncStatus]);
 
   // Convert cached conversations to the expected format
   const formattedConversations: Conversation[] = conversations.map((c) => ({

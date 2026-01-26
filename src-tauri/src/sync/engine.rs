@@ -4,14 +4,14 @@
 //! The local database is a cache of server state, not the source of truth.
 
 use chrono::{DateTime, Duration, Utc};
-use flume::{Receiver, Sender};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tauri::Emitter;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::backend::EmailBackend;
 use crate::config::{self, AccountConfig};
@@ -127,7 +127,7 @@ pub struct SyncEngine {
     classifier: Arc<MessageClassifier>,
     status: Arc<RwLock<SyncStatus>>,
     is_online: Arc<AtomicBool>,
-    event_tx: Sender<SyncEvent>,
+    app_handle: Option<tauri::AppHandle>,
     shutdown: Arc<AtomicBool>,
 }
 
@@ -138,7 +138,8 @@ impl SyncEngine {
         user_email: String,
         account_config: AccountConfig,
         config: SyncConfig,
-    ) -> Result<(Self, Receiver<SyncEvent>), HimalayaError> {
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<Self, HimalayaError> {
         // Ensure parent directory exists
         if let Some(parent) = config.db_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -149,8 +150,6 @@ impl SyncEngine {
         let action_queue = Arc::new(ActionQueue::new(db.clone()));
         let conversation_grouper = Arc::new(ConversationGrouper::new(db.clone()));
         let classifier = Arc::new(MessageClassifier::new(db.clone()));
-
-        let (event_tx, event_rx) = flume::unbounded();
 
         let status = SyncStatus {
             state: SyncState::Idle,
@@ -174,11 +173,11 @@ impl SyncEngine {
             classifier,
             status: Arc::new(RwLock::new(status)),
             is_online: Arc::new(AtomicBool::new(false)),
-            event_tx,
+            app_handle,
             shutdown: Arc::new(AtomicBool::new(false)),
         };
 
-        Ok((engine, event_rx))
+        Ok(engine)
     }
 
     /// Get current sync status
@@ -218,7 +217,16 @@ impl SyncEngine {
     {
         let mut status = self.status.write().await;
         update_fn(&mut status);
-        let _ = self.event_tx.send(SyncEvent::StatusChanged(status.clone()));
+        self.emit_event(SyncEvent::StatusChanged(status.clone()));
+    }
+
+    /// Emit an event to the frontend via Tauri
+    fn emit_event(&self, event: SyncEvent) {
+        if let Some(handle) = &self.app_handle {
+            if let Err(e) = handle.emit("sync-event", &event) {
+                warn!("Failed to emit sync event: {}", e);
+            }
+        }
     }
 
     /// Create an EmailBackend for this account
@@ -256,7 +264,7 @@ impl SyncEngine {
                 .await;
 
                 self.set_online(true);
-                let _ = self.event_tx.send(SyncEvent::SyncComplete);
+                self.emit_event(SyncEvent::SyncComplete);
             }
             Err(e) => {
                 error!("Full sync failed: {}", e);
@@ -328,7 +336,7 @@ impl SyncEngine {
         let conversations = self.db.get_conversations(&self.account_id, true)?;
         let affected_conversations: Vec<i64> = conversations.iter().map(|c| c.id).collect();
 
-        let _ = self.event_tx.send(SyncEvent::ConversationsUpdated {
+        self.emit_event(SyncEvent::ConversationsUpdated {
             conversation_ids: affected_conversations.clone(),
         });
 
@@ -341,7 +349,10 @@ impl SyncEngine {
     }
 
     /// Get list of folders to sync
-    async fn get_folders_to_sync(&self, backend: &EmailBackend) -> Result<Vec<String>, HimalayaError> {
+    async fn get_folders_to_sync(
+        &self,
+        backend: &EmailBackend,
+    ) -> Result<Vec<String>, HimalayaError> {
         if !self.config.sync_folders.is_empty() {
             return Ok(self.config.sync_folders.clone());
         }
@@ -437,7 +448,8 @@ impl SyncEngine {
 
         // Serialize to/flags as JSON
         let to_json = serde_json::to_string(&envelope.to).unwrap_or_else(|_| "[]".to_string());
-        let flags_json = serde_json::to_string(&envelope.flags).unwrap_or_else(|_| "[]".to_string());
+        let flags_json =
+            serde_json::to_string(&envelope.flags).unwrap_or_else(|_| "[]".to_string());
 
         Ok(CachedMessage {
             id: 0, // Will be set by database
@@ -501,12 +513,12 @@ impl SyncEngine {
         let affected: Vec<i64> = affected_conversations.into_iter().collect();
 
         if !affected.is_empty() {
-            let _ = self.event_tx.send(SyncEvent::ConversationsUpdated {
+            self.emit_event(SyncEvent::ConversationsUpdated {
                 conversation_ids: affected.clone(),
             });
         }
 
-        let _ = self.event_tx.send(SyncEvent::SyncComplete);
+        self.emit_event(SyncEvent::SyncComplete);
 
         Ok(SyncResult {
             new_messages: message_ids.len() as u32,
@@ -517,12 +529,18 @@ impl SyncEngine {
     }
 
     /// Get conversations from cache
-    pub fn get_conversations(&self, include_hidden: bool) -> Result<Vec<CachedConversation>, HimalayaError> {
+    pub fn get_conversations(
+        &self,
+        include_hidden: bool,
+    ) -> Result<Vec<CachedConversation>, HimalayaError> {
         self.db.get_conversations(&self.account_id, include_hidden)
     }
 
     /// Get messages for a conversation
-    pub fn get_conversation_messages(&self, conversation_id: i64) -> Result<Vec<CachedMessage>, HimalayaError> {
+    pub fn get_conversation_messages(
+        &self,
+        conversation_id: i64,
+    ) -> Result<Vec<CachedMessage>, HimalayaError> {
         self.db.get_conversation_messages(conversation_id)
     }
 
@@ -532,8 +550,13 @@ impl SyncEngine {
     }
 
     /// Fetch full message body and cache it
-    pub async fn fetch_message_body(&self, message_id: i64) -> Result<CachedMessage, HimalayaError> {
-        let message = self.db.get_message_by_id(message_id)?
+    pub async fn fetch_message_body(
+        &self,
+        message_id: i64,
+    ) -> Result<CachedMessage, HimalayaError> {
+        let message = self
+            .db
+            .get_message_by_id(message_id)?
             .ok_or_else(|| HimalayaError::MessageNotFound(message_id.to_string()))?;
 
         // If already cached, return it
@@ -576,7 +599,11 @@ fn parse_email_address(addr: &str) -> (Option<String>, String) {
             let email = addr[name_end + 1..email_start].trim().to_lowercase();
             let name = addr[..name_end].trim().trim_matches('"').trim();
             return (
-                if name.is_empty() { None } else { Some(name.to_string()) },
+                if name.is_empty() {
+                    None
+                } else {
+                    Some(name.to_string())
+                },
                 email,
             );
         }

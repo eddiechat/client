@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import {
   SyncStatus,
   CachedConversation,
@@ -13,6 +14,17 @@ import {
   setSyncOnline,
   hasPendingSyncActions,
 } from "../lib/api";
+
+/** Sync event payload from Tauri backend */
+interface SyncEventPayload {
+  StatusChanged?: SyncStatus;
+  NewMessages?: { folder: string; count: number };
+  MessagesDeleted?: { folder: string; uids: number[] };
+  FlagsChanged?: { folder: string; uids: number[] };
+  ConversationsUpdated?: { conversation_ids: number[] };
+  Error?: { message: string };
+  SyncComplete?: null;
+}
 
 export interface UseSyncOptions {
   account?: string;
@@ -209,15 +221,51 @@ export function useSync(options: UseSyncOptions = {}): UseSyncReturn {
     }
   }, [autoInit, initialize]);
 
-  // Poll for status updates
+  // Listen for Tauri sync events
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    let unlisten: UnlistenFn | null = null;
+
+    const setupListener = async () => {
+      unlisten = await listen<SyncEventPayload>("sync-event", (event) => {
+        const payload = event.payload;
+
+        if ("StatusChanged" in payload && payload.StatusChanged) {
+          setStatus(payload.StatusChanged);
+        }
+
+        if ("ConversationsUpdated" in payload) {
+          refreshConversations();
+        }
+
+        if ("SyncComplete" in payload) {
+          refreshStatus();
+          refreshConversations();
+        }
+
+        if ("Error" in payload && payload.Error) {
+          setError(payload.Error.message);
+        }
+      });
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [isInitialized, refreshStatus, refreshConversations]);
+
+  // Fallback polling (much less frequent now)
   useEffect(() => {
     if (!isInitialized || pollInterval <= 0) return;
 
-    const poll = () => {
-      refreshStatus();
-    };
-
-    pollRef.current = window.setInterval(poll, pollInterval);
+    // Use a longer interval since we have events
+    const fallbackInterval = Math.max(pollInterval, 30000);
+    pollRef.current = window.setInterval(refreshStatus, fallbackInterval);
 
     return () => {
       if (pollRef.current) {

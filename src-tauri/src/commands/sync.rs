@@ -21,6 +21,7 @@ use crate::types::error::HimalayaError;
 pub struct SyncManager {
     engines: RwLock<HashMap<String, Arc<SyncEngine>>>,
     default_db_dir: PathBuf,
+    app_handle: RwLock<Option<tauri::AppHandle>>,
 }
 
 impl SyncManager {
@@ -43,7 +44,14 @@ impl SyncManager {
         Self {
             engines: RwLock::new(HashMap::new()),
             default_db_dir: db_dir,
+            app_handle: RwLock::new(None),
         }
+    }
+
+    /// Set the Tauri app handle for event emission
+    pub async fn set_app_handle(&self, handle: tauri::AppHandle) {
+        let mut app_handle = self.app_handle.write().await;
+        *app_handle = Some(handle);
     }
 
     /// Get or create sync engine for an account
@@ -76,11 +84,15 @@ impl SyncManager {
             fetch_page_size: 1000,
         };
 
-        let (engine, _event_rx) = SyncEngine::new(
+        // Get app handle for event emission
+        let app_handle = self.app_handle.read().await.clone();
+
+        let engine = SyncEngine::new(
             name.to_string(),
             account.email.clone(),
             account.clone(),
             sync_config,
+            app_handle,
         )?;
 
         let engine = Arc::new(engine);
@@ -181,8 +193,8 @@ pub struct ParticipantInfo {
 
 impl From<CachedConversation> for ConversationResponse {
     fn from(c: CachedConversation) -> Self {
-        let participants: Vec<ParticipantInfo> = serde_json::from_str(&c.participants)
-            .unwrap_or_default();
+        let participants: Vec<ParticipantInfo> =
+            serde_json::from_str(&c.participants).unwrap_or_default();
 
         Self {
             id: c.id,
@@ -228,7 +240,8 @@ impl From<CachedMessage> for CachedMessageResponse {
             from_address: m.from_address,
             from_name: m.from_name,
             to_addresses: serde_json::from_str(&m.to_addresses).unwrap_or_default(),
-            cc_addresses: m.cc_addresses
+            cc_addresses: m
+                .cc_addresses
                 .as_ref()
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default(),
