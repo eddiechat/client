@@ -1,0 +1,549 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		014FA31804EFBEF457896A54 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F5DA83DA04B0083474289064 /* WebKit.framework */; };
+		1E4965A78001FEA5D1F55AA9 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A75CFE400580B822C0F709C2 /* UIKit.framework */; };
+		3EA7B2073669A6DA05022509 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 823C0B2CB55FCB03DC440921 /* MetalKit.framework */; };
+		464E5A3460A70425D59D4A02 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ADC8D5ECCD237ECA7D85A4E /* Security.framework */; };
+		7098470DD911E044A08F1119 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4B19A4D8B5555C49D2AE0745 /* Metal.framework */; };
+		7691C2871046F0F00DD07BEF /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 33A44DEBEE84FDF9A858FB8A /* main.mm */; };
+		BD23CC3299548ECF0051920F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6293FA323F6431AD9E4D94A1 /* Assets.xcassets */; };
+		CE5E838B0CA0C4DE1A9EA403 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EB2C747F8321D2A158BD539B /* QuartzCore.framework */; };
+		DF00AC33A9853530C2BB6661 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6CE399FB82337A4B53BEA9BD /* CoreGraphics.framework */; };
+		E4C8B30C6C658A259A1F3B00 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 400B859B70B58E399094C6A9 /* LaunchScreen.storyboard */; };
+		E878AF8BBEC67B9FA4AA62AB /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C5C347F45582DEA8AF76D2DF /* libapp.a */; };
+		FBF923D3D83A355265B156D0 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 9488C65D1C45782F20911F42 /* assets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		056A33030CC0A0382BB7A873 /* config.rs */ = {isa = PBXFileReference; path = config.rs; sourceTree = "<group>"; };
+		08F511564B99F4DBF9E1B9C7 /* messages.rs */ = {isa = PBXFileReference; path = messages.rs; sourceTree = "<group>"; };
+		0F47D91F9525B671D2156C5E /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		10A7C23C26062DA7AD85EC56 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		12769CF9721458433BC26A85 /* sync.rs */ = {isa = PBXFileReference; path = sync.rs; sourceTree = "<group>"; };
+		13001C0C341B41548CF522CF /* envelopes.rs */ = {isa = PBXFileReference; path = envelopes.rs; sourceTree = "<group>"; };
+		1DF5CD9CBA7D38CAEFA22138 /* flags.rs */ = {isa = PBXFileReference; path = flags.rs; sourceTree = "<group>"; };
+		1E7D0DB6A87411A1AE69DE06 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		232CF63B66595580C70A3581 /* folders.rs */ = {isa = PBXFileReference; path = folders.rs; sourceTree = "<group>"; };
+		24F2A1013B5107FF06F65085 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		29E38D45A8017B4939CFA8CC /* conversations.rs */ = {isa = PBXFileReference; path = conversations.rs; sourceTree = "<group>"; };
+		2ADC8D5ECCD237ECA7D85A4E /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		314E5166F1C9370976ABF6A4 /* db.rs */ = {isa = PBXFileReference; path = db.rs; sourceTree = "<group>"; };
+		33A44DEBEE84FDF9A858FB8A /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		3CC7EEF02447BC601F362D59 /* eddie-chat_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "eddie-chat_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		400B859B70B58E399094C6A9 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		4B19A4D8B5555C49D2AE0745 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		4C2E3F1CC74AC28E197DED98 /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		5C9259C31A1A4988AAA2DD73 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		6293FA323F6431AD9E4D94A1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6851694269049A89AC7D48C1 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		68D64D7F9EE170756158D7E3 /* error.rs */ = {isa = PBXFileReference; path = error.rs; sourceTree = "<group>"; };
+		6CE399FB82337A4B53BEA9BD /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		81BC4C7A1F957080581E4065 /* eddie-chat_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "eddie-chat_iOS.entitlements"; sourceTree = "<group>"; };
+		823C0B2CB55FCB03DC440921 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		83469495468D1F4CDD75887A /* conversation.rs */ = {isa = PBXFileReference; path = conversation.rs; sourceTree = "<group>"; };
+		8DABDFAE1F5F03C3E67FC64B /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		8E968779F0089BD95E389F32 /* accounts.rs */ = {isa = PBXFileReference; path = accounts.rs; sourceTree = "<group>"; };
+		9488C65D1C45782F20911F42 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		A75CFE400580B822C0F709C2 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		AD6B3308C4757527D3CF6681 /* classifier.rs */ = {isa = PBXFileReference; path = classifier.rs; sourceTree = "<group>"; };
+		B93B8F442806B6B5E845D000 /* action_queue.rs */ = {isa = PBXFileReference; path = action_queue.rs; sourceTree = "<group>"; };
+		C5C347F45582DEA8AF76D2DF /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		CBFE696CD94A3BBE95240257 /* conversation.rs */ = {isa = PBXFileReference; path = conversation.rs; sourceTree = "<group>"; };
+		D886D57C4E3A49314FEE1A6B /* engine.rs */ = {isa = PBXFileReference; path = engine.rs; sourceTree = "<group>"; };
+		D98B5E821C3152DF1109194F /* capability.rs */ = {isa = PBXFileReference; path = capability.rs; sourceTree = "<group>"; };
+		EAFCEA68E583F36AF3128E1D /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		EB2C747F8321D2A158BD539B /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		F572BE99C821B393B530516D /* idle.rs */ = {isa = PBXFileReference; path = idle.rs; sourceTree = "<group>"; };
+		F5DA83DA04B0083474289064 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		196489A64D26CCB9BD2CE3A6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E878AF8BBEC67B9FA4AA62AB /* libapp.a in Frameworks */,
+				DF00AC33A9853530C2BB6661 /* CoreGraphics.framework in Frameworks */,
+				7098470DD911E044A08F1119 /* Metal.framework in Frameworks */,
+				3EA7B2073669A6DA05022509 /* MetalKit.framework in Frameworks */,
+				CE5E838B0CA0C4DE1A9EA403 /* QuartzCore.framework in Frameworks */,
+				464E5A3460A70425D59D4A02 /* Security.framework in Frameworks */,
+				1E4965A78001FEA5D1F55AA9 /* UIKit.framework in Frameworks */,
+				014FA31804EFBEF457896A54 /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		339F697D9B806691ADC840BA /* sync */ = {
+			isa = PBXGroup;
+			children = (
+				B93B8F442806B6B5E845D000 /* action_queue.rs */,
+				D98B5E821C3152DF1109194F /* capability.rs */,
+				AD6B3308C4757527D3CF6681 /* classifier.rs */,
+				83469495468D1F4CDD75887A /* conversation.rs */,
+				314E5166F1C9370976ABF6A4 /* db.rs */,
+				D886D57C4E3A49314FEE1A6B /* engine.rs */,
+				F572BE99C821B393B530516D /* idle.rs */,
+				24F2A1013B5107FF06F65085 /* mod.rs */,
+			);
+			path = sync;
+			sourceTree = "<group>";
+		};
+		35EC44860B446B95F0A27123 /* types */ = {
+			isa = PBXGroup;
+			children = (
+				CBFE696CD94A3BBE95240257 /* conversation.rs */,
+				68D64D7F9EE170756158D7E3 /* error.rs */,
+				0F47D91F9525B671D2156C5E /* mod.rs */,
+			);
+			path = types;
+			sourceTree = "<group>";
+		};
+		433FAF99B0857BA4E10F79A0 /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				6851694269049A89AC7D48C1 /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		51FCCD02C91CCF7D537BE6A6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3CC7EEF02447BC601F362D59 /* eddie-chat_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		638751C482AD3578EC4D6466 /* Externals */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Externals;
+			sourceTree = "<group>";
+		};
+		658362BE74FF18353940EE51 = {
+			isa = PBXGroup;
+			children = (
+				9488C65D1C45782F20911F42 /* assets */,
+				6293FA323F6431AD9E4D94A1 /* Assets.xcassets */,
+				400B859B70B58E399094C6A9 /* LaunchScreen.storyboard */,
+				BA19B498B50D8CD7509EA5BA /* eddie-chat_iOS */,
+				638751C482AD3578EC4D6466 /* Externals */,
+				F02E7143A40922B53A87B8BF /* Sources */,
+				9A33718F042B8800A5DE47E0 /* src */,
+				C1AAA71C9F9DEADBC4BB292E /* Frameworks */,
+				51FCCD02C91CCF7D537BE6A6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		819853ED104DFD94E601894C /* commands */ = {
+			isa = PBXGroup;
+			children = (
+				8E968779F0089BD95E389F32 /* accounts.rs */,
+				056A33030CC0A0382BB7A873 /* config.rs */,
+				29E38D45A8017B4939CFA8CC /* conversations.rs */,
+				13001C0C341B41548CF522CF /* envelopes.rs */,
+				1DF5CD9CBA7D38CAEFA22138 /* flags.rs */,
+				232CF63B66595580C70A3581 /* folders.rs */,
+				08F511564B99F4DBF9E1B9C7 /* messages.rs */,
+				1E7D0DB6A87411A1AE69DE06 /* mod.rs */,
+				12769CF9721458433BC26A85 /* sync.rs */,
+			);
+			path = commands;
+			sourceTree = "<group>";
+		};
+		9A33718F042B8800A5DE47E0 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				5C9259C31A1A4988AAA2DD73 /* lib.rs */,
+				4C2E3F1CC74AC28E197DED98 /* main.rs */,
+				D6500014E1F5E159CBC4D050 /* backend */,
+				819853ED104DFD94E601894C /* commands */,
+				C5220DD448BE73799375B557 /* config */,
+				339F697D9B806691ADC840BA /* sync */,
+				35EC44860B446B95F0A27123 /* types */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+		BA19B498B50D8CD7509EA5BA /* eddie-chat_iOS */ = {
+			isa = PBXGroup;
+			children = (
+				81BC4C7A1F957080581E4065 /* eddie-chat_iOS.entitlements */,
+				10A7C23C26062DA7AD85EC56 /* Info.plist */,
+			);
+			path = "eddie-chat_iOS";
+			sourceTree = "<group>";
+		};
+		C1AAA71C9F9DEADBC4BB292E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				6CE399FB82337A4B53BEA9BD /* CoreGraphics.framework */,
+				C5C347F45582DEA8AF76D2DF /* libapp.a */,
+				4B19A4D8B5555C49D2AE0745 /* Metal.framework */,
+				823C0B2CB55FCB03DC440921 /* MetalKit.framework */,
+				EB2C747F8321D2A158BD539B /* QuartzCore.framework */,
+				2ADC8D5ECCD237ECA7D85A4E /* Security.framework */,
+				A75CFE400580B822C0F709C2 /* UIKit.framework */,
+				F5DA83DA04B0083474289064 /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		C5220DD448BE73799375B557 /* config */ = {
+			isa = PBXGroup;
+			children = (
+				8DABDFAE1F5F03C3E67FC64B /* mod.rs */,
+			);
+			path = config;
+			sourceTree = "<group>";
+		};
+		D6500014E1F5E159CBC4D050 /* backend */ = {
+			isa = PBXGroup;
+			children = (
+				EAFCEA68E583F36AF3128E1D /* mod.rs */,
+			);
+			path = backend;
+			sourceTree = "<group>";
+		};
+		F02E7143A40922B53A87B8BF /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				F9766253A338596C5234D1CB /* eddie-chat */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		F9766253A338596C5234D1CB /* eddie-chat */ = {
+			isa = PBXGroup;
+			children = (
+				33A44DEBEE84FDF9A858FB8A /* main.mm */,
+				433FAF99B0857BA4E10F79A0 /* bindings */,
+			);
+			path = "eddie-chat";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4EE2AC75940D0D73673962E8 /* eddie-chat_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 55F4755D6BC90A4F1D943339 /* Build configuration list for PBXNativeTarget "eddie-chat_iOS" */;
+			buildPhases = (
+				AE44E3AFED1C2E9FA22E96D0 /* Build Rust Code */,
+				A2B8CBBBE51DB6F8DC1B8B30 /* Sources */,
+				E04FB605CF5C175642B67FCF /* Resources */,
+				196489A64D26CCB9BD2CE3A6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "eddie-chat_iOS";
+			packageProductDependencies = (
+			);
+			productName = "eddie-chat_iOS";
+			productReference = 3CC7EEF02447BC601F362D59 /* eddie-chat_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9A4283E53C862D2BE84BACC9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					4EE2AC75940D0D73673962E8 = {
+						DevelopmentTeam = C9CQHXKFH2;
+					};
+				};
+			};
+			buildConfigurationList = 865E1F7A961A1AA743AA68B8 /* Build configuration list for PBXProject "eddie-chat" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 658362BE74FF18353940EE51;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4EE2AC75940D0D73673962E8 /* eddie-chat_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E04FB605CF5C175642B67FCF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BD23CC3299548ECF0051920F /* Assets.xcassets in Resources */,
+				E4C8B30C6C658A259A1F3B00 /* LaunchScreen.storyboard in Resources */,
+				FBF923D3D83A355265B156D0 /* assets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AE44E3AFED1C2E9FA22E96D0 /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "bun tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A2B8CBBBE51DB6F8DC1B8B30 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7691C2871046F0F00DD07BEF /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		096D89624CC0D95B3ABCDD42 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = release;
+		};
+		1B66003321117B72A7096B5C /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "eddie-chat_iOS/eddie-chat_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = "C9CQHXKFH2";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "eddie-chat_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = chat.eddie.app;
+				PRODUCT_NAME = "eddie.chat";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = release;
+		};
+		3874CEDC029FB08FE7E3807B /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = debug;
+		};
+		DFA4D23F8D115166005B6491 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "eddie-chat_iOS/eddie-chat_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = "C9CQHXKFH2";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "eddie-chat_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = chat.eddie.app;
+				PRODUCT_NAME = "eddie.chat";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		55F4755D6BC90A4F1D943339 /* Build configuration list for PBXNativeTarget "eddie-chat_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DFA4D23F8D115166005B6491 /* debug */,
+				1B66003321117B72A7096B5C /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		865E1F7A961A1AA743AA68B8 /* Build configuration list for PBXProject "eddie-chat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3874CEDC029FB08FE7E3807B /* debug */,
+				096D89624CC0D95B3ABCDD42 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 9A4283E53C862D2BE84BACC9 /* Project object */;
+}
