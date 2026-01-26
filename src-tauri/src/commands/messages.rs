@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tauri::State;
 use tracing::{info, warn};
 
-use crate::backend;
+use crate::backend::{self, SendMessageResult};
 use crate::commands::sync::SyncManager;
 use crate::config;
 use crate::types::{Message, ReadMessageRequest};
@@ -163,12 +163,12 @@ pub async fn move_messages(
 }
 
 /// Send a message via SMTP and save to Sent folder
-/// Returns the message ID in the Sent folder, or None if no Sent folder was found
+/// Returns the message ID and sent folder name, or None if no Sent folder was found
 #[tauri::command]
 pub async fn send_message(
     account: Option<String>,
     message: String,
-) -> Result<Option<String>, String> {
+) -> Result<Option<SendMessageResult>, String> {
     info!(
         "Tauri command: send_message - account: {:?}, len: {}",
         account,

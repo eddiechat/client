@@ -28,8 +28,13 @@ export async function getAccountDetails(name: string): Promise<AccountDetails> {
 }
 
 // Message commands
-// Returns the message ID in the Sent folder, or null if no Sent folder was found
-export async function sendMessage(message: string, account?: string): Promise<string | null> {
+export interface SendMessageResult {
+  message_id: string;
+  sent_folder: string;
+}
+
+// Returns the message ID and sent folder name, or null if no Sent folder was found
+export async function sendMessage(message: string, account?: string): Promise<SendMessageResult | null> {
   return invoke("send_message", { account, message });
 }
 

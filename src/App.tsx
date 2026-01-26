@@ -87,7 +87,11 @@ function App() {
       .join("\r\n");
 
     const rawMessage = `${headers}\r\n\r\n${data.body}`;
-    await api.sendMessage(rawMessage, currentAccount || undefined);
+    const result = await api.sendMessage(rawMessage, currentAccount || undefined);
+    // Sync the sent folder to pull the message into local database
+    if (result?.sent_folder) {
+      await api.syncFolder(result.sent_folder, currentAccount || undefined);
+    }
     refreshConversations();
   };
 
@@ -129,7 +133,11 @@ function App() {
       ].join("\r\n");
 
       const rawMessage = `${headers}\r\n\r\n${text}`;
-      await api.sendMessage(rawMessage, currentAccount || undefined);
+      const result = await api.sendMessage(rawMessage, currentAccount || undefined);
+      // Sync the sent folder to pull the message into local database
+      if (result?.sent_folder) {
+        await api.syncFolder(result.sent_folder, currentAccount || undefined);
+      }
       refreshConversations();
     },
     [selectedConversation, currentAccount, refreshConversations]

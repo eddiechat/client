@@ -29,6 +29,13 @@ use crate::config::{self, AccountConfig, AuthConfig, PasswordSource};
 use crate::types::error::HimalayaError;
 use crate::types::{Attachment, Envelope, Folder, Message};
 
+/// Result of sending a message - contains the message ID and sent folder name
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SendMessageResult {
+    pub message_id: String,
+    pub sent_folder: String,
+}
+
 /// Backend service for email operations
 pub struct EmailBackend {
     /// Account configuration from our config
@@ -661,7 +668,11 @@ impl EmailBackend {
     }
 
     /// Send a message via SMTP and save to Sent folder
-    pub async fn send_message(&self, raw_message: &[u8]) -> Result<Option<String>, HimalayaError> {
+    /// Returns the message ID and sent folder name, or None if no Sent folder was found
+    pub async fn send_message(
+        &self,
+        raw_message: &[u8],
+    ) -> Result<Option<SendMessageResult>, HimalayaError> {
         // First, send via SMTP
         let smtp_config = self.build_smtp_config().await?;
 
@@ -689,7 +700,10 @@ impl EmailBackend {
             info!("Saving sent message to folder: {}", folder);
             let id = self.save_message(Some(&folder), raw_message).await?;
             info!("Message saved to Sent folder with id: {}", id);
-            Ok(Some(id))
+            Ok(Some(SendMessageResult {
+                message_id: id,
+                sent_folder: folder,
+            }))
         } else {
             info!("No Sent folder found, message not saved to IMAP");
             Ok(None)
