@@ -1106,7 +1106,7 @@ body {
 }
 
 /* ===== Responsive ===== */
-@media (max-width: 768px) {
+@media (max-aspect-ratio: 3/4) {
   .sidebar {
     position: absolute;
     left: 0;
