@@ -8,8 +8,8 @@ use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::collections::HashSet;
+use std::path::Path;
 
 use crate::types::error::HimalayaError;
 
@@ -41,11 +41,11 @@ pub struct CachedMessage {
     pub references: Option<String>,
     pub from_address: String,
     pub from_name: Option<String>,
-    pub to_addresses: String,  // JSON array
-    pub cc_addresses: Option<String>,  // JSON array
+    pub to_addresses: String,         // JSON array
+    pub cc_addresses: Option<String>, // JSON array
     pub subject: Option<String>,
     pub date: Option<DateTime<Utc>>,
-    pub flags: String,  // JSON array of flags
+    pub flags: String, // JSON array of flags
     pub has_attachment: bool,
     pub body_cached: bool,
     pub text_body: Option<String>,
@@ -60,14 +60,14 @@ pub struct CachedMessage {
 pub struct CachedConversation {
     pub id: i64,
     pub account_id: String,
-    pub participant_key: String,  // Normalized, sorted participant emails
-    pub participants: String,  // JSON array of participant info
+    pub participant_key: String, // Normalized, sorted participant emails
+    pub participants: String,    // JSON array of participant info
     pub last_message_date: Option<DateTime<Utc>>,
     pub last_message_preview: Option<String>,
     pub last_message_from: Option<String>,
     pub message_count: u32,
     pub unread_count: u32,
-    pub is_outgoing: bool,  // Last message direction
+    pub is_outgoing: bool, // Last message direction
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -84,21 +84,21 @@ pub struct ConversationMessage {
 pub struct QueuedActionRecord {
     pub id: i64,
     pub account_id: String,
-    pub action_type: String,  // add_flags, remove_flags, delete, move, send
+    pub action_type: String, // add_flags, remove_flags, delete, move, send
     pub folder_name: Option<String>,
     pub uid: Option<u32>,
-    pub payload: String,  // JSON payload
+    pub payload: String, // JSON payload
     pub created_at: DateTime<Utc>,
     pub retry_count: u32,
     pub last_error: Option<String>,
-    pub status: String,  // pending, processing, failed, completed
+    pub status: String, // pending, processing, failed, completed
 }
 
 /// Message classification result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageClassification {
     pub message_id: i64,
-    pub classification: String,  // chat, newsletter, automated, transactional
+    pub classification: String, // chat, newsletter, automated, transactional
     pub confidence: f32,
     pub is_hidden_from_chat: bool,
     pub classified_at: DateTime<Utc>,
@@ -109,7 +109,7 @@ pub struct MessageClassification {
 pub struct SyncProgress {
     pub account_id: String,
     pub folder_name: String,
-    pub phase: String,  // initial, incremental, complete
+    pub phase: String, // initial, incremental, complete
     pub total_messages: Option<u32>,
     pub synced_messages: u32,
     pub oldest_synced_date: Option<DateTime<Utc>>,
@@ -127,10 +127,9 @@ impl SyncDatabase {
     /// Create a new database at the given path
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, HimalayaError> {
         let manager = SqliteConnectionManager::file(path);
-        let pool = Pool::builder()
-            .max_size(10)
-            .build(manager)
-            .map_err(|e| HimalayaError::Backend(format!("Failed to create database pool: {}", e)))?;
+        let pool = Pool::builder().max_size(10).build(manager).map_err(|e| {
+            HimalayaError::Backend(format!("Failed to create database pool: {}", e))
+        })?;
 
         let db = Self { pool };
         db.initialize_schema()?;
@@ -140,10 +139,9 @@ impl SyncDatabase {
     /// Create an in-memory database (for testing)
     pub fn in_memory() -> Result<Self, HimalayaError> {
         let manager = SqliteConnectionManager::memory();
-        let pool = Pool::builder()
-            .max_size(1)
-            .build(manager)
-            .map_err(|e| HimalayaError::Backend(format!("Failed to create database pool: {}", e)))?;
+        let pool = Pool::builder().max_size(1).build(manager).map_err(|e| {
+            HimalayaError::Backend(format!("Failed to create database pool: {}", e))
+        })?;
 
         let db = Self { pool };
         db.initialize_schema()?;
@@ -152,9 +150,9 @@ impl SyncDatabase {
 
     /// Get a connection from the pool
     pub fn connection(&self) -> Result<DbConnection, HimalayaError> {
-        self.pool
-            .get()
-            .map_err(|e| HimalayaError::Backend(format!("Failed to get database connection: {}", e)))
+        self.pool.get().map_err(|e| {
+            HimalayaError::Backend(format!("Failed to get database connection: {}", e))
+        })
     }
 
     /// Initialize the database schema
@@ -304,26 +302,34 @@ impl SyncDatabase {
     // ========== Folder Sync State Operations ==========
 
     /// Get sync state for a folder
-    pub fn get_folder_sync_state(&self, account_id: &str, folder_name: &str) -> Result<Option<FolderSyncState>, HimalayaError> {
+    pub fn get_folder_sync_state(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+    ) -> Result<Option<FolderSyncState>, HimalayaError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT account_id, folder_name, uidvalidity, highestmodseq, last_seen_uid, last_sync_timestamp, sync_in_progress
              FROM folder_sync_state WHERE account_id = ?1 AND folder_name = ?2"
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let result = stmt.query_row(params![account_id, folder_name], |row| {
-            Ok(FolderSyncState {
-                account_id: row.get(0)?,
-                folder_name: row.get(1)?,
-                uidvalidity: row.get(2)?,
-                highestmodseq: row.get::<_, Option<i64>>(3)?.map(|v| v as u64),
-                last_seen_uid: row.get(4)?,
-                last_sync_timestamp: row.get::<_, Option<String>>(5)?
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc)),
-                sync_in_progress: row.get::<_, i32>(6)? != 0,
+        let result = stmt
+            .query_row(params![account_id, folder_name], |row| {
+                Ok(FolderSyncState {
+                    account_id: row.get(0)?,
+                    folder_name: row.get(1)?,
+                    uidvalidity: row.get(2)?,
+                    highestmodseq: row.get::<_, Option<i64>>(3)?.map(|v| v as u64),
+                    last_seen_uid: row.get(4)?,
+                    last_sync_timestamp: row
+                        .get::<_, Option<String>>(5)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    sync_in_progress: row.get::<_, i32>(6)? != 0,
+                })
             })
-        }).optional().map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -355,26 +361,33 @@ impl SyncDatabase {
     }
 
     /// Invalidate folder cache (when UIDVALIDITY changes)
-    pub fn invalidate_folder_cache(&self, account_id: &str, folder_name: &str) -> Result<(), HimalayaError> {
+    pub fn invalidate_folder_cache(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+    ) -> Result<(), HimalayaError> {
         let conn = self.connection()?;
 
         // Delete all messages in this folder
         conn.execute(
             "DELETE FROM messages WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         // Reset sync state
         conn.execute(
             "DELETE FROM folder_sync_state WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         // Reset sync progress
         conn.execute(
             "DELETE FROM sync_progress WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -429,17 +442,24 @@ impl SyncDatabase {
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         // Get the row ID
-        let id = conn.query_row(
-            "SELECT id FROM messages WHERE account_id = ?1 AND folder_name = ?2 AND uid = ?3",
-            params![msg.account_id, msg.folder_name, msg.uid],
-            |row| row.get(0),
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let id = conn
+            .query_row(
+                "SELECT id FROM messages WHERE account_id = ?1 AND folder_name = ?2 AND uid = ?3",
+                params![msg.account_id, msg.folder_name, msg.uid],
+                |row| row.get(0),
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(id)
     }
 
     /// Get a message by account/folder/uid
-    pub fn get_message(&self, account_id: &str, folder_name: &str, uid: u32) -> Result<Option<CachedMessage>, HimalayaError> {
+    pub fn get_message(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        uid: u32,
+    ) -> Result<Option<CachedMessage>, HimalayaError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -448,7 +468,11 @@ impl SyncDatabase {
              FROM messages WHERE account_id = ?1 AND folder_name = ?2 AND uid = ?3"
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let result = stmt.query_row(params![account_id, folder_name, uid], Self::row_to_cached_message)
+        let result = stmt
+            .query_row(
+                params![account_id, folder_name, uid],
+                Self::row_to_cached_message,
+            )
             .optional()
             .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
@@ -465,7 +489,8 @@ impl SyncDatabase {
              FROM messages WHERE id = ?1"
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let result = stmt.query_row(params![id], Self::row_to_cached_message)
+        let result = stmt
+            .query_row(params![id], Self::row_to_cached_message)
             .optional()
             .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
@@ -473,19 +498,31 @@ impl SyncDatabase {
     }
 
     /// Update flags for a message
-    pub fn update_message_flags(&self, account_id: &str, folder_name: &str, uid: u32, flags: &str) -> Result<(), HimalayaError> {
+    pub fn update_message_flags(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        uid: u32,
+        flags: &str,
+    ) -> Result<(), HimalayaError> {
         let conn = self.connection()?;
         conn.execute(
             "UPDATE messages SET flags = ?1, updated_at = datetime('now')
              WHERE account_id = ?2 AND folder_name = ?3 AND uid = ?4",
             params![flags, account_id, folder_name, uid],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(())
     }
 
     /// Delete messages by UIDs
-    pub fn delete_messages_by_uids(&self, account_id: &str, folder_name: &str, uids: &[u32]) -> Result<(), HimalayaError> {
+    pub fn delete_messages_by_uids(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        uids: &[u32],
+    ) -> Result<(), HimalayaError> {
         if uids.is_empty() {
             return Ok(());
         }
@@ -513,13 +550,18 @@ impl SyncDatabase {
     }
 
     /// Get all UIDs in a folder (for deletion detection)
-    pub fn get_folder_uids(&self, account_id: &str, folder_name: &str) -> Result<HashSet<u32>, HimalayaError> {
+    pub fn get_folder_uids(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+    ) -> Result<HashSet<u32>, HimalayaError> {
         let conn = self.connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT uid FROM messages WHERE account_id = ?1 AND folder_name = ?2"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let mut stmt = conn
+            .prepare("SELECT uid FROM messages WHERE account_id = ?1 AND folder_name = ?2")
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let uids = stmt.query_map(params![account_id, folder_name], |row| row.get(0))
+        let uids = stmt
+            .query_map(params![account_id, folder_name], |row| row.get(0))
             .map_err(|e| HimalayaError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
@@ -528,7 +570,13 @@ impl SyncDatabase {
     }
 
     /// Get messages for a folder, sorted by date
-    pub fn get_folder_messages(&self, account_id: &str, folder_name: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<CachedMessage>, HimalayaError> {
+    pub fn get_folder_messages(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<Vec<CachedMessage>, HimalayaError> {
         let conn = self.connection()?;
         let sql = format!(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -539,14 +587,23 @@ impl SyncDatabase {
              LIMIT ?3 OFFSET ?4"
         );
 
-        let mut stmt = conn.prepare(&sql).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let messages = stmt.query_map(
-            params![account_id, folder_name, limit.unwrap_or(1000), offset.unwrap_or(0)],
-            Self::row_to_cached_message
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?
-         .filter_map(|r| r.ok())
-         .collect();
+        let messages = stmt
+            .query_map(
+                params![
+                    account_id,
+                    folder_name,
+                    limit.unwrap_or(1000),
+                    offset.unwrap_or(0)
+                ],
+                Self::row_to_cached_message,
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
 
         Ok(messages)
     }
@@ -565,7 +622,8 @@ impl SyncDatabase {
             to_addresses: row.get(9)?,
             cc_addresses: row.get(10)?,
             subject: row.get(11)?,
-            date: row.get::<_, Option<String>>(12)?
+            date: row
+                .get::<_, Option<String>>(12)?
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc)),
             flags: row.get(13)?,
@@ -574,12 +632,14 @@ impl SyncDatabase {
             text_body: row.get(16)?,
             html_body: row.get(17)?,
             raw_size: row.get(18)?,
-            created_at: row.get::<_, String>(19)
+            created_at: row
+                .get::<_, String>(19)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
-            updated_at: row.get::<_, String>(20)
+            updated_at: row
+                .get::<_, String>(20)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
@@ -618,17 +678,23 @@ impl SyncDatabase {
             ],
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let id = conn.query_row(
-            "SELECT id FROM conversations WHERE account_id = ?1 AND participant_key = ?2",
-            params![conv.account_id, conv.participant_key],
-            |row| row.get(0),
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let id = conn
+            .query_row(
+                "SELECT id FROM conversations WHERE account_id = ?1 AND participant_key = ?2",
+                params![conv.account_id, conv.participant_key],
+                |row| row.get(0),
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(id)
     }
 
     /// Get conversation by participant key
-    pub fn get_conversation_by_key(&self, account_id: &str, participant_key: &str) -> Result<Option<CachedConversation>, HimalayaError> {
+    pub fn get_conversation_by_key(
+        &self,
+        account_id: &str,
+        participant_key: &str,
+    ) -> Result<Option<CachedConversation>, HimalayaError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
@@ -636,7 +702,11 @@ impl SyncDatabase {
              FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let result = stmt.query_row(params![account_id, participant_key], Self::row_to_conversation)
+        let result = stmt
+            .query_row(
+                params![account_id, participant_key],
+                Self::row_to_conversation,
+            )
             .optional()
             .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
@@ -644,7 +714,11 @@ impl SyncDatabase {
     }
 
     /// Get all conversations for an account, sorted by last message date
-    pub fn get_conversations(&self, account_id: &str, include_hidden: bool) -> Result<Vec<CachedConversation>, HimalayaError> {
+    pub fn get_conversations(
+        &self,
+        account_id: &str,
+        include_hidden: bool,
+    ) -> Result<Vec<CachedConversation>, HimalayaError> {
         let conn = self.connection()?;
 
         let sql = if include_hidden {
@@ -667,9 +741,12 @@ impl SyncDatabase {
              ORDER BY c.last_message_date DESC"
         };
 
-        let mut stmt = conn.prepare(sql).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let conversations = stmt.query_map(params![account_id], Self::row_to_conversation)
+        let conversations = stmt
+            .query_map(params![account_id], Self::row_to_conversation)
             .map_err(|e| HimalayaError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
@@ -678,7 +755,11 @@ impl SyncDatabase {
     }
 
     /// Link a message to a conversation
-    pub fn link_message_to_conversation(&self, conversation_id: i64, message_id: i64) -> Result<(), HimalayaError> {
+    pub fn link_message_to_conversation(
+        &self,
+        conversation_id: i64,
+        message_id: i64,
+    ) -> Result<(), HimalayaError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT OR IGNORE INTO conversation_messages (conversation_id, message_id) VALUES (?1, ?2)",
@@ -689,7 +770,10 @@ impl SyncDatabase {
     }
 
     /// Get messages for a conversation
-    pub fn get_conversation_messages(&self, conversation_id: i64) -> Result<Vec<CachedMessage>, HimalayaError> {
+    pub fn get_conversation_messages(
+        &self,
+        conversation_id: i64,
+    ) -> Result<Vec<CachedMessage>, HimalayaError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT m.id, m.account_id, m.folder_name, m.uid, m.message_id, m.in_reply_to, m.references_header,
@@ -701,7 +785,8 @@ impl SyncDatabase {
              ORDER BY m.date ASC"
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let messages = stmt.query_map(params![conversation_id], Self::row_to_cached_message)
+        let messages = stmt
+            .query_map(params![conversation_id], Self::row_to_cached_message)
             .map_err(|e| HimalayaError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
@@ -712,12 +797,14 @@ impl SyncDatabase {
     /// Delete empty conversations
     pub fn delete_empty_conversations(&self, account_id: &str) -> Result<u64, HimalayaError> {
         let conn = self.connection()?;
-        let deleted = conn.execute(
-            "DELETE FROM conversations WHERE account_id = ?1 AND id NOT IN (
+        let deleted = conn
+            .execute(
+                "DELETE FROM conversations WHERE account_id = ?1 AND id NOT IN (
                 SELECT DISTINCT conversation_id FROM conversation_messages
             )",
-            params![account_id],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+                params![account_id],
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(deleted as u64)
     }
@@ -728,7 +815,8 @@ impl SyncDatabase {
             account_id: row.get(1)?,
             participant_key: row.get(2)?,
             participants: row.get(3)?,
-            last_message_date: row.get::<_, Option<String>>(4)?
+            last_message_date: row
+                .get::<_, Option<String>>(4)?
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc)),
             last_message_preview: row.get(5)?,
@@ -736,12 +824,14 @@ impl SyncDatabase {
             message_count: row.get(7)?,
             unread_count: row.get(8)?,
             is_outgoing: row.get::<_, i32>(9)? != 0,
-            created_at: row.get::<_, String>(10)
+            created_at: row
+                .get::<_, String>(10)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
-            updated_at: row.get::<_, String>(11)
+            updated_at: row
+                .get::<_, String>(11)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
@@ -765,13 +855,17 @@ impl SyncDatabase {
                 action.payload,
                 action.status,
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(conn.last_insert_rowid())
     }
 
     /// Get pending actions in order
-    pub fn get_pending_actions(&self, account_id: &str) -> Result<Vec<QueuedActionRecord>, HimalayaError> {
+    pub fn get_pending_actions(
+        &self,
+        account_id: &str,
+    ) -> Result<Vec<QueuedActionRecord>, HimalayaError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, action_type, folder_name, uid, payload, created_at, retry_count, last_error, status
@@ -779,7 +873,8 @@ impl SyncDatabase {
              ORDER BY created_at ASC"
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let actions = stmt.query_map(params![account_id], Self::row_to_action)
+        let actions = stmt
+            .query_map(params![account_id], Self::row_to_action)
             .map_err(|e| HimalayaError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
@@ -788,13 +883,19 @@ impl SyncDatabase {
     }
 
     /// Update action status
-    pub fn update_action_status(&self, id: i64, status: &str, error: Option<&str>) -> Result<(), HimalayaError> {
+    pub fn update_action_status(
+        &self,
+        id: i64,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<(), HimalayaError> {
         let conn = self.connection()?;
         conn.execute(
             "UPDATE action_queue SET status = ?1, last_error = ?2, retry_count = retry_count + 1
              WHERE id = ?3",
             params![status, error, id],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -802,10 +903,12 @@ impl SyncDatabase {
     /// Delete completed actions
     pub fn delete_completed_actions(&self, account_id: &str) -> Result<u64, HimalayaError> {
         let conn = self.connection()?;
-        let deleted = conn.execute(
-            "DELETE FROM action_queue WHERE account_id = ?1 AND status = 'completed'",
-            params![account_id],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let deleted = conn
+            .execute(
+                "DELETE FROM action_queue WHERE account_id = ?1 AND status = 'completed'",
+                params![account_id],
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(deleted as u64)
     }
@@ -818,7 +921,8 @@ impl SyncDatabase {
             folder_name: row.get(3)?,
             uid: row.get(4)?,
             payload: row.get(5)?,
-            created_at: row.get::<_, String>(6)
+            created_at: row
+                .get::<_, String>(6)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
@@ -832,7 +936,10 @@ impl SyncDatabase {
     // ========== Message Classification Operations ==========
 
     /// Set classification for a message
-    pub fn set_message_classification(&self, classification: &MessageClassification) -> Result<(), HimalayaError> {
+    pub fn set_message_classification(
+        &self,
+        classification: &MessageClassification,
+    ) -> Result<(), HimalayaError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO message_classifications (message_id, classification, confidence, is_hidden_from_chat, classified_at)
@@ -855,26 +962,35 @@ impl SyncDatabase {
     }
 
     /// Get classification for a message
-    pub fn get_message_classification(&self, message_id: i64) -> Result<Option<MessageClassification>, HimalayaError> {
+    pub fn get_message_classification(
+        &self,
+        message_id: i64,
+    ) -> Result<Option<MessageClassification>, HimalayaError> {
         let conn = self.connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT message_id, classification, confidence, is_hidden_from_chat, classified_at
-             FROM message_classifications WHERE message_id = ?1"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT message_id, classification, confidence, is_hidden_from_chat, classified_at
+             FROM message_classifications WHERE message_id = ?1",
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let result = stmt.query_row(params![message_id], |row| {
-            Ok(MessageClassification {
-                message_id: row.get(0)?,
-                classification: row.get(1)?,
-                confidence: row.get(2)?,
-                is_hidden_from_chat: row.get::<_, i32>(3)? != 0,
-                classified_at: row.get::<_, String>(4)
-                    .ok()
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(Utc::now),
+        let result = stmt
+            .query_row(params![message_id], |row| {
+                Ok(MessageClassification {
+                    message_id: row.get(0)?,
+                    classification: row.get(1)?,
+                    confidence: row.get(2)?,
+                    is_hidden_from_chat: row.get::<_, i32>(3)? != 0,
+                    classified_at: row
+                        .get::<_, String>(4)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                })
             })
-        }).optional().map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -910,37 +1026,49 @@ impl SyncDatabase {
     }
 
     /// Get sync progress
-    pub fn get_sync_progress(&self, account_id: &str, folder_name: &str) -> Result<Option<SyncProgress>, HimalayaError> {
+    pub fn get_sync_progress(
+        &self,
+        account_id: &str,
+        folder_name: &str,
+    ) -> Result<Option<SyncProgress>, HimalayaError> {
         let conn = self.connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT account_id, folder_name, phase, total_messages, synced_messages,
+        let mut stmt = conn
+            .prepare(
+                "SELECT account_id, folder_name, phase, total_messages, synced_messages,
                     oldest_synced_date, last_batch_uid, started_at, updated_at
-             FROM sync_progress WHERE account_id = ?1 AND folder_name = ?2"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+             FROM sync_progress WHERE account_id = ?1 AND folder_name = ?2",
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let result = stmt.query_row(params![account_id, folder_name], |row| {
-            Ok(SyncProgress {
-                account_id: row.get(0)?,
-                folder_name: row.get(1)?,
-                phase: row.get(2)?,
-                total_messages: row.get(3)?,
-                synced_messages: row.get(4)?,
-                oldest_synced_date: row.get::<_, Option<String>>(5)?
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc)),
-                last_batch_uid: row.get(6)?,
-                started_at: row.get::<_, String>(7)
-                    .ok()
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(Utc::now),
-                updated_at: row.get::<_, String>(8)
-                    .ok()
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(Utc::now),
+        let result = stmt
+            .query_row(params![account_id, folder_name], |row| {
+                Ok(SyncProgress {
+                    account_id: row.get(0)?,
+                    folder_name: row.get(1)?,
+                    phase: row.get(2)?,
+                    total_messages: row.get(3)?,
+                    synced_messages: row.get(4)?,
+                    oldest_synced_date: row
+                        .get::<_, Option<String>>(5)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    last_batch_uid: row.get(6)?,
+                    started_at: row
+                        .get::<_, String>(7)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    updated_at: row
+                        .get::<_, String>(8)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                })
             })
-        }).optional().map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -948,7 +1076,14 @@ impl SyncDatabase {
     // ========== Server Capabilities Operations ==========
 
     /// Store server capabilities
-    pub fn store_capabilities(&self, account_id: &str, capabilities: &[String], supports_qresync: bool, supports_condstore: bool, supports_idle: bool) -> Result<(), HimalayaError> {
+    pub fn store_capabilities(
+        &self,
+        account_id: &str,
+        capabilities: &[String],
+        supports_qresync: bool,
+        supports_condstore: bool,
+        supports_idle: bool,
+    ) -> Result<(), HimalayaError> {
         let conn = self.connection()?;
         let capabilities_json = serde_json::to_string(capabilities)
             .map_err(|e| HimalayaError::Backend(e.to_string()))?;
@@ -975,23 +1110,31 @@ impl SyncDatabase {
     }
 
     /// Get cached server capabilities
-    pub fn get_capabilities(&self, account_id: &str) -> Result<Option<(Vec<String>, bool, bool, bool)>, HimalayaError> {
+    pub fn get_capabilities(
+        &self,
+        account_id: &str,
+    ) -> Result<Option<(Vec<String>, bool, bool, bool)>, HimalayaError> {
         let conn = self.connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT capabilities, supports_qresync, supports_condstore, supports_idle
-             FROM server_capabilities WHERE account_id = ?1"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT capabilities, supports_qresync, supports_condstore, supports_idle
+             FROM server_capabilities WHERE account_id = ?1",
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let result = stmt.query_row(params![account_id], |row| {
-            let caps_json: String = row.get(0)?;
-            let caps: Vec<String> = serde_json::from_str(&caps_json).unwrap_or_default();
-            Ok((
-                caps,
-                row.get::<_, i32>(1)? != 0,
-                row.get::<_, i32>(2)? != 0,
-                row.get::<_, i32>(3)? != 0,
-            ))
-        }).optional().map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        let result = stmt
+            .query_row(params![account_id], |row| {
+                let caps_json: String = row.get(0)?;
+                let caps: Vec<String> = serde_json::from_str(&caps_json).unwrap_or_default();
+                Ok((
+                    caps,
+                    row.get::<_, i32>(1)? != 0,
+                    row.get::<_, i32>(2)? != 0,
+                    row.get::<_, i32>(3)? != 0,
+                ))
+            })
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -1035,9 +1178,11 @@ mod tests {
             sync_in_progress: false,
         };
 
-        db.upsert_folder_sync_state(&state).expect("Failed to upsert");
+        db.upsert_folder_sync_state(&state)
+            .expect("Failed to upsert");
 
-        let retrieved = db.get_folder_sync_state("test@example.com", "INBOX")
+        let retrieved = db
+            .get_folder_sync_state("test@example.com", "INBOX")
             .expect("Failed to get")
             .expect("State not found");
 

@@ -84,9 +84,7 @@ impl CapabilityDetector {
     /// - CAPABILITY command response
     /// - OK response with [CAPABILITY ...] code
     pub fn detect(capabilities: &[String]) -> CapabilityInfo {
-        let caps_upper: Vec<String> = capabilities.iter()
-            .map(|c| c.to_uppercase())
-            .collect();
+        let caps_upper: Vec<String> = capabilities.iter().map(|c| c.to_uppercase()).collect();
 
         let has_qresync = caps_upper.iter().any(|c| c == "QRESYNC");
         let has_condstore = caps_upper.iter().any(|c| c == "CONDSTORE");
@@ -139,9 +137,7 @@ impl CapabilityDetector {
             line
         };
 
-        caps_str.split_whitespace()
-            .map(|s| s.to_string())
-            .collect()
+        caps_str.split_whitespace().map(|s| s.to_string()).collect()
     }
 }
 
@@ -245,10 +241,7 @@ mod tests {
 
     #[test]
     fn test_detect_bare() {
-        let caps = vec![
-            "IMAP4rev1".to_string(),
-            "IDLE".to_string(),
-        ];
+        let caps = vec!["IMAP4rev1".to_string(), "IDLE".to_string()];
 
         let info = CapabilityDetector::detect(&caps);
         assert_eq!(info.sync_capability, ServerCapability::Bare);

@@ -155,10 +155,7 @@ impl AppConfig {
     /// Get account by name, or default if name is None
     pub fn get_account(&self, name: Option<&str>) -> Option<(&str, &AccountConfig)> {
         match name {
-            Some(n) => self
-                .accounts
-                .get_key_value(n)
-                .map(|(k, v)| (k.as_str(), v)),
+            Some(n) => self.accounts.get_key_value(n).map(|(k, v)| (k.as_str(), v)),
             None => {
                 let default_name = self.default_account_name()?;
                 self.accounts
@@ -180,7 +177,12 @@ pub fn default_config_paths() -> Vec<PathBuf> {
 
     // Home directory fallback
     if let Some(home_dir) = dirs::home_dir() {
-        paths.push(home_dir.join(".config").join("eddie.chat").join("config.toml"));
+        paths.push(
+            home_dir
+                .join(".config")
+                .join("eddie.chat")
+                .join("config.toml"),
+        );
         paths.push(home_dir.join(".eddie.chat.rc"));
     }
 
@@ -260,8 +262,9 @@ pub fn save_config_to_file(config: &AppConfig) -> Result<(), HimalayaError> {
 
     // Ensure directory exists
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| HimalayaError::Config(format!("Failed to create config directory: {}", e)))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            HimalayaError::Config(format!("Failed to create config directory: {}", e))
+        })?;
     }
 
     let content = toml::to_string_pretty(config)

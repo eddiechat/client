@@ -268,7 +268,10 @@ pub fn parse_untagged_response(line: &str, folder: &str) -> Option<ChangeNotific
 
     // Handle EXISTS response: "* 42 EXISTS"
     if line.ends_with(" EXISTS") {
-        if let Some(count_str) = line.strip_prefix("* ").and_then(|s| s.strip_suffix(" EXISTS")) {
+        if let Some(count_str) = line
+            .strip_prefix("* ")
+            .and_then(|s| s.strip_suffix(" EXISTS"))
+        {
             if let Ok(count) = count_str.parse::<u32>() {
                 return Some(ChangeNotification::NewMessages {
                     folder: folder.to_string(),
@@ -280,7 +283,10 @@ pub fn parse_untagged_response(line: &str, folder: &str) -> Option<ChangeNotific
 
     // Handle EXPUNGE response: "* 42 EXPUNGE"
     if line.ends_with(" EXPUNGE") {
-        if let Some(_) = line.strip_prefix("* ").and_then(|s| s.strip_suffix(" EXPUNGE")) {
+        if let Some(_) = line
+            .strip_prefix("* ")
+            .and_then(|s| s.strip_suffix(" EXPUNGE"))
+        {
             return Some(ChangeNotification::MessagesExpunged {
                 folder: folder.to_string(),
                 count: 1, // EXPUNGE is per-message

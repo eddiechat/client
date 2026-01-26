@@ -9,11 +9,10 @@
 //! - UI updates only after the next sync confirms the server state changed
 //! - Server wins all conflicts
 
+pub mod action_queue;
+pub mod capability;
+pub mod classifier;
+pub mod conversation;
 pub mod db;
 pub mod engine;
-pub mod capability;
-pub mod action_queue;
-pub mod conversation;
-pub mod classifier;
 pub mod idle;
-

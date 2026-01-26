@@ -5,7 +5,9 @@ use crate::types::{Envelope, ListEnvelopesRequest, ListEnvelopesResponse};
 
 /// List envelopes (email metadata) for a folder
 #[tauri::command]
-pub async fn list_envelopes(request: ListEnvelopesRequest) -> Result<ListEnvelopesResponse, String> {
+pub async fn list_envelopes(
+    request: ListEnvelopesRequest,
+) -> Result<ListEnvelopesResponse, String> {
     info!("Tauri command: list_envelopes - {:?}", request);
 
     let backend = backend::get_backend(request.account.as_deref())

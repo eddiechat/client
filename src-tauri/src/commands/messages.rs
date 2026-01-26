@@ -94,7 +94,10 @@ pub async fn move_messages(
 /// Send a message via SMTP and save to Sent folder
 /// Returns the message ID in the Sent folder, or None if no Sent folder was found
 #[tauri::command]
-pub async fn send_message(account: Option<String>, message: String) -> Result<Option<String>, String> {
+pub async fn send_message(
+    account: Option<String>,
+    message: String,
+) -> Result<Option<String>, String> {
     info!(
         "Tauri command: send_message - account: {:?}, len: {}",
         account,

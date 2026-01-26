@@ -27,7 +27,10 @@ pub async fn create_folder(account: Option<String>, name: String) -> Result<(), 
         .await
         .map_err(|e| e.to_string())?;
 
-    backend.create_folder(&name).await.map_err(|e| e.to_string())
+    backend
+        .create_folder(&name)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Delete a folder
@@ -42,7 +45,10 @@ pub async fn delete_folder(account: Option<String>, name: String) -> Result<(), 
         .await
         .map_err(|e| e.to_string())?;
 
-    backend.delete_folder(&name).await.map_err(|e| e.to_string())
+    backend
+        .delete_folder(&name)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Expunge a folder (permanently delete messages marked as deleted)
@@ -57,5 +63,8 @@ pub async fn expunge_folder(account: Option<String>, name: String) -> Result<(),
         .await
         .map_err(|e| e.to_string())?;
 
-    backend.expunge_folder(&name).await.map_err(|e| e.to_string())
+    backend
+        .expunge_folder(&name)
+        .await
+        .map_err(|e| e.to_string())
 }

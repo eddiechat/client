@@ -107,7 +107,10 @@ impl MessageClassifier {
             "nytimes.com",
             "washingtonpost.com",
             "medium.com",
-        ].iter().map(|s| s.to_string()).collect()
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
     }
 
     fn default_automated_senders() -> HashSet<String> {
@@ -136,7 +139,10 @@ impl MessageClassifier {
             "noreply@trello.com",
             "notifications@linear.app",
             "no-reply@notion.so",
-        ].iter().map(|s| s.to_string()).collect()
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
     }
 
     fn default_transactional_patterns() -> Vec<String> {
@@ -157,7 +163,10 @@ impl MessageClassifier {
             "subscription",
             "renewal",
             "payment",
-        ].iter().map(|s| s.to_string()).collect()
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
     }
 
     /// Classify a message
@@ -166,13 +175,18 @@ impl MessageClassifier {
         let mut scores: Vec<(Classification, f32)> = Vec::new();
 
         let from_lower = message.from_address.to_lowercase();
-        let subject_lower = message.subject.as_ref()
+        let subject_lower = message
+            .subject
+            .as_ref()
             .map(|s| s.to_lowercase())
             .unwrap_or_default();
 
         // Check for noreply/no-reply sender
-        if from_lower.contains("noreply") || from_lower.contains("no-reply") ||
-           from_lower.contains("donotreply") || from_lower.contains("do-not-reply") {
+        if from_lower.contains("noreply")
+            || from_lower.contains("no-reply")
+            || from_lower.contains("donotreply")
+            || from_lower.contains("do-not-reply")
+        {
             reasons.push("Sender is no-reply address".to_string());
             scores.push((Classification::Automated, 0.7));
         }
@@ -194,8 +208,10 @@ impl MessageClassifier {
         // Check for List-Unsubscribe header patterns
         if let Some(text) = &message.text_body {
             let text_lower = text.to_lowercase();
-            if text_lower.contains("unsubscribe") || text_lower.contains("opt-out") ||
-               text_lower.contains("email preferences") {
+            if text_lower.contains("unsubscribe")
+                || text_lower.contains("opt-out")
+                || text_lower.contains("email preferences")
+            {
                 reasons.push("Contains unsubscribe link".to_string());
                 scores.push((Classification::Newsletter, 0.6));
             }
@@ -204,16 +220,22 @@ impl MessageClassifier {
         // Check for transactional patterns in subject
         for pattern in &self.transactional_patterns {
             if subject_lower.contains(pattern) {
-                reasons.push(format!("Subject contains transactional pattern: {}", pattern));
+                reasons.push(format!(
+                    "Subject contains transactional pattern: {}",
+                    pattern
+                ));
                 scores.push((Classification::Transactional, 0.7));
                 break;
             }
         }
 
         // Check for common newsletter subject patterns
-        if subject_lower.contains("newsletter") || subject_lower.contains("digest") ||
-           subject_lower.contains("weekly update") || subject_lower.contains("daily update") ||
-           subject_lower.starts_with("[") && subject_lower.contains("]") {
+        if subject_lower.contains("newsletter")
+            || subject_lower.contains("digest")
+            || subject_lower.contains("weekly update")
+            || subject_lower.contains("daily update")
+            || subject_lower.starts_with("[") && subject_lower.contains("]")
+        {
             reasons.push("Subject suggests newsletter".to_string());
             scores.push((Classification::Newsletter, 0.6));
         }
@@ -226,9 +248,12 @@ impl MessageClassifier {
         }
 
         // Check for calendar/event notifications
-        if subject_lower.contains("invitation:") || subject_lower.contains("calendar") ||
-           subject_lower.contains("accepted:") || subject_lower.contains("declined:") ||
-           subject_lower.contains("reminder:") {
+        if subject_lower.contains("invitation:")
+            || subject_lower.contains("calendar")
+            || subject_lower.contains("accepted:")
+            || subject_lower.contains("declined:")
+            || subject_lower.contains("reminder:")
+        {
             reasons.push("Calendar/event notification".to_string());
             scores.push((Classification::Automated, 0.8));
         }
@@ -267,7 +292,10 @@ impl MessageClassifier {
     }
 
     /// Classify and store result in database
-    pub fn classify_and_store(&self, message: &CachedMessage) -> Result<ClassificationResult, HimalayaError> {
+    pub fn classify_and_store(
+        &self,
+        message: &CachedMessage,
+    ) -> Result<ClassificationResult, HimalayaError> {
         let result = self.classify(message);
 
         let classification = MessageClassification {
@@ -284,7 +312,10 @@ impl MessageClassifier {
     }
 
     /// Batch classify messages
-    pub fn classify_batch(&self, messages: &[CachedMessage]) -> Result<Vec<ClassificationResult>, HimalayaError> {
+    pub fn classify_batch(
+        &self,
+        messages: &[CachedMessage],
+    ) -> Result<Vec<ClassificationResult>, HimalayaError> {
         let mut results = Vec::with_capacity(messages.len());
 
         for message in messages {
@@ -296,7 +327,10 @@ impl MessageClassifier {
     }
 
     /// Get classification for a message (from cache or compute)
-    pub fn get_or_classify(&self, message: &CachedMessage) -> Result<ClassificationResult, HimalayaError> {
+    pub fn get_or_classify(
+        &self,
+        message: &CachedMessage,
+    ) -> Result<ClassificationResult, HimalayaError> {
         // Try to get from cache
         if let Some(cached) = self.db.get_message_classification(message.id)? {
             return Ok(ClassificationResult {
@@ -313,8 +347,8 @@ impl MessageClassifier {
     /// Check if a message should be shown in chat UI
     pub fn is_chat_message(&self, message: &CachedMessage) -> Result<bool, HimalayaError> {
         let result = self.get_or_classify(message)?;
-        Ok(result.classification == Classification::Chat ||
-           result.classification == Classification::Unknown)
+        Ok(result.classification == Classification::Chat
+            || result.classification == Classification::Unknown)
     }
 
     /// Update classification settings (mark a message as chat/non-chat)

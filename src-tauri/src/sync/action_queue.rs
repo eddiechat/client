@@ -29,10 +29,7 @@ pub enum ActionType {
     },
 
     /// Delete messages (mark as \Deleted, then EXPUNGE)
-    Delete {
-        folder: String,
-        uids: Vec<u32>,
-    },
+    Delete { folder: String, uids: Vec<u32> },
 
     /// Move messages to another folder
     Move {
@@ -104,18 +101,31 @@ impl ActionType {
     /// Check if this action can be merged with another
     pub fn can_merge(&self, other: &ActionType) -> bool {
         match (self, other) {
-            (Self::AddFlags { folder: f1, flags: flags1, .. },
-             Self::AddFlags { folder: f2, flags: flags2, .. }) => {
-                f1 == f2 && flags1 == flags2
-            }
-            (Self::RemoveFlags { folder: f1, flags: flags1, .. },
-             Self::RemoveFlags { folder: f2, flags: flags2, .. }) => {
-                f1 == f2 && flags1 == flags2
-            }
-            (Self::Delete { folder: f1, .. },
-             Self::Delete { folder: f2, .. }) => {
-                f1 == f2
-            }
+            (
+                Self::AddFlags {
+                    folder: f1,
+                    flags: flags1,
+                    ..
+                },
+                Self::AddFlags {
+                    folder: f2,
+                    flags: flags2,
+                    ..
+                },
+            ) => f1 == f2 && flags1 == flags2,
+            (
+                Self::RemoveFlags {
+                    folder: f1,
+                    flags: flags1,
+                    ..
+                },
+                Self::RemoveFlags {
+                    folder: f2,
+                    flags: flags2,
+                    ..
+                },
+            ) => f1 == f2 && flags1 == flags2,
+            (Self::Delete { folder: f1, .. }, Self::Delete { folder: f2, .. }) => f1 == f2,
             _ => false,
         }
     }
@@ -123,24 +133,21 @@ impl ActionType {
     /// Merge UIDs from another action of the same type
     pub fn merge_uids(&mut self, other: &ActionType) {
         match (self, other) {
-            (Self::AddFlags { uids: uids1, .. },
-             Self::AddFlags { uids: uids2, .. }) => {
+            (Self::AddFlags { uids: uids1, .. }, Self::AddFlags { uids: uids2, .. }) => {
                 for uid in uids2 {
                     if !uids1.contains(uid) {
                         uids1.push(*uid);
                     }
                 }
             }
-            (Self::RemoveFlags { uids: uids1, .. },
-             Self::RemoveFlags { uids: uids2, .. }) => {
+            (Self::RemoveFlags { uids: uids1, .. }, Self::RemoveFlags { uids: uids2, .. }) => {
                 for uid in uids2 {
                     if !uids1.contains(uid) {
                         uids1.push(*uid);
                     }
                 }
             }
-            (Self::Delete { uids: uids1, .. },
-             Self::Delete { uids: uids2, .. }) => {
+            (Self::Delete { uids: uids1, .. }, Self::Delete { uids: uids2, .. }) => {
                 for uid in uids2 {
                     if !uids1.contains(uid) {
                         uids1.push(*uid);
@@ -203,10 +210,7 @@ pub struct ActionQueue {
 impl ActionQueue {
     /// Create a new action queue
     pub fn new(db: Arc<SyncDatabase>) -> Self {
-        Self {
-            db,
-            max_retries: 5,
-        }
+        Self { db, max_retries: 5 }
     }
 
     /// Queue a new action
@@ -231,46 +235,87 @@ impl ActionQueue {
     }
 
     /// Queue a mark-as-read action
-    pub fn queue_mark_read(&self, account_id: &str, folder: &str, uids: Vec<u32>) -> Result<i64, HimalayaError> {
-        self.queue(account_id, ActionType::AddFlags {
-            folder: folder.to_string(),
-            uids,
-            flags: vec!["\\Seen".to_string()],
-        })
+    pub fn queue_mark_read(
+        &self,
+        account_id: &str,
+        folder: &str,
+        uids: Vec<u32>,
+    ) -> Result<i64, HimalayaError> {
+        self.queue(
+            account_id,
+            ActionType::AddFlags {
+                folder: folder.to_string(),
+                uids,
+                flags: vec!["\\Seen".to_string()],
+            },
+        )
     }
 
     /// Queue a mark-as-unread action
-    pub fn queue_mark_unread(&self, account_id: &str, folder: &str, uids: Vec<u32>) -> Result<i64, HimalayaError> {
-        self.queue(account_id, ActionType::RemoveFlags {
-            folder: folder.to_string(),
-            uids,
-            flags: vec!["\\Seen".to_string()],
-        })
+    pub fn queue_mark_unread(
+        &self,
+        account_id: &str,
+        folder: &str,
+        uids: Vec<u32>,
+    ) -> Result<i64, HimalayaError> {
+        self.queue(
+            account_id,
+            ActionType::RemoveFlags {
+                folder: folder.to_string(),
+                uids,
+                flags: vec!["\\Seen".to_string()],
+            },
+        )
     }
 
     /// Queue a delete action
-    pub fn queue_delete(&self, account_id: &str, folder: &str, uids: Vec<u32>) -> Result<i64, HimalayaError> {
-        self.queue(account_id, ActionType::Delete {
-            folder: folder.to_string(),
-            uids,
-        })
+    pub fn queue_delete(
+        &self,
+        account_id: &str,
+        folder: &str,
+        uids: Vec<u32>,
+    ) -> Result<i64, HimalayaError> {
+        self.queue(
+            account_id,
+            ActionType::Delete {
+                folder: folder.to_string(),
+                uids,
+            },
+        )
     }
 
     /// Queue a move action
-    pub fn queue_move(&self, account_id: &str, source: &str, target: &str, uids: Vec<u32>) -> Result<i64, HimalayaError> {
-        self.queue(account_id, ActionType::Move {
-            source_folder: source.to_string(),
-            target_folder: target.to_string(),
-            uids,
-        })
+    pub fn queue_move(
+        &self,
+        account_id: &str,
+        source: &str,
+        target: &str,
+        uids: Vec<u32>,
+    ) -> Result<i64, HimalayaError> {
+        self.queue(
+            account_id,
+            ActionType::Move {
+                source_folder: source.to_string(),
+                target_folder: target.to_string(),
+                uids,
+            },
+        )
     }
 
     /// Queue a send action
-    pub fn queue_send(&self, account_id: &str, raw_message: Vec<u8>, save_to_sent: bool) -> Result<i64, HimalayaError> {
-        self.queue(account_id, ActionType::Send {
-            raw_message,
-            save_to_sent,
-        })
+    pub fn queue_send(
+        &self,
+        account_id: &str,
+        raw_message: Vec<u8>,
+        save_to_sent: bool,
+    ) -> Result<i64, HimalayaError> {
+        self.queue(
+            account_id,
+            ActionType::Send {
+                raw_message,
+                save_to_sent,
+            },
+        )
     }
 
     /// Get all pending actions for an account
@@ -279,8 +324,9 @@ impl ActionQueue {
 
         let mut actions = Vec::new();
         for record in records {
-            let action: ActionType = serde_json::from_str(&record.payload)
-                .map_err(|e| HimalayaError::Backend(format!("Failed to deserialize action: {}", e)))?;
+            let action: ActionType = serde_json::from_str(&record.payload).map_err(|e| {
+                HimalayaError::Backend(format!("Failed to deserialize action: {}", e))
+            })?;
 
             actions.push(QueuedAction {
                 id: Some(record.id),
@@ -390,7 +436,11 @@ mod tests {
         let deserialized: ActionType = serde_json::from_str(&json).unwrap();
 
         match deserialized {
-            ActionType::AddFlags { folder, uids, flags } => {
+            ActionType::AddFlags {
+                folder,
+                uids,
+                flags,
+            } => {
                 assert_eq!(folder, "INBOX");
                 assert_eq!(uids, vec![1, 2, 3]);
                 assert_eq!(flags, vec!["\\Seen"]);

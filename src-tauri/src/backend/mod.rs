@@ -17,12 +17,12 @@ use email::folder::{
 use email::imap::config::{ImapAuthConfig, ImapConfig as EmailImapConfig};
 use email::message::{
     add::AddMessage, copy::CopyMessages, delete::DeleteMessages, get::GetMessages,
-    r#move::MoveMessages, peek::PeekMessages, send::SendMessage,
+    peek::PeekMessages, r#move::MoveMessages, send::SendMessage,
 };
 use email::smtp::config::{SmtpAuthConfig, SmtpConfig as EmailSmtpConfig};
 use email::tls::{Encryption, Tls};
-use std::path::PathBuf;
 use secret::Secret;
+use std::path::PathBuf;
 use tracing::info;
 
 use crate::config::{self, AccountConfig, AuthConfig, PasswordSource};
@@ -114,7 +114,9 @@ impl EmailBackend {
                 ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
             }
             AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config("OAuth2 not yet supported".to_string()));
+                return Err(HimalayaError::Config(
+                    "OAuth2 not yet supported".to_string(),
+                ));
             }
         };
 
@@ -156,7 +158,9 @@ impl EmailBackend {
                 SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
             }
             AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config("OAuth2 not yet supported".to_string()));
+                return Err(HimalayaError::Config(
+                    "OAuth2 not yet supported".to_string(),
+                ));
             }
         };
 
@@ -198,7 +202,8 @@ impl EmailBackend {
                 || name_lower.contains("envoy")      // French
                 || name_lower.contains("gesendet")   // German
                 || name_lower.contains("enviados")   // Spanish
-                || name_lower.contains("inviati")    // Italian
+                || name_lower.contains("inviati")
+            // Italian
             {
                 info!("Found sent folder: {}", folder.name);
                 return Ok(Some(folder.name.clone()));
@@ -277,7 +282,10 @@ impl EmailBackend {
             .map(|e| {
                 info!(
                     "Fetched envelope: from={}, to={}, date={}, subject={}",
-                    e.from.to_string(), e.to.to_string(), e.date.to_rfc3339(), e.subject
+                    e.from.to_string(),
+                    e.to.to_string(),
+                    e.date.to_rfc3339(),
+                    e.subject
                 );
                 Envelope {
                     id: e.id.clone(),
@@ -387,10 +395,7 @@ impl EmailBackend {
             .unwrap_or_default();
 
         let subject = parsed.subject().map(|s| s.to_string()).unwrap_or_default();
-        let date = parsed
-            .date()
-            .map(|d| d.to_rfc3339())
-            .unwrap_or_default();
+        let date = parsed.date().map(|d| d.to_rfc3339()).unwrap_or_default();
         let message_id = parsed.message_id().map(|s| s.to_string());
         let in_reply_to = parsed.in_reply_to().as_text().map(|s| s.to_string());
 
@@ -429,7 +434,12 @@ impl EmailBackend {
             headers: parsed
                 .headers()
                 .iter()
-                .map(|h| (h.name().to_string(), h.value().as_text().unwrap_or("").to_string()))
+                .map(|h| {
+                    (
+                        h.name().to_string(),
+                        h.value().as_text().unwrap_or("").to_string(),
+                    )
+                })
                 .collect(),
             text_body,
             html_body,

@@ -31,7 +31,11 @@ impl Participant {
                 let name = addr[..name_end].trim().trim_matches('"').trim();
                 return Self {
                     email,
-                    name: if name.is_empty() { None } else { Some(name.to_string()) },
+                    name: if name.is_empty() {
+                        None
+                    } else {
+                        Some(name.to_string())
+                    },
                 };
             }
         }
@@ -70,11 +74,7 @@ impl Participant {
             let local = &email[..at_pos];
             let domain = &email[at_pos..];
 
-            let normalized_local = local
-                .split('+')
-                .next()
-                .unwrap_or(local)
-                .to_string();
+            let normalized_local = local.split('+').next().unwrap_or(local).to_string();
 
             return format!("{}{}", normalized_local, domain);
         }
@@ -193,9 +193,10 @@ impl ConversationGrouper {
         message: &CachedMessage,
     ) -> Result<i64, HimalayaError> {
         // Parse addresses
-        let to_addresses: Vec<String> = serde_json::from_str(&message.to_addresses)
-            .unwrap_or_default();
-        let cc_addresses: Option<Vec<String>> = message.cc_addresses
+        let to_addresses: Vec<String> =
+            serde_json::from_str(&message.to_addresses).unwrap_or_default();
+        let cc_addresses: Option<Vec<String>> = message
+            .cc_addresses
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok());
 
@@ -210,7 +211,7 @@ impl ConversationGrouper {
         // Skip messages with no other participants (self-sent only)
         if participant_key.is_empty() {
             return Err(HimalayaError::Backend(
-                "Message has no participants other than user".to_string()
+                "Message has no participants other than user".to_string(),
             ));
         }
 
@@ -232,10 +233,14 @@ impl ConversationGrouper {
 
         // Parse flags to check for \Seen
         let flags: Vec<String> = serde_json::from_str(&message.flags).unwrap_or_default();
-        let is_seen = flags.iter().any(|f| f.to_lowercase() == "\\seen" || f.to_lowercase() == "seen");
+        let is_seen = flags
+            .iter()
+            .any(|f| f.to_lowercase() == "\\seen" || f.to_lowercase() == "seen");
 
         // Get or create conversation
-        let existing = self.db.get_conversation_by_key(account_id, &participant_key)?;
+        let existing = self
+            .db
+            .get_conversation_by_key(account_id, &participant_key)?;
 
         let conversation = if let Some(mut conv) = existing {
             // Update existing conversation
@@ -247,7 +252,9 @@ impl ConversationGrouper {
 
             if should_update_last {
                 conv.last_message_date = message.date;
-                conv.last_message_preview = message.text_body.as_ref()
+                conv.last_message_preview = message
+                    .text_body
+                    .as_ref()
                     .or(message.subject.as_ref())
                     .map(|s| {
                         let trimmed = s.trim();
@@ -257,7 +264,9 @@ impl ConversationGrouper {
                             trimmed.to_string()
                         }
                     });
-                conv.last_message_from = message.from_name.clone()
+                conv.last_message_from = message
+                    .from_name
+                    .clone()
                     .or_else(|| Some(from_participant.email.clone()));
                 conv.is_outgoing = is_outgoing;
             }
@@ -276,17 +285,19 @@ impl ConversationGrouper {
                 participant_key: participant_key.clone(),
                 participants: participants_json,
                 last_message_date: message.date,
-                last_message_preview: message.text_body.as_ref()
-                    .or(message.subject.as_ref())
-                    .map(|s| {
+                last_message_preview: message.text_body.as_ref().or(message.subject.as_ref()).map(
+                    |s| {
                         let trimmed = s.trim();
                         if trimmed.len() > 100 {
                             format!("{}...", &trimmed.chars().take(100).collect::<String>())
                         } else {
                             trimmed.to_string()
                         }
-                    }),
-                last_message_from: message.from_name.clone()
+                    },
+                ),
+                last_message_from: message
+                    .from_name
+                    .clone()
                     .or_else(|| Some(from_participant.email.clone())),
                 message_count: 1,
                 unread_count: if !is_seen && !is_outgoing { 1 } else { 0 },
@@ -308,7 +319,11 @@ impl ConversationGrouper {
     /// Rebuild conversations for an account
     ///
     /// This is useful after initial sync or when fixing data issues.
-    pub fn rebuild_conversations(&self, account_id: &str, user_email: &str) -> Result<u32, HimalayaError> {
+    pub fn rebuild_conversations(
+        &self,
+        account_id: &str,
+        user_email: &str,
+    ) -> Result<u32, HimalayaError> {
         // Get all messages for the account across all folders
         let conn = self.db.connection()?;
 
@@ -316,7 +331,8 @@ impl ConversationGrouper {
         conn.execute(
             "DELETE FROM conversations WHERE account_id = ?1",
             rusqlite::params![account_id],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
         // Get messages grouped by participant key
         let mut stmt = conn.prepare(
@@ -327,9 +343,8 @@ impl ConversationGrouper {
              ORDER BY date ASC"
         ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
 
-        let messages: Vec<CachedMessage> = stmt.query_map(
-            rusqlite::params![account_id],
-            |row| {
+        let messages: Vec<CachedMessage> = stmt
+            .query_map(rusqlite::params![account_id], |row| {
                 Ok(CachedMessage {
                     id: row.get(0)?,
                     account_id: row.get(1)?,
@@ -343,7 +358,8 @@ impl ConversationGrouper {
                     to_addresses: row.get(9)?,
                     cc_addresses: row.get(10)?,
                     subject: row.get(11)?,
-                    date: row.get::<_, Option<String>>(12)?
+                    date: row
+                        .get::<_, Option<String>>(12)?
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc)),
                     flags: row.get(13)?,
@@ -352,19 +368,21 @@ impl ConversationGrouper {
                     text_body: row.get(16)?,
                     html_body: row.get(17)?,
                     raw_size: row.get(18)?,
-                    created_at: row.get::<_, String>(19)
+                    created_at: row
+                        .get::<_, String>(19)
                         .ok()
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(Utc::now),
-                    updated_at: row.get::<_, String>(20)
+                    updated_at: row
+                        .get::<_, String>(20)
                         .ok()
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(Utc::now),
                 })
-            }
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?
+            })
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -373,7 +391,10 @@ impl ConversationGrouper {
 
         let mut count = 0;
         for message in messages {
-            if self.assign_to_conversation(account_id, user_email, &message).is_ok() {
+            if self
+                .assign_to_conversation(account_id, user_email, &message)
+                .is_ok()
+            {
                 count += 1;
             }
         }
@@ -385,7 +406,11 @@ impl ConversationGrouper {
     }
 
     /// Update conversation when a message is deleted
-    pub fn handle_message_deleted(&self, account_id: &str, _message_id: i64) -> Result<(), HimalayaError> {
+    pub fn handle_message_deleted(
+        &self,
+        account_id: &str,
+        _message_id: i64,
+    ) -> Result<(), HimalayaError> {
         // The conversation_messages table has ON DELETE CASCADE,
         // so the link is automatically removed.
         // We just need to clean up empty conversations.
@@ -410,9 +435,10 @@ impl ConversationGrouper {
         }
 
         // Get the conversation for this message
-        let to_addresses: Vec<String> = serde_json::from_str(&message.to_addresses)
-            .unwrap_or_default();
-        let cc_addresses: Option<Vec<String>> = message.cc_addresses
+        let to_addresses: Vec<String> =
+            serde_json::from_str(&message.to_addresses).unwrap_or_default();
+        let cc_addresses: Option<Vec<String>> = message
+            .cc_addresses
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok());
 
@@ -423,11 +449,15 @@ impl ConversationGrouper {
             cc_addresses.as_deref(),
         );
 
-        if let Some(mut conv) = self.db.get_conversation_by_key(account_id, &participant_key)? {
+        if let Some(mut conv) = self
+            .db
+            .get_conversation_by_key(account_id, &participant_key)?
+        {
             // Check if this is an incoming message
             let user_normalized = Participant::normalize_email(user_email);
             let from_participant = Participant::from_address(&message.from_address);
-            let is_outgoing = Participant::normalize_email(&from_participant.email) == user_normalized;
+            let is_outgoing =
+                Participant::normalize_email(&from_participant.email) == user_normalized;
 
             if !is_outgoing {
                 if is_seen && !was_seen {

@@ -17,7 +17,8 @@ pub struct Conversation {
 
 impl Conversation {
     pub fn participants_key(participants: &[String]) -> String {
-        let mut sorted: Vec<String> = participants.iter()
+        let mut sorted: Vec<String> = participants
+            .iter()
             .map(|p| normalize_email(p).to_lowercase())
             .collect();
         sorted.sort();
