@@ -377,6 +377,7 @@ export function ConversationView({
             {/* Attachment preview */}
             {attachments.length > 0 && (
               <div className="attachments-preview">
+                <span className="attachments-preview-label">Ready to send</span>
                 {attachments.map((attachment, index) => (
                   <div key={index} className="attachment-chip">
                     <span className="attachment-name" title={attachment.name}>
@@ -660,6 +661,7 @@ export function ConversationView({
         {/* Attachment preview */}
         {attachments.length > 0 && (
           <div className="attachments-preview">
+            <span className="attachments-preview-label">Ready to send</span>
             {attachments.map((attachment, index) => (
               <div key={index} className="attachment-chip">
                 <span className="attachment-name" title={attachment.name}>

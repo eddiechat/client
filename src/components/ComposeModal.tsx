@@ -177,39 +177,41 @@ export function ComposeModal({
             />
           </div>
 
-          {/* Attachments section */}
-          <div className="form-row attachments-row">
-            <button type="button" onClick={handleAddAttachment} className="add-attachment-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-              </svg>
-              Add Attachment
-            </button>
-            {attachments.length > 0 && (
-              <div className="compose-attachments-list">
-                {attachments.map((attachment, index) => (
-                  <div key={index} className="attachment-chip">
-                    <span className="attachment-name" title={attachment.name}>
-                      {attachment.name}
-                    </span>
-                    <button
-                      type="button"
-                      className="attachment-remove"
-                      onClick={() => handleRemoveAttachment(index)}
-                      title="Remove attachment"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {attachments.length > 0 && (
+            <div className="compose-attachments-list">
+              {attachments.map((attachment, index) => (
+                <div key={index} className="attachment-chip">
+                  <span className="attachment-name" title={attachment.name}>
+                    {attachment.name}
+                  </span>
+                  <button
+                    type="button"
+                    className="attachment-remove"
+                    onClick={() => handleRemoveAttachment(index)}
+                    title="Remove attachment"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="compose-footer">
+          <button
+            type="button"
+            onClick={handleAddAttachment}
+            className="attachment-icon-btn"
+            title="Add attachment"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
+          <div className="footer-spacer"></div>
           <button type="button" onClick={handleSaveDraft} disabled={sending} className="cancel-btn">
             Save Draft
           </button>
