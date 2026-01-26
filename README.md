@@ -1,6 +1,12 @@
+<p align="center">
+  <img src="public/eddie-swirl-green.svg" alt="eddie logo" width="120" height="120">
+</p>
+
 # eddie.chat
 
 **eddie** is an open source, privacy-first, collaborative conversational interface built on top of email. eddie has a client-centric and fully transparent AI infrastructure, and a marketplace of community-driven, remixable agent skills.
+
+[Read the Manifesto →](https://eddie.chat)
 
 ---
 
