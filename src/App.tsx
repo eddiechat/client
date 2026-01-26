@@ -184,7 +184,7 @@ function App() {
   return (
     <main className="app">
       {/* Sidebar with chat list */}
-      <aside className="sidebar">
+      <aside className={`sidebar${selectedConversation ? ' hidden' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-title">
             <div className="sidebar-brand">
