@@ -9,6 +9,7 @@ import {
   parseEmailContent,
 } from "../lib/utils";
 import { Avatar } from "./Avatar";
+import { GravatarModal } from "./GravatarModal";
 
 interface ConversationViewProps {
   conversation: Conversation | null;
@@ -143,6 +144,7 @@ export function ConversationView({
   const [inputValue, setInputValue] = useState("");
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
+  const [gravatarModalEmail, setGravatarModalEmail] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
@@ -448,8 +450,13 @@ export function ConversationView({
                           backgroundColor: getAvatarColor(
                             message.envelope.from
                           ),
+                          cursor: "pointer",
                         }}
                         title={getAvatarTooltip(message.envelope.from, message.id)}
+                        onClick={() => {
+                          const email = extractEmail(message.envelope.from);
+                          if (email) setGravatarModalEmail(email);
+                        }}
                       >
                         {(() => {
                           const messageEmail = extractEmail(message.envelope.from);
@@ -548,6 +555,13 @@ export function ConversationView({
           </button>
         </div>
       </form>
+
+      {/* Gravatar Modal */}
+      <GravatarModal
+        email={gravatarModalEmail}
+        isOpen={!!gravatarModalEmail}
+        onClose={() => setGravatarModalEmail(null)}
+      />
     </div>
   );
 }
