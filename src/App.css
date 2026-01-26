@@ -1203,3 +1203,168 @@ body {
     flex-shrink: 0;
   }
 }
+
+/* ===== Account Setup Wizard ===== */
+.account-setup-wizard {
+  max-width: 480px;
+}
+
+.wizard-step-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.wizard-step-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.wizard-step-header p {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.provider-detected {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+/* Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--bg-tertiary);
+  border-top-color: var(--bubble-sent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 24px auto;
+}
+
+/* OAuth section */
+.oauth-section {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.oauth-section p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.oauth-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--bubble-sent);
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.oauth-btn:hover:not(:disabled) {
+  background: #2968dc;
+}
+
+.oauth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.check-status-btn {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.check-status-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.oauth-success {
+  text-align: center;
+  padding: 24px;
+  background: rgba(52, 199, 89, 0.1);
+  border: 1px solid rgba(52, 199, 89, 0.3);
+  border-radius: 12px;
+}
+
+.oauth-success p {
+  font-size: 15px;
+  color: #34c759;
+  font-weight: 500;
+}
+
+/* App password section */
+.app-password-section {
+  text-align: center;
+}
+
+.app-password-section p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.help-link {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--text-accent);
+  text-decoration: none;
+  margin-bottom: 20px;
+}
+
+.help-link:hover {
+  text-decoration: underline;
+}
+
+/* Manual config link */
+.manual-config-link {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.manual-config-link:hover {
+  color: var(--text-accent);
+}
+
+/* Password section */
+.password-section {
+  margin-top: 16px;
+}
+
+/* Account setup wizard responsive */
+@media (max-aspect-ratio: 3/4) {
+  .account-setup-wizard {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}

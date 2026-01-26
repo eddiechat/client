@@ -1,10 +1,13 @@
+mod autodiscovery;
 mod backend;
 mod commands;
 mod config;
+mod credentials;
+mod oauth;
 mod sync;
 mod types;
 
-use commands::SyncManager;
+use commands::{OAuthState, SyncManager};
 use tauri::Manager;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -30,7 +33,9 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(SyncManager::new())
+        .manage(OAuthState::new())
         .setup(|app| {
             // Try to initialize config on startup
             if let Err(e) = config::init_config() {
@@ -59,6 +64,21 @@ pub fn run() {
             commands::account_exists,
             commands::remove_account,
             commands::get_account_details,
+            // Autodiscovery commands
+            commands::discover_email_config,
+            commands::test_email_connection,
+            // OAuth2 commands
+            commands::start_oauth_flow,
+            commands::complete_oauth_flow,
+            commands::refresh_oauth_tokens,
+            commands::check_oauth_status,
+            // Credential commands
+            commands::store_password,
+            commands::store_app_password,
+            commands::delete_credentials,
+            commands::has_credentials,
+            // Combined account setup
+            commands::save_discovered_account,
             // Folder commands
             commands::list_folders,
             commands::create_folder,

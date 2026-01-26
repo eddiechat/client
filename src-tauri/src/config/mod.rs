@@ -84,6 +84,16 @@ pub struct SmtpConfig {
     pub auth: AuthConfig,
 }
 
+/// OAuth2 provider type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OAuth2Provider {
+    Google,
+    Microsoft,
+    Yahoo,
+    Fastmail,
+}
+
 /// Authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -97,18 +107,17 @@ pub enum AuthConfig {
     },
     /// OAuth2 authentication
     OAuth2 {
-        /// OAuth2 client ID
-        client_id: String,
-        /// OAuth2 client secret (optional)
-        client_secret: Option<String>,
-        /// OAuth2 token URL
-        token_url: String,
-        /// OAuth2 authorization URL
-        auth_url: String,
-        /// OAuth2 scopes
-        scopes: Vec<String>,
-        /// Refresh token
-        refresh_token: Option<String>,
+        /// OAuth2 provider (google, microsoft, yahoo, fastmail)
+        provider: OAuth2Provider,
+        /// Access token (stored in keychain, this is just a reference)
+        /// The actual token is fetched from the credential store
+        #[serde(skip_serializing_if = "Option::is_none")]
+        access_token: Option<String>,
+    },
+    /// App-specific password (for iCloud, etc.)
+    AppPassword {
+        /// Username (usually email address)
+        user: String,
     },
 }
 

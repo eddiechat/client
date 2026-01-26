@@ -23,9 +23,11 @@ use email::smtp::config::{SmtpAuthConfig, SmtpConfig as EmailSmtpConfig};
 use email::tls::{Encryption, Tls};
 use secret::Secret;
 use std::path::PathBuf;
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::config::{self, AccountConfig, AuthConfig, PasswordSource};
+use crate::config::{self, AccountConfig, AuthConfig, OAuth2Provider, PasswordSource};
+use crate::credentials::CredentialStore;
+use crate::oauth::OAuthManager;
 use crate::types::error::HimalayaError;
 use crate::types::{Attachment, Envelope, Folder, Message};
 
@@ -115,17 +117,8 @@ impl EmailBackend {
             .as_ref()
             .ok_or_else(|| HimalayaError::Config("No IMAP configuration".to_string()))?;
 
-        let auth = match &imap.auth {
-            AuthConfig::Password { user: _, password } => {
-                let passwd = Self::resolve_password(password).await?;
-                ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
-            }
-            AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config(
-                    "OAuth2 not yet supported".to_string(),
-                ));
-            }
-        };
+        let email = &self.account_config.email;
+        let (login, auth) = Self::build_auth_config(&imap.auth, email).await?;
 
         let tls_config = Tls {
             cert: imap.tls_cert.as_ref().map(PathBuf::from),
@@ -142,13 +135,62 @@ impl EmailBackend {
             host: imap.host.clone(),
             port: imap.port,
             encryption,
-            login: match &imap.auth {
-                AuthConfig::Password { user, .. } => user.clone(),
-                AuthConfig::OAuth2 { .. } => self.account_config.email.clone(),
-            },
+            login,
             auth,
             ..Default::default()
         })
+    }
+
+    /// Build authentication configuration from AuthConfig
+    async fn build_auth_config(
+        auth_config: &AuthConfig,
+        email: &str,
+    ) -> Result<(String, ImapAuthConfig), HimalayaError> {
+        match auth_config {
+            AuthConfig::Password { user, password } => {
+                let passwd = Self::resolve_password(password).await?;
+                Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
+            }
+            AuthConfig::OAuth2 { provider, access_token } => {
+                // Get OAuth tokens from credential store or use provided token
+                let token = if let Some(token) = access_token {
+                    token.clone()
+                } else {
+                    // Try to get from credential store
+                    let cred_store = CredentialStore::new();
+                    let tokens = cred_store.get_oauth_tokens(email).map_err(|e| {
+                        HimalayaError::Config(format!("Failed to get OAuth tokens: {}", e))
+                    })?;
+
+                    // Check if token needs refresh
+                    if crate::oauth::OAuthManager::should_refresh(&tokens) {
+                        warn!("OAuth token for {} should be refreshed", email);
+                        // Token refresh should be handled by the caller before this point
+                        // For now, we'll use the existing token
+                    }
+
+                    tokens.access_token
+                };
+
+                // Build XOAUTH2 SASL string
+                let xoauth2_string = OAuthManager::build_xoauth2_string(email, &token);
+
+                // For email-lib, we use OAuth2 auth config
+                // The library expects the XOAUTH2 token directly
+                Ok((
+                    email.to_string(),
+                    ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(xoauth2_string))),
+                ))
+            }
+            AuthConfig::AppPassword { user } => {
+                // Get app password from credential store
+                let cred_store = CredentialStore::new();
+                let password = cred_store.get_app_password(email).map_err(|e| {
+                    HimalayaError::Config(format!("Failed to get app password: {}", e))
+                })?;
+                Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(password)))))
+            }
+        }
     }
 
     /// Build SMTP configuration for email-lib
@@ -159,17 +201,8 @@ impl EmailBackend {
             .as_ref()
             .ok_or_else(|| HimalayaError::Config("No SMTP configuration".to_string()))?;
 
-        let auth = match &smtp.auth {
-            AuthConfig::Password { user: _, password } => {
-                let passwd = Self::resolve_password(password).await?;
-                SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
-            }
-            AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config(
-                    "OAuth2 not yet supported".to_string(),
-                ));
-            }
-        };
+        let email = &self.account_config.email;
+        let (login, auth) = Self::build_smtp_auth_config(&smtp.auth, email).await?;
 
         let tls_config = Tls {
             cert: smtp.tls_cert.as_ref().map(PathBuf::from),
@@ -186,13 +219,50 @@ impl EmailBackend {
             host: smtp.host.clone(),
             port: smtp.port,
             encryption,
-            login: match &smtp.auth {
-                AuthConfig::Password { user, .. } => user.clone(),
-                AuthConfig::OAuth2 { .. } => self.account_config.email.clone(),
-            },
+            login,
             auth,
             ..Default::default()
         })
+    }
+
+    /// Build SMTP authentication configuration from AuthConfig
+    async fn build_smtp_auth_config(
+        auth_config: &AuthConfig,
+        email: &str,
+    ) -> Result<(String, SmtpAuthConfig), HimalayaError> {
+        match auth_config {
+            AuthConfig::Password { user, password } => {
+                let passwd = Self::resolve_password(password).await?;
+                Ok((user.clone(), SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
+            }
+            AuthConfig::OAuth2 { provider, access_token } => {
+                // Get OAuth tokens from credential store or use provided token
+                let token = if let Some(token) = access_token {
+                    token.clone()
+                } else {
+                    let cred_store = CredentialStore::new();
+                    let tokens = cred_store.get_oauth_tokens(email).map_err(|e| {
+                        HimalayaError::Config(format!("Failed to get OAuth tokens: {}", e))
+                    })?;
+                    tokens.access_token
+                };
+
+                // Build XOAUTH2 SASL string
+                let xoauth2_string = OAuthManager::build_xoauth2_string(email, &token);
+
+                Ok((
+                    email.to_string(),
+                    SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(xoauth2_string))),
+                ))
+            }
+            AuthConfig::AppPassword { user } => {
+                let cred_store = CredentialStore::new();
+                let password = cred_store.get_app_password(email).map_err(|e| {
+                    HimalayaError::Config(format!("Failed to get app password: {}", e))
+                })?;
+                Ok((user.clone(), SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(password)))))
+            }
+        }
     }
 
     /// Find the Sent folder by checking common folder names
