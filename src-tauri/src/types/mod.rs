@@ -43,6 +43,15 @@ pub struct Attachment {
     pub size: usize,
 }
 
+/// Represents an attachment to be sent with a composed message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComposeAttachment {
+    pub path: String,
+    pub name: String,
+    pub mime_type: String,
+    pub size: usize,
+}
+
 /// Represents an account configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
