@@ -219,12 +219,14 @@ pub async fn send_message_with_attachments(
     subject: String,
     body: String,
     attachments: Vec<ComposeAttachment>,
+    in_reply_to: Option<String>,
 ) -> Result<Option<SendMessageResult>, String> {
     info!(
-        "Tauri command: send_message_with_attachments - account: {:?}, to: {:?}, attachments: {}",
+        "Tauri command: send_message_with_attachments - account: {:?}, to: {:?}, attachments: {}, in_reply_to: {:?}",
         account,
         to,
-        attachments.len()
+        attachments.len(),
+        in_reply_to
     );
 
     let backend = backend::get_backend(account.as_deref())
@@ -234,14 +236,29 @@ pub async fn send_message_with_attachments(
     // Generate a unique boundary for the MIME message
     let boundary = format!("----=_Part_{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
 
+    // Generate a unique Message-ID for proper threading
+    let message_id = format!(
+        "<{}.{}@eddie.local>",
+        uuid::Uuid::new_v4().to_string().replace("-", ""),
+        chrono::Utc::now().timestamp()
+    );
+
     // Build headers
     let mut headers = vec![
         format!("From: {}", from),
         format!("To: {}", to.join(", ")),
         format!("Subject: {}", subject),
         format!("Date: {}", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")),
+        format!("Message-ID: {}", message_id),
         "MIME-Version: 1.0".to_string(),
     ];
+
+    // Add In-Reply-To header for threading (RFC 2822)
+    if let Some(ref reply_to_id) = in_reply_to {
+        headers.push(format!("In-Reply-To: {}", reply_to_id));
+        // Also add References header for proper threading chain
+        headers.push(format!("References: {}", reply_to_id));
+    }
 
     // Add Cc if present
     if let Some(cc_addrs) = &cc {

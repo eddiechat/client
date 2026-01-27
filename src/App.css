@@ -1576,3 +1576,119 @@ body {
 .message-bubble.sent .attachment-icon {
   background: rgba(0, 0, 0, 0.1);
 }
+
+/* ===== Reply Button and Indicator ===== */
+.message-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.message-reply-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.message-bubble-container:hover .message-reply-btn {
+  opacity: 0.6;
+}
+
+.message-reply-btn:hover {
+  opacity: 1 !important;
+  background: var(--bg-tertiary);
+}
+
+.message-reply-btn svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+
+/* For outgoing messages, reverse the order */
+.message-bubble-container.outgoing .message-bubble-row {
+  flex-direction: row-reverse;
+}
+
+/* Reply indicator above input */
+.reply-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.reply-indicator-content {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.reply-indicator-bar {
+  width: 3px;
+  min-width: 3px;
+  background: var(--bubble-sent);
+  border-radius: 2px;
+}
+
+.reply-indicator-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reply-indicator-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bubble-sent);
+}
+
+.reply-indicator-snippet {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-indicator-close {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.reply-indicator-close:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+
+.reply-indicator-close svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}

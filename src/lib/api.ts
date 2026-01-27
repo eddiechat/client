@@ -47,7 +47,8 @@ export async function sendMessageWithAttachments(
   body: string,
   attachments: ComposeAttachment[],
   cc?: string[],
-  account?: string
+  account?: string,
+  inReplyTo?: string
 ): Promise<SendMessageResult | null> {
   return invoke("send_message_with_attachments", {
     account,
@@ -57,6 +58,7 @@ export async function sendMessageWithAttachments(
     subject,
     body,
     attachments,
+    in_reply_to: inReplyTo, // Tauri expects snake_case to match Rust parameter
   });
 }
 

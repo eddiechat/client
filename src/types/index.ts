@@ -82,6 +82,14 @@ export interface SaveAccountRequest {
   password: string;
 }
 
+// Reply target for the hybrid subject strategy
+export interface ReplyTarget {
+  messageId: string;      // The message_id header (for In-Reply-To)
+  subject: string;        // Original subject (for Re: prefix)
+  snippet: string;        // Preview text to show in UI
+  from: string;           // Who sent the message
+}
+
 // Conversation type for Signal-like messaging UI
 export interface Conversation {
   id: string;

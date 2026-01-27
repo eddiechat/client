@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { Conversation, Message, ComposeAttachment } from "../types";
+import type { Conversation, Message, ComposeAttachment, ReplyTarget } from "../types";
 import {
   getAvatarColor,
   getInitials,
@@ -19,7 +19,7 @@ interface ConversationViewProps {
   loading?: boolean;
   error?: string | null;
   currentAccountEmail?: string;
-  onSendMessage: (text: string, attachments?: ComposeAttachment[]) => void;
+  onSendMessage: (text: string, attachments?: ComposeAttachment[], replyTarget?: ReplyTarget) => void;
   onBack?: () => void;
   // Compose mode props
   isComposing?: boolean;
@@ -146,8 +146,9 @@ export function ConversationView({
   const [inputValue, setInputValue] = useState("");
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
-const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
+  const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
@@ -199,9 +200,10 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
     }
   }, [isComposing]);
 
-  // Reset attachments when conversation changes
+  // Reset attachments and reply target when conversation changes
   useEffect(() => {
     setAttachments([]);
+    setReplyTarget(null);
   }, [conversation?.id]);
 
   // Handle adding attachments via file dialog
@@ -276,6 +278,34 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Handle setting up a reply to a specific message
+  const handleReplyToMessage = (message: Message) => {
+    const messageId = message.envelope.message_id;
+    if (!messageId) {
+      // Can't reply to messages without a message_id
+      console.warn("Cannot reply to message without message_id");
+      return;
+    }
+
+    // Get a snippet of the message for the UI
+    const snippet = message.text_body?.slice(0, 100) || message.envelope.subject || "(No content)";
+
+    setReplyTarget({
+      messageId,
+      subject: message.envelope.subject || "",
+      snippet: snippet.length > 100 ? snippet.slice(0, 97) + "..." : snippet,
+      from: message.envelope.from,
+    });
+
+    // Focus the input
+    inputRef.current?.focus();
+  };
+
+  // Handle canceling a reply
+  const handleCancelReply = () => {
+    setReplyTarget(null);
+  };
+
   // Handle Enter key in To field
   const handleToKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -302,9 +332,14 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
         setAttachments([]);
         setParticipantsConfirmed(false);
       } else if (conversation) {
-        onSendMessage(inputValue.trim(), attachments.length > 0 ? attachments : undefined);
+        onSendMessage(
+          inputValue.trim(),
+          attachments.length > 0 ? attachments : undefined,
+          replyTarget || undefined
+        );
         setInputValue("");
         setAttachments([]);
+        setReplyTarget(null);
       }
       inputRef.current?.focus();
     }
@@ -627,24 +662,40 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
                         </span>
                       )}
 
-                      <div className={`message-bubble ${isOut ? "sent" : "received"}`}>
-                        <div className="message-text">
-                          {parseEmailContent(message.text_body) || message.envelope.subject || "(No content)"}
+                      <div className="message-bubble-row">
+                        <div className={`message-bubble ${isOut ? "sent" : "received"}`}>
+                          <div className="message-text">
+                            {parseEmailContent(message.text_body) || message.envelope.subject || "(No content)"}
+                          </div>
+                          <AttachmentList
+                            messageId={message.id}
+                            hasAttachment={message.envelope.has_attachment}
+                          />
+                          <span className="message-time">
+                            {formatMessageTime(message.envelope.date)}
+                            {isOut && (
+                              <span className="message-status">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
+                                </svg>
+                              </span>
+                            )}
+                          </span>
                         </div>
-                        <AttachmentList
-                          messageId={message.id}
-                          hasAttachment={message.envelope.has_attachment}
-                        />
-                        <span className="message-time">
-                          {formatMessageTime(message.envelope.date)}
-                          {isOut && (
-                            <span className="message-status">
-                              <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
-                              </svg>
-                            </span>
-                          )}
-                        </span>
+
+                        {/* Reply button - shown on hover */}
+                        {message.envelope.message_id && (
+                          <button
+                            className="message-reply-btn"
+                            onClick={() => handleReplyToMessage(message)}
+                            title="Reply to this message"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M9 17l-5-5 5-5" />
+                              <path d="M4 12h11a4 4 0 0 1 4 4v1" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -658,6 +709,31 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
 
       {/* Input */}
       <form className="conversation-input" onSubmit={handleSubmit}>
+        {/* Reply indicator */}
+        {replyTarget && (
+          <div className="reply-indicator">
+            <div className="reply-indicator-content">
+              <div className="reply-indicator-bar" />
+              <div className="reply-indicator-info">
+                <span className="reply-indicator-label">
+                  Replying to {getSenderName(replyTarget.from)}
+                </span>
+                <span className="reply-indicator-snippet">{replyTarget.snippet}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="reply-indicator-close"
+              onClick={handleCancelReply}
+              title="Cancel reply"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Attachment preview */}
         {attachments.length > 0 && (
           <div className="attachments-preview">
@@ -693,7 +769,7 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
               ref={inputRef}
               type="text"
               className="message-input"
-              placeholder="Message"
+              placeholder={replyTarget ? "Write a reply..." : "Message"}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
             />

@@ -11,7 +11,7 @@ import {
   useConversationMessages,
 } from "./hooks/useConversations";
 import * as api from "./lib/api";
-import type { Conversation, SaveAccountRequest, ComposeAttachment } from "./types";
+import type { Conversation, SaveAccountRequest, ComposeAttachment, ReplyTarget } from "./types";
 import { extractEmail } from "./lib/utils";
 import "./App.css";
 
@@ -107,15 +107,23 @@ function App() {
     }
   }, [conversations]);
 
+  // Get sender display name for generic subjects
+  const getSenderDisplayName = useCallback(() => {
+    if (!currentAccount) return "Someone";
+    // Extract name from email (part before @)
+    const emailPart = currentAccount.split("@")[0];
+    // Capitalize first letter
+    return emailPart.charAt(0).toUpperCase() + emailPart.slice(1);
+  }, [currentAccount]);
+
   // Handle sending a new message in compose mode (no existing conversation)
   const handleSendNewMessage = useCallback(
     async (text: string, participants: string[], attachments?: ComposeAttachment[]) => {
       if ((!text.trim() && (!attachments || attachments.length === 0)) || participants.length === 0) return;
 
-      // Extract first line as subject
-      const lines = text.split('\n');
-      const subject = lines[0].trim() || '(No subject)';
-      const body = lines.length > 1 ? lines.slice(1).join('\n').trim() || lines[0] : text;
+      // Use generic subject for new messages: "[Sender Name] via Eddie"
+      const subject = `${getSenderDisplayName()} via Eddie`;
+      const body = text;
 
       // Use the new API if we have attachments, otherwise use the legacy API for compatibility
       const result = await api.sendMessageWithAttachments(
@@ -125,7 +133,8 @@ function App() {
         body,
         attachments || [],
         undefined,
-        currentAccount || undefined
+        currentAccount || undefined,
+        undefined // no in_reply_to for new messages
       );
 
       // Sync the sent folder to pull the message into local database
@@ -152,11 +161,11 @@ function App() {
         }
       }, 500);
     },
-    [currentAccount, refreshConversations, conversations]
+    [currentAccount, refreshConversations, conversations, getSenderDisplayName]
   );
 
   const handleSendFromConversation = useCallback(
-    async (text: string, attachments?: ComposeAttachment[]) => {
+    async (text: string, attachments?: ComposeAttachment[], replyTarget?: ReplyTarget) => {
       if (!selectedConversation || (!text.trim() && (!attachments || attachments.length === 0))) return;
 
       // Get all recipients (all participants except current user)
@@ -167,11 +176,28 @@ function App() {
       // If no recipients found, use first participant
       const to = recipients.length > 0 ? recipients : [selectedConversation.participants[0]];
 
-      // Extract first line as subject for new message style
-      const lines = text.split('\n');
-      const firstLine = lines[0].trim();
-      const subject = firstLine || `Re: ${selectedConversation.last_message_preview}`;
-      const body = lines.length > 1 ? lines.slice(1).join('\n').trim() || text : text;
+      let subject: string;
+      let body: string;
+      let inReplyTo: string | undefined;
+
+      if (replyTarget) {
+        // This is a reply - use "Re:" subject and include quoted text
+        const originalSubject = replyTarget.subject || "";
+        // Avoid double "Re:" prefix
+        subject = originalSubject.toLowerCase().startsWith("re:")
+          ? originalSubject
+          : `Re: ${originalSubject}`;
+
+        // Add quoted text at the end of the body
+        const quotedText = `\n\n> ${replyTarget.snippet.split('\n').join('\n> ')}`;
+        body = text + quotedText;
+        inReplyTo = replyTarget.messageId;
+      } else {
+        // This is a new message in the conversation - use generic subject
+        subject = `${getSenderDisplayName()} via Eddie`;
+        body = text;
+        inReplyTo = undefined;
+      }
 
       // Use the new API with attachments support
       const result = await api.sendMessageWithAttachments(
@@ -181,7 +207,8 @@ function App() {
         body,
         attachments || [],
         undefined,
-        currentAccount || undefined
+        currentAccount || undefined,
+        inReplyTo
       );
 
       // Sync the sent folder to pull the message into local database
@@ -191,7 +218,7 @@ function App() {
       refreshConversations();
       refreshMessages();
     },
-    [selectedConversation, currentAccount, refreshConversations, refreshMessages]
+    [selectedConversation, currentAccount, refreshConversations, refreshMessages, getSenderDisplayName]
   );
 
   const handleEditAccount = useCallback(async () => {
