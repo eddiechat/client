@@ -1361,6 +1361,139 @@ body {
   color: white;
 }
 
+/* ===== Message Full View ===== */
+.message-full-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.message-full-view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 12px;
+}
+
+.message-full-view-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.message-full-view-subject {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.message-full-view-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.message-full-view-sender {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.message-full-view-date {
+  color: var(--text-muted);
+}
+
+.message-full-view-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.message-full-view-close:hover {
+  background: var(--bg-tertiary);
+}
+
+.message-full-view-close svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+}
+
+.message-full-view-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.message-full-view-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.message-full-view-html {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.message-full-view-html img {
+  max-width: 100%;
+  height: auto;
+}
+
+.message-full-view-html a {
+  color: var(--accent-color);
+}
+
+.message-full-view-html table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+
+.message-full-view-html td,
+.message-full-view-html th {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+}
+
+/* ===== Expandable Message Indicator ===== */
+.message-bubble.expandable {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.message-bubble.expandable:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.message-bubble.expandable.sent {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.message-bubble.expandable.sent:hover {
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
 /* ===== Responsive ===== */
 @media (max-aspect-ratio: 3/4) {
   .sidebar {

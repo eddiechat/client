@@ -8,10 +8,12 @@ import {
   getGravatarUrl,
   getConversationNameParts,
   parseEmailContent,
+  hasExpandableContent,
 } from "../lib/utils";
 import { Avatar } from "./Avatar";
 import { GravatarModal } from "./GravatarModal";
 import { AttachmentList } from "./AttachmentList";
+import { MessageFullView } from "./MessageFullView";
 
 interface ConversationViewProps {
   conversation: Conversation | null;
@@ -147,6 +149,7 @@ export function ConversationView({
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
 const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
+  const [fullViewMessage, setFullViewMessage] = useState<Message | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -156,9 +159,10 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
   const prevConversationRef = useRef<Conversation | null>(null);
   const wasComposingRef = useRef(false);
 
-  // Close gravatar panel when conversation changes
+  // Close gravatar panel and full view when conversation changes
   useEffect(() => {
     setGravatarModalData(null);
+    setFullViewMessage(null);
   }, [conversation?.id]);
 
   // Scroll to bottom when messages change
@@ -514,8 +518,13 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
         </div>
       </div>
 
-      {/* Gravatar Panel or Messages */}
-      {gravatarModalData ? (
+      {/* Full View Panel, Gravatar Panel, or Messages */}
+      {fullViewMessage ? (
+        <MessageFullView
+          message={fullViewMessage}
+          onClose={() => setFullViewMessage(null)}
+        />
+      ) : gravatarModalData ? (
         <GravatarModal
           email={gravatarModalData.email}
           name={gravatarModalData.name}
@@ -627,25 +636,35 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
                         </span>
                       )}
 
-                      <div className={`message-bubble ${isOut ? "sent" : "received"}`}>
-                        <div className="message-text">
-                          {parseEmailContent(message.text_body) || message.envelope.subject || "(No content)"}
-                        </div>
-                        <AttachmentList
-                          messageId={message.id}
-                          hasAttachment={message.envelope.has_attachment}
-                        />
-                        <span className="message-time">
-                          {formatMessageTime(message.envelope.date)}
-                          {isOut && (
-                            <span className="message-status">
-                              <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
-                              </svg>
+                      {(() => {
+                        const isExpandable = hasExpandableContent(message.text_body, message.html_body);
+                        return (
+                          <div
+                            className={`message-bubble ${isOut ? "sent" : "received"}${isExpandable ? " expandable" : ""}`}
+                            onClick={isExpandable ? () => setFullViewMessage(message) : undefined}
+                            style={isExpandable ? { cursor: "pointer" } : undefined}
+                            title={isExpandable ? "Click to view full message" : undefined}
+                          >
+                            <div className="message-text">
+                              {parseEmailContent(message.text_body) || message.envelope.subject || "(No content)"}
+                            </div>
+                            <AttachmentList
+                              messageId={message.id}
+                              hasAttachment={message.envelope.has_attachment}
+                            />
+                            <span className="message-time">
+                              {formatMessageTime(message.envelope.date)}
+                              {isOut && (
+                                <span className="message-status">
+                                  <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
+                                  </svg>
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </span>
-                      </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
