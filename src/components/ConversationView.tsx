@@ -144,7 +144,7 @@ export function ConversationView({
   const [inputValue, setInputValue] = useState("");
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
-  const [gravatarModalEmail, setGravatarModalEmail] = useState<string | null>(null);
+  const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
@@ -402,11 +402,12 @@ export function ConversationView({
       </div>
 
       {/* Gravatar Panel or Messages */}
-      {gravatarModalEmail ? (
+      {gravatarModalData ? (
         <GravatarModal
-          email={gravatarModalEmail}
-          isOpen={!!gravatarModalEmail}
-          onClose={() => setGravatarModalEmail(null)}
+          email={gravatarModalData.email}
+          name={gravatarModalData.name}
+          isOpen={!!gravatarModalData}
+          onClose={() => setGravatarModalData(null)}
         />
       ) : (
         <>
@@ -464,7 +465,8 @@ export function ConversationView({
                         title={getAvatarTooltip(message.envelope.from, message.id)}
                         onClick={() => {
                           const email = extractEmail(message.envelope.from);
-                          if (email) setGravatarModalEmail(email);
+                          const name = getSenderName(message.envelope.from);
+                          if (email) setGravatarModalData({ email, name });
                         }}
                       >
                         {(() => {

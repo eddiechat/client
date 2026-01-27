@@ -1159,6 +1159,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: white;
 }
 
 .gravatar-panel-header {
@@ -1166,13 +1167,32 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.gravatar-panel-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
 .gravatar-panel-title {
   font-size: 17px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #1a1a1a;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gravatar-panel-email {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gravatar-panel-close {
@@ -1185,30 +1205,31 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--transition-fast);
+  transition: background 0.15s ease;
 }
 
 .gravatar-panel-close:hover {
-  background: var(--bg-hover);
+  background: #f0f0f0;
 }
 
 .gravatar-panel-close svg {
   width: 20px;
   height: 20px;
-  color: var(--text-secondary);
+  color: #666;
 }
 
 .gravatar-panel-content {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  overflow: hidden;
 }
 
 .gravatar-panel-content iframe {
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  height: 100%;
+  border: none;
 }
 
 /* ===== Responsive ===== */
