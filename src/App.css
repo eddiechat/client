@@ -982,10 +982,27 @@ body {
 
 .compose-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.compose-footer .footer-left {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.compose-footer .footer-right {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  align-items: center;
 }
 
 .compose-footer button {
@@ -1005,6 +1022,27 @@ body {
 
 .cancel-btn:hover {
   background: var(--bg-hover);
+}
+
+.back-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.back-btn:hover {
+  background: var(--bg-hover);
+}
+
+.clear-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.clear-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .send-btn {
@@ -1050,6 +1088,12 @@ body {
 /* ===== Account Config Modal ===== */
 .account-config-modal {
   max-width: 500px;
+  max-height: 90vh;
+}
+
+.account-config-modal .compose-form {
+  overflow-y: auto;
+  max-height: calc(90vh - 140px); /* Account for header and footer */
 }
 
 .config-section {
@@ -1351,6 +1395,24 @@ body {
 
 .manual-config-link:hover {
   color: var(--text-accent);
+}
+
+/* Back link */
+.back-link {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  color: var(--text-accent);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border-radius: 6px;
+}
+
+.back-link:hover {
+  background: var(--bg-hover);
 }
 
 /* Password section */
