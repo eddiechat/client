@@ -153,6 +153,11 @@ export function ConversationView({
   const prevConversationRef = useRef<Conversation | null>(null);
   const wasComposingRef = useRef(false);
 
+  // Close gravatar panel when conversation changes
+  useEffect(() => {
+    setGravatarModalData(null);
+  }, [conversation?.id]);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
