@@ -192,6 +192,7 @@ function App() {
         const quotedText = `\n\n> ${replyTarget.snippet.split('\n').join('\n> ')}`;
         body = text + quotedText;
         inReplyTo = replyTarget.messageId;
+        console.log("[Reply] Sending reply with In-Reply-To:", inReplyTo);
       } else {
         // This is a new message in the conversation - use generic subject
         subject = `${getSenderDisplayName()} via Eddie`;

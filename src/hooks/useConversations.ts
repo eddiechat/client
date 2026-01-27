@@ -255,7 +255,7 @@ export function useConversationMessages(
           envelope: {
             id: m.uid.toString(),
             message_id: m.message_id || undefined,
-            in_reply_to: undefined,
+            in_reply_to: m.in_reply_to || undefined,
             from: m.from_name ? `${m.from_name} <${m.from_address}>` : m.from_address,
             to: m.to_addresses,
             subject: m.subject || "",
