@@ -74,6 +74,7 @@ pub async fn get_account_details(name: String) -> Result<AccountDetails, String>
 
     let username = match &imap.auth {
         config::AuthConfig::Password { user, .. } => user.clone(),
+        config::AuthConfig::AppPassword { user } => user.clone(),
         config::AuthConfig::OAuth2 { .. } => account.email.clone(),
     };
 

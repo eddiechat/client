@@ -252,6 +252,5 @@ fn detect_provider_from_mx(mx_host: &str, domain: &str) -> Option<EmailDiscovery
 
 /// Create a DNS resolver
 fn create_resolver() -> Result<TokioAsyncResolver, AutodiscoveryError> {
-    TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())
-        .map_err(|e| AutodiscoveryError::DnsError(format!("Failed to create resolver: {}", e)))
+    Ok(TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default()))
 }

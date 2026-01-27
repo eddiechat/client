@@ -9,7 +9,7 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, TokenUrl,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -136,26 +136,23 @@ impl OAuthManager {
         let csrf_token = generate_state_token();
 
         // Build the OAuth2 client
-        let client = BasicClient::new(ClientId::new(config.client_id.clone()))
-            .set_auth_uri(
-                AuthUrl::new(config.auth_url.clone())
-                    .map_err(|e| OAuthError::Configuration(e.to_string()))?,
-            )
-            .set_token_uri(
-                TokenUrl::new(config.token_url.clone())
-                    .map_err(|e| OAuthError::Configuration(e.to_string()))?,
-            )
-            .set_redirect_uri(
-                RedirectUrl::new(redirect_uri.to_string())
-                    .map_err(|e| OAuthError::Configuration(e.to_string()))?,
-            );
+        let auth_url = AuthUrl::new(config.auth_url.clone())
+            .map_err(|e| OAuthError::Configuration(e.to_string()))?;
+        let token_url = TokenUrl::new(config.token_url.clone())
+            .map_err(|e| OAuthError::Configuration(e.to_string()))?;
+        let client_secret = config.client_secret.as_ref()
+            .map(|s| ClientSecret::new(s.clone()));
 
-        // Add client secret if available
-        let client = if let Some(secret) = &config.client_secret {
-            client.set_client_secret(ClientSecret::new(secret.clone()))
-        } else {
-            client
-        };
+        let client = BasicClient::new(
+            ClientId::new(config.client_id.clone()),
+            client_secret,
+            auth_url,
+            Some(token_url),
+        )
+        .set_redirect_uri(
+            RedirectUrl::new(redirect_uri.to_string())
+                .map_err(|e| OAuthError::Configuration(e.to_string()))?,
+        );
 
         // Build authorization URL with PKCE
         let mut auth_request = client
