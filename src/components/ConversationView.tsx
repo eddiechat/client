@@ -146,7 +146,7 @@ export function ConversationView({
   const [inputValue, setInputValue] = useState("");
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
-  const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
+const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);

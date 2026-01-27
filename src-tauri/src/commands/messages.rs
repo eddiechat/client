@@ -208,85 +208,6 @@ pub async fn save_message(
         .map_err(|e| e.to_string())
 }
 
-/// Attachment info for frontend display
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct AttachmentInfo {
-    pub index: usize,
-    pub filename: String,
-    pub mime_type: String,
-    pub size: usize,
-}
-
-/// Get attachment information for a message (without downloading content)
-#[tauri::command]
-pub async fn get_message_attachments(
-    account: Option<String>,
-    folder: Option<String>,
-    id: String,
-) -> Result<Vec<AttachmentInfo>, String> {
-    info!(
-        "Tauri command: get_message_attachments - account: {:?}, folder: {:?}, id: {}",
-        account, folder, id
-    );
-
-    let backend = backend::get_backend(account.as_deref())
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Get attachment info from the backend
-    let attachments = backend
-        .get_attachment_info(folder.as_deref(), &id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(attachments
-        .into_iter()
-        .enumerate()
-        .map(|(index, a)| AttachmentInfo {
-            index,
-            filename: a.filename.unwrap_or_else(|| format!("attachment_{}", index)),
-            mime_type: a.mime_type,
-            size: a.size,
-        })
-        .collect())
-}
-
-/// Download a specific attachment from a message
-#[tauri::command]
-pub async fn download_attachment(
-    account: Option<String>,
-    folder: Option<String>,
-    id: String,
-    attachment_index: usize,
-    download_dir: Option<String>,
-) -> Result<String, String> {
-    info!(
-        "Tauri command: download_attachment - account: {:?}, folder: {:?}, id: {}, index: {}, dir: {:?}",
-        account, folder, id, attachment_index, download_dir
-    );
-
-    let backend = backend::get_backend(account.as_deref())
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Determine download directory
-    let download_path: PathBuf = match download_dir {
-        Some(dir) => dir.into(),
-        None => dirs::download_dir().unwrap_or_else(|| PathBuf::from(".")),
-    };
-
-    // Create directory if it doesn't exist
-    fs::create_dir_all(&download_path).map_err(|e| e.to_string())?;
-
-    // Download the attachment
-    let file_path = backend
-        .download_attachment(folder.as_deref(), &id, attachment_index, &download_path)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(file_path.to_string_lossy().to_string())
-}
-
 /// Send a message with attachments via SMTP and save to Sent folder
 /// Builds a proper MIME multipart message with attachments
 #[tauri::command]
@@ -388,7 +309,86 @@ pub async fn send_message_with_attachments(
         .map_err(|e| e.to_string())
 }
 
-/// Download attachments from a message
+/// Attachment info for frontend display
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AttachmentInfo {
+    pub index: usize,
+    pub filename: String,
+    pub mime_type: String,
+    pub size: usize,
+}
+
+/// Get attachment information for a message (without downloading content)
+#[tauri::command]
+pub async fn get_message_attachments(
+    account: Option<String>,
+    folder: Option<String>,
+    id: String,
+) -> Result<Vec<AttachmentInfo>, String> {
+    info!(
+        "Tauri command: get_message_attachments - account: {:?}, folder: {:?}, id: {}",
+        account, folder, id
+    );
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Get attachment info from the backend
+    let attachments = backend
+        .get_attachment_info(folder.as_deref(), &id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(attachments
+        .into_iter()
+        .enumerate()
+        .map(|(index, a)| AttachmentInfo {
+            index,
+            filename: a.filename.unwrap_or_else(|| format!("attachment_{}", index)),
+            mime_type: a.mime_type,
+            size: a.size,
+        })
+        .collect())
+}
+
+/// Download a specific attachment from a message
+#[tauri::command]
+pub async fn download_attachment(
+    account: Option<String>,
+    folder: Option<String>,
+    id: String,
+    attachment_index: usize,
+    download_dir: Option<String>,
+) -> Result<String, String> {
+    info!(
+        "Tauri command: download_attachment - account: {:?}, folder: {:?}, id: {}, index: {}, dir: {:?}",
+        account, folder, id, attachment_index, download_dir
+    );
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Determine download directory
+    let download_path: PathBuf = match download_dir {
+        Some(dir) => dir.into(),
+        None => dirs::download_dir().unwrap_or_else(|| PathBuf::from(".")),
+    };
+
+    // Create directory if it doesn't exist
+    fs::create_dir_all(&download_path).map_err(|e| e.to_string())?;
+
+    // Download the attachment
+    let file_path = backend
+        .download_attachment(folder.as_deref(), &id, attachment_index, &download_path)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Download all attachments from a message
 #[tauri::command]
 pub async fn download_attachments(
     account: Option<String>,
