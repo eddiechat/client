@@ -10,6 +10,7 @@ import {
   parseEmailContent,
 } from "../lib/utils";
 import { Avatar } from "./Avatar";
+import { GravatarModal } from "./GravatarModal";
 import { AttachmentList } from "./AttachmentList";
 
 interface ConversationViewProps {
@@ -145,6 +146,7 @@ export function ConversationView({
   const [inputValue, setInputValue] = useState("");
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
+const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +155,11 @@ export function ConversationView({
   // Track previous conversation to detect switches from compose mode
   const prevConversationRef = useRef<Conversation | null>(null);
   const wasComposingRef = useRef(false);
+
+  // Close gravatar panel when conversation changes
+  useEffect(() => {
+    setGravatarModalData(null);
+  }, [conversation?.id]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -507,22 +514,32 @@ export function ConversationView({
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="conversation-messages">
-        {loading ? (
-          <div className="messages-loading">
-            <div className="loading-spinner" />
-            <span>Loading messages...</span>
-          </div>
-        ) : error ? (
-          <div className="messages-error">
-            <span>Error loading messages: {error}</span>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="messages-empty">
-            <p>No messages yet. Start the conversation!</p>
-          </div>
-        ) : (
+      {/* Gravatar Panel or Messages */}
+      {gravatarModalData ? (
+        <GravatarModal
+          email={gravatarModalData.email}
+          name={gravatarModalData.name}
+          isOpen={!!gravatarModalData}
+          onClose={() => setGravatarModalData(null)}
+        />
+      ) : (
+        <>
+          {/* Messages */}
+          <div className="conversation-messages">
+            {loading ? (
+              <div className="messages-loading">
+                <div className="loading-spinner" />
+                <span>Loading messages...</span>
+              </div>
+            ) : error ? (
+              <div className="messages-error">
+                <span>Error loading messages: {error}</span>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="messages-empty">
+                <p>No messages yet. Start the conversation!</p>
+              </div>
+            ) : (
           <>
             {messages.map((message, index) => {
               const isOut = isOutgoing(message, currentAccountEmail);
@@ -556,8 +573,14 @@ export function ConversationView({
                           backgroundColor: getAvatarColor(
                             message.envelope.from
                           ),
+                          cursor: "pointer",
                         }}
                         title={getAvatarTooltip(message.envelope.from, message.id)}
+                        onClick={() => {
+                          const email = extractEmail(message.envelope.from);
+                          const name = getSenderName(message.envelope.from);
+                          if (email) setGravatarModalData({ email, name });
+                        }}
                       >
                         {(() => {
                           const messageEmail = extractEmail(message.envelope.from);
@@ -685,6 +708,8 @@ export function ConversationView({
           </div>
         </div>
       </form>
+        </>
+      )}
     </div>
   );
 }
