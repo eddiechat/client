@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ComposeMessageData, ComposeAttachment } from "../types";
+import { searchEntities, type EntitySuggestion } from "../lib/api";
 
 interface ComposeModalProps {
   isOpen: boolean;
@@ -25,6 +26,127 @@ export function ComposeModal({
   const [body, setBody] = useState(initialData?.body || "");
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const [sending, setSending] = useState(false);
+
+  // Suggestion state
+  const [suggestions, setSuggestions] = useState<EntitySuggestion[]>([]);
+  const [activeField, setActiveField] = useState<"to" | "cc" | null>(null);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toInputRef = useRef<HTMLInputElement>(null);
+  const ccInputRef = useRef<HTMLInputElement>(null);
+
+  // Get the current word being typed (after the last comma)
+  const getCurrentWord = (value: string): string => {
+    const parts = value.split(",");
+    return parts[parts.length - 1].trim();
+  };
+
+  // Search for suggestions with debounce
+  const searchSuggestions = useCallback(async (query: string) => {
+    if (query.length < 1) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const results = await searchEntities(query, 5);
+      setSuggestions(results);
+      setSelectedSuggestionIndex(0);
+    } catch (error) {
+      console.error("Failed to search entities:", error);
+      setSuggestions([]);
+    }
+  }, []);
+
+  // Handle input change with debounced search
+  const handleInputChange = (
+    field: "to" | "cc",
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    setter(value);
+    setActiveField(field);
+
+    // Debounce the search
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    const currentWord = getCurrentWord(value);
+    debounceTimerRef.current = setTimeout(() => {
+      searchSuggestions(currentWord);
+    }, 150);
+  };
+
+  // Handle selecting a suggestion
+  const handleSelectSuggestion = (suggestion: EntitySuggestion) => {
+    const setter = activeField === "to" ? setTo : setCc;
+    const currentValue = activeField === "to" ? to : cc;
+
+    // Replace the current word with the selected suggestion
+    const parts = currentValue.split(",");
+    parts[parts.length - 1] = " " + suggestion.email;
+    const newValue = parts.join(",").trim() + ", ";
+
+    setter(newValue);
+    setSuggestions([]);
+    setActiveField(null);
+
+    // Focus back on the input
+    const inputRef = activeField === "to" ? toInputRef : ccInputRef;
+    inputRef.current?.focus();
+  };
+
+  // Handle keyboard navigation in suggestions
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (suggestions.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : prev));
+        break;
+      case "Enter":
+        if (suggestions[selectedSuggestionIndex]) {
+          e.preventDefault();
+          handleSelectSuggestion(suggestions[selectedSuggestionIndex]);
+        }
+        break;
+      case "Escape":
+        setSuggestions([]);
+        setActiveField(null);
+        break;
+      case "Tab":
+        if (suggestions[selectedSuggestionIndex]) {
+          e.preventDefault();
+          handleSelectSuggestion(suggestions[selectedSuggestionIndex]);
+        }
+        break;
+    }
+  };
+
+  // Clear suggestions when clicking outside
+  const handleInputBlur = () => {
+    // Delay to allow click on suggestion to register
+    setTimeout(() => {
+      setSuggestions([]);
+      setActiveField(null);
+    }, 200);
+  };
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -137,26 +259,88 @@ export function ComposeModal({
         </div>
 
         <div className="compose-form">
-          <div className="form-row">
+          <div className="form-row form-row-with-suggestions">
             <label htmlFor="to">To:</label>
-            <input
-              id="to"
-              type="text"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              placeholder="recipient@example.com"
-            />
+            <div className="input-with-suggestions">
+              <input
+                ref={toInputRef}
+                id="to"
+                type="text"
+                value={to}
+                onChange={(e) => handleInputChange("to", e.target.value, setTo)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleInputBlur}
+                onFocus={() => setActiveField("to")}
+                placeholder="recipient@example.com"
+                autoComplete="off"
+              />
+              {activeField === "to" && suggestions.length > 0 && (
+                <div className="suggestions-dropdown">
+                  {suggestions.map((suggestion, index) => (
+                    <div
+                      key={suggestion.id}
+                      className={`suggestion-item ${index === selectedSuggestionIndex ? "selected" : ""} ${suggestion.is_connection ? "is-connection" : ""}`}
+                      onMouseDown={() => handleSelectSuggestion(suggestion)}
+                      onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                    >
+                      <span className="suggestion-email">{suggestion.email}</span>
+                      {suggestion.name && (
+                        <span className="suggestion-name">{suggestion.name}</span>
+                      )}
+                      {suggestion.is_connection && (
+                        <span className="suggestion-badge" title="You've emailed this person">
+                          <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                          </svg>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="form-row">
+          <div className="form-row form-row-with-suggestions">
             <label htmlFor="cc">Cc:</label>
-            <input
-              id="cc"
-              type="text"
-              value={cc}
-              onChange={(e) => setCc(e.target.value)}
-              placeholder="cc@example.com"
-            />
+            <div className="input-with-suggestions">
+              <input
+                ref={ccInputRef}
+                id="cc"
+                type="text"
+                value={cc}
+                onChange={(e) => handleInputChange("cc", e.target.value, setCc)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleInputBlur}
+                onFocus={() => setActiveField("cc")}
+                placeholder="cc@example.com"
+                autoComplete="off"
+              />
+              {activeField === "cc" && suggestions.length > 0 && (
+                <div className="suggestions-dropdown">
+                  {suggestions.map((suggestion, index) => (
+                    <div
+                      key={suggestion.id}
+                      className={`suggestion-item ${index === selectedSuggestionIndex ? "selected" : ""} ${suggestion.is_connection ? "is-connection" : ""}`}
+                      onMouseDown={() => handleSelectSuggestion(suggestion)}
+                      onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                    >
+                      <span className="suggestion-email">{suggestion.email}</span>
+                      {suggestion.name && (
+                        <span className="suggestion-name">{suggestion.name}</span>
+                      )}
+                      {suggestion.is_connection && (
+                        <span className="suggestion-badge" title="You've emailed this person">
+                          <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                          </svg>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="form-row">

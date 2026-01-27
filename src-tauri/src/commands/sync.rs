@@ -201,6 +201,30 @@ pub struct ParticipantInfo {
     pub name: Option<String>,
 }
 
+/// Entity response for autocomplete suggestions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityResponse {
+    pub id: i64,
+    pub email: String,
+    pub name: Option<String>,
+    pub is_connection: bool,
+    pub latest_contact: String,
+    pub contact_count: u32,
+}
+
+impl From<crate::sync::db::Entity> for EntityResponse {
+    fn from(e: crate::sync::db::Entity) -> Self {
+        Self {
+            id: e.id,
+            email: e.email,
+            name: e.name,
+            is_connection: e.is_connection,
+            latest_contact: e.latest_contact.to_rfc3339(),
+            contact_count: e.contact_count,
+        }
+    }
+}
+
 impl From<CachedConversation> for ConversationResponse {
     fn from(c: CachedConversation) -> Self {
         let participants: Vec<ParticipantInfo> =
@@ -715,6 +739,36 @@ pub async fn mark_conversation_read(
     );
 
     Ok(())
+}
+
+/// Search entities for autocomplete suggestions
+/// Returns up to 5 entities matching the query, prioritizing connections and recent contacts
+#[tauri::command]
+pub async fn search_entities(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+    query: String,
+    limit: Option<u32>,
+) -> Result<Vec<EntityResponse>, String> {
+    let account_id = get_account_id(account)?;
+    let limit = limit.unwrap_or(5).min(10); // Default to 5, max 10
+
+    if query.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let engine = manager
+        .get_or_create(&account_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let entities = engine
+        .read()
+        .await
+        .search_entities(&query, limit)
+        .map_err(|e| e.to_string())?;
+
+    Ok(entities.into_iter().map(|e| e.into()).collect())
 }
 
 // Helper function to get account ID

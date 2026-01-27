@@ -104,6 +104,7 @@ pub fn run() {
             commands::stop_monitoring,
             commands::shutdown_sync_engine,
             commands::mark_conversation_read,
+            commands::search_entities,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

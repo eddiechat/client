@@ -1057,6 +1057,85 @@ body {
   line-height: 1.5;
 }
 
+/* Autocomplete suggestions for To/Cc fields */
+.form-row-with-suggestions {
+  position: relative;
+}
+
+.input-with-suggestions {
+  position: relative;
+  width: 100%;
+}
+
+.suggestions-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.suggestion-item:first-child {
+  border-radius: 9px 9px 0 0;
+}
+
+.suggestion-item:last-child {
+  border-radius: 0 0 9px 9px;
+}
+
+.suggestion-item:only-child {
+  border-radius: 9px;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected {
+  background: var(--bg-hover);
+}
+
+.suggestion-item.is-connection {
+  background: rgba(var(--accent-rgb, 0, 122, 255), 0.05);
+}
+
+.suggestion-item.is-connection.selected,
+.suggestion-item.is-connection:hover {
+  background: rgba(var(--accent-rgb, 0, 122, 255), 0.1);
+}
+
+.suggestion-email {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.suggestion-name {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-left: auto;
+}
+
+.suggestion-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-accent);
+  margin-left: 4px;
+}
+
 .compose-footer {
   display: flex;
   justify-content: flex-end;

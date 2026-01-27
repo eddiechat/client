@@ -476,6 +476,9 @@ impl SyncEngine {
             let msg_id = self.db.upsert_message(&cached_msg)?;
             message_ids.push(msg_id);
 
+            // Extract entities (participants) from the message
+            extract_entities_from_message(&self.db, &self.account_id, &self.user_email, &cached_msg);
+
             // Classify if enabled
             if self.config.auto_classify {
                 if let Ok(Some(msg)) = self.db.get_message_by_id(msg_id) {
@@ -645,6 +648,12 @@ impl SyncEngine {
     /// Queue a user action
     pub fn queue_action(&self, action: ActionType) -> Result<i64, HimalayaError> {
         self.action_queue.queue(&self.account_id, action)
+    }
+
+    /// Search entities for autocomplete suggestions
+    /// Returns up to `limit` entities matching the query, prioritizing connections and recent contacts
+    pub fn search_entities(&self, query: &str, limit: u32) -> Result<Vec<crate::sync::db::Entity>, HimalayaError> {
+        self.db.search_entities(&self.account_id, query, limit)
     }
 
     /// Replay pending actions from the action queue
@@ -970,6 +979,73 @@ fn parse_email_address(addr: &str) -> (Option<String>, String) {
 
     // Plain email address
     (None, addr.to_lowercase())
+}
+
+/// Extract and store entities from a cached message
+/// If the message is from the user, recipients are marked as connections
+fn extract_entities_from_message(
+    db: &SyncDatabase,
+    account_id: &str,
+    user_email: &str,
+    msg: &CachedMessage,
+) {
+    let contact_timestamp = msg.date.unwrap_or_else(Utc::now);
+    let user_email_lower = user_email.to_lowercase();
+
+    // Check if the message is from the user (outgoing)
+    let is_from_user = msg.from_address.to_lowercase() == user_email_lower;
+
+    // Extract sender (from)
+    if !is_from_user {
+        // Don't add self as an entity
+        if let Err(e) = db.upsert_entity(
+            account_id,
+            &msg.from_address,
+            msg.from_name.as_deref(),
+            false, // sender is not a connection unless we've sent to them
+            contact_timestamp,
+        ) {
+            debug!("Failed to upsert entity for from address: {}", e);
+        }
+    }
+
+    // Extract recipients (to)
+    let to_addresses: Vec<String> = serde_json::from_str(&msg.to_addresses).unwrap_or_default();
+    for addr in to_addresses {
+        let (name, email) = parse_email_address(&addr);
+        if email.to_lowercase() == user_email_lower {
+            continue; // Skip self
+        }
+        if let Err(e) = db.upsert_entity(
+            account_id,
+            &email,
+            name.as_deref(),
+            is_from_user, // Mark as connection if user sent the message
+            contact_timestamp,
+        ) {
+            debug!("Failed to upsert entity for to address: {}", e);
+        }
+    }
+
+    // Extract CC recipients
+    if let Some(cc_json) = &msg.cc_addresses {
+        let cc_addresses: Vec<String> = serde_json::from_str(cc_json).unwrap_or_default();
+        for addr in cc_addresses {
+            let (name, email) = parse_email_address(&addr);
+            if email.to_lowercase() == user_email_lower {
+                continue; // Skip self
+            }
+            if let Err(e) = db.upsert_entity(
+                account_id,
+                &email,
+                name.as_deref(),
+                is_from_user, // Mark as connection if user sent the message
+                contact_timestamp,
+            ) {
+                debug!("Failed to upsert entity for cc address: {}", e);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

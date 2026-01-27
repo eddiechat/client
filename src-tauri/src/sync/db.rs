@@ -118,6 +118,18 @@ pub struct SyncProgress {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Entity (participant) for autocomplete and connection tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Entity {
+    pub id: i64,
+    pub account_id: String,
+    pub email: String,
+    pub name: Option<String>,
+    pub is_connection: bool,          // True if user has sent email to this entity
+    pub latest_contact: DateTime<Utc>, // Most recent interaction timestamp
+    pub contact_count: u32,           // Number of interactions
+}
+
 /// SQLite database for sync cache
 pub struct SyncDatabase {
     pool: DbPool,
@@ -294,6 +306,26 @@ impl SyncDatabase {
                 supports_idle INTEGER DEFAULT 0,
                 detected_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            -- Entities table for participant tracking and autocomplete
+            CREATE TABLE IF NOT EXISTS entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                name TEXT,
+                is_connection INTEGER DEFAULT 0,  -- 1 if user has sent email to this entity
+                latest_contact TEXT NOT NULL DEFAULT (datetime('now')),
+                contact_count INTEGER DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(account_id, email)
+            );
+
+            -- Indexes for entity lookups and autocomplete
+            CREATE INDEX IF NOT EXISTS idx_entities_account ON entities(account_id);
+            CREATE INDEX IF NOT EXISTS idx_entities_email ON entities(account_id, email);
+            CREATE INDEX IF NOT EXISTS idx_entities_connection ON entities(account_id, is_connection);
+            CREATE INDEX IF NOT EXISTS idx_entities_latest_contact ON entities(account_id, latest_contact DESC);
         "#).map_err(|e| HimalayaError::Backend(format!("Failed to initialize schema: {}", e)))?;
 
         Ok(())
@@ -1411,6 +1443,133 @@ impl SyncDatabase {
                     row.get::<_, i32>(2)? != 0,
                     row.get::<_, i32>(3)? != 0,
                 ))
+            })
+            .optional()
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    // ========== Entity Operations ==========
+
+    /// Upsert an entity (participant) - updates if exists, creates if not
+    /// If is_connection is true, it will be set to true (never reverted to false)
+    pub fn upsert_entity(
+        &self,
+        account_id: &str,
+        email: &str,
+        name: Option<&str>,
+        is_connection: bool,
+        contact_timestamp: DateTime<Utc>,
+    ) -> Result<i64, HimalayaError> {
+        let conn = self.connection()?;
+
+        // Use INSERT OR REPLACE pattern with special handling for is_connection
+        // is_connection should only be upgraded to true, never downgraded to false
+        conn.execute(
+            "INSERT INTO entities (account_id, email, name, is_connection, latest_contact, contact_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1)
+             ON CONFLICT(account_id, email) DO UPDATE SET
+                name = COALESCE(excluded.name, entities.name),
+                is_connection = CASE WHEN excluded.is_connection = 1 THEN 1 ELSE entities.is_connection END,
+                latest_contact = CASE WHEN excluded.latest_contact > entities.latest_contact THEN excluded.latest_contact ELSE entities.latest_contact END,
+                contact_count = entities.contact_count + 1,
+                updated_at = datetime('now')",
+            params![
+                account_id,
+                email.to_lowercase(),
+                name,
+                is_connection as i32,
+                contact_timestamp.to_rfc3339(),
+            ],
+        )
+        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        // Get the ID
+        let id = conn
+            .query_row(
+                "SELECT id FROM entities WHERE account_id = ?1 AND email = ?2",
+                params![account_id, email.to_lowercase()],
+                |row| row.get(0),
+            )
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        Ok(id)
+    }
+
+    /// Search entities for autocomplete
+    /// Prioritizes: 1) connections, 2) recent contacts
+    /// Returns up to `limit` results matching the query
+    pub fn search_entities(
+        &self,
+        account_id: &str,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<Entity>, HimalayaError> {
+        let conn = self.connection()?;
+
+        // Search by email or name prefix, prioritizing connections and recent contacts
+        let search_pattern = format!("{}%", query.to_lowercase());
+        let mut stmt = conn.prepare(
+            "SELECT id, account_id, email, name, is_connection, latest_contact, contact_count
+             FROM entities
+             WHERE account_id = ?1 AND (email LIKE ?2 OR LOWER(name) LIKE ?2)
+             ORDER BY is_connection DESC, latest_contact DESC
+             LIMIT ?3"
+        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let entities = stmt
+            .query_map(params![account_id, search_pattern, limit], |row| {
+                Ok(Entity {
+                    id: row.get(0)?,
+                    account_id: row.get(1)?,
+                    email: row.get(2)?,
+                    name: row.get(3)?,
+                    is_connection: row.get::<_, i32>(4)? != 0,
+                    latest_contact: row
+                        .get::<_, String>(5)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    contact_count: row.get(6)?,
+                })
+            })
+            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(entities)
+    }
+
+    /// Get an entity by email
+    pub fn get_entity(
+        &self,
+        account_id: &str,
+        email: &str,
+    ) -> Result<Option<Entity>, HimalayaError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, account_id, email, name, is_connection, latest_contact, contact_count
+             FROM entities WHERE account_id = ?1 AND email = ?2"
+        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+
+        let result = stmt
+            .query_row(params![account_id, email.to_lowercase()], |row| {
+                Ok(Entity {
+                    id: row.get(0)?,
+                    account_id: row.get(1)?,
+                    email: row.get(2)?,
+                    name: row.get(3)?,
+                    is_connection: row.get::<_, i32>(4)? != 0,
+                    latest_contact: row
+                        .get::<_, String>(5)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    contact_count: row.get(6)?,
+                })
             })
             .optional()
             .map_err(|e| HimalayaError::Backend(e.to_string()))?;
