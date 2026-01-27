@@ -10,6 +10,7 @@ import {
   parseEmailContent,
 } from "../lib/utils";
 import { Avatar } from "./Avatar";
+import { AttachmentList } from "./AttachmentList";
 
 interface ConversationViewProps {
   conversation: Conversation | null;
@@ -607,6 +608,10 @@ export function ConversationView({
                         <div className="message-text">
                           {parseEmailContent(message.text_body) || message.envelope.subject || "(No content)"}
                         </div>
+                        <AttachmentList
+                          messageId={message.id}
+                          hasAttachment={message.envelope.has_attachment}
+                        />
                         <span className="message-time">
                           {formatMessageTime(message.envelope.date)}
                           {isOut && (

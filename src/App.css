@@ -1306,3 +1306,168 @@ body {
     flex-shrink: 0;
   }
 }
+
+/* ===== Attachment Styles ===== */
+.attachment-container {
+  margin-top: 8px;
+}
+
+.attachment-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.8;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.attachment-toggle:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.attachment-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.attachment-count {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.attachment-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachment-loading,
+.attachment-error,
+.attachment-empty {
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 4px 0;
+}
+
+.attachment-error {
+  color: #ff6b6b;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.15);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.attachment-item:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.attachment-item:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.attachment-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.attachment-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.attachment-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attachment-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachment-size {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.attachment-download-icon,
+.attachment-downloading {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.attachment-download-icon svg,
+.attachment-downloading svg {
+  width: 16px;
+  height: 16px;
+}
+
+.attachment-downloading .spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Style adjustments for sent vs received bubbles */
+.message-bubble.sent .attachment-toggle {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.message-bubble.sent .attachment-toggle:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.message-bubble.sent .attachment-item {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.message-bubble.sent .attachment-item:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.message-bubble.sent .attachment-icon {
+  background: rgba(0, 0, 0, 0.1);
+}

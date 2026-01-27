@@ -211,3 +211,48 @@ export async function markConversationRead(
 ): Promise<void> {
   return invoke("mark_conversation_read", { account, conversationId });
 }
+
+// ========== Attachment Commands ==========
+
+export interface AttachmentInfo {
+  index: number;
+  filename: string;
+  mime_type: string;
+  size: number;
+}
+
+/** Get attachment information for a message */
+export async function getMessageAttachments(
+  folder: string,
+  id: string,
+  account?: string
+): Promise<AttachmentInfo[]> {
+  return invoke("get_message_attachments", { account, folder, id });
+}
+
+/** Download a specific attachment from a message */
+export async function downloadAttachment(
+  folder: string,
+  id: string,
+  attachmentIndex: number,
+  downloadDir?: string,
+  account?: string
+): Promise<string> {
+  return invoke("download_attachment", {
+    account,
+    folder,
+    id,
+    attachmentIndex,
+    downloadDir,
+  });
+}
+
+/** Download all attachments from a message */
+export async function downloadAttachments(
+  folder: string,
+  id: string,
+  downloadDir?: string,
+  account?: string
+): Promise<string[]> {
+  return invoke("download_attachments", { account, folder, id, downloadDir });
+}

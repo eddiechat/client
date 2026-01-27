@@ -76,6 +76,8 @@ pub fn run() {
             commands::send_message,
             commands::send_message_with_attachments,
             commands::save_message,
+            commands::get_message_attachments,
+            commands::download_attachment,
             commands::download_attachments,
             // Flag commands
             commands::add_flags,
