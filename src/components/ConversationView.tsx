@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import type { Conversation, Message } from "../types";
+import { open } from "@tauri-apps/plugin-dialog";
+import type { Conversation, Message, ComposeAttachment } from "../types";
 import {
   getAvatarColor,
   getInitials,
@@ -16,13 +17,13 @@ interface ConversationViewProps {
   loading?: boolean;
   error?: string | null;
   currentAccountEmail?: string;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, attachments?: ComposeAttachment[]) => void;
   onBack?: () => void;
   // Compose mode props
   isComposing?: boolean;
   composeParticipants?: string[];
   onComposeParticipantsConfirm?: (participants: string[]) => void;
-  onSendNewMessage?: (text: string, participants: string[]) => void;
+  onSendNewMessage?: (text: string, participants: string[], attachments?: ComposeAttachment[]) => void;
 }
 
 // Format time for message bubbles
@@ -143,6 +144,7 @@ export function ConversationView({
   const [inputValue, setInputValue] = useState("");
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
+  const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
@@ -185,8 +187,86 @@ export function ConversationView({
     if (!isComposing) {
       setToInputValue("");
       setParticipantsConfirmed(false);
+      setAttachments([]);
     }
   }, [isComposing]);
+
+  // Reset attachments when conversation changes
+  useEffect(() => {
+    setAttachments([]);
+  }, [conversation?.id]);
+
+  // Handle adding attachments via file dialog
+  const handleAddAttachment = async () => {
+    try {
+      const selected = await open({
+        multiple: true,
+        title: "Select files to attach",
+      });
+
+      if (selected) {
+        const files = Array.isArray(selected) ? selected : [selected];
+        const newAttachments: ComposeAttachment[] = files.map((filePath) => {
+          const fileName = filePath.split(/[/\\]/).pop() || "attachment";
+          const extension = fileName.split(".").pop()?.toLowerCase() || "";
+
+          // Determine MIME type based on extension
+          const mimeTypes: Record<string, string> = {
+            pdf: "application/pdf",
+            doc: "application/msword",
+            docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            xls: "application/vnd.ms-excel",
+            xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ppt: "application/vnd.ms-powerpoint",
+            pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            txt: "text/plain",
+            csv: "text/csv",
+            html: "text/html",
+            css: "text/css",
+            js: "application/javascript",
+            json: "application/json",
+            xml: "application/xml",
+            zip: "application/zip",
+            gz: "application/gzip",
+            tar: "application/x-tar",
+            rar: "application/vnd.rar",
+            "7z": "application/x-7z-compressed",
+            png: "image/png",
+            jpg: "image/jpeg",
+            jpeg: "image/jpeg",
+            gif: "image/gif",
+            webp: "image/webp",
+            svg: "image/svg+xml",
+            ico: "image/x-icon",
+            bmp: "image/bmp",
+            mp3: "audio/mpeg",
+            wav: "audio/wav",
+            ogg: "audio/ogg",
+            mp4: "video/mp4",
+            webm: "video/webm",
+            avi: "video/x-msvideo",
+            mov: "video/quicktime",
+          };
+
+          return {
+            path: filePath,
+            name: fileName,
+            mime_type: mimeTypes[extension] || "application/octet-stream",
+            size: 0, // Size will be determined by the backend when reading the file
+          };
+        });
+
+        setAttachments((prev) => [...prev, ...newAttachments]);
+      }
+    } catch (error) {
+      console.error("Failed to select files:", error);
+    }
+  };
+
+  // Handle removing an attachment
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
 
   // Handle Enter key in To field
   const handleToKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -206,15 +286,17 @@ export function ConversationView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputValue.trim()) {
+    if (inputValue.trim() || attachments.length > 0) {
       // Check if we're in compose mode with no existing conversation
       if (isComposing && !conversation && composeParticipants.length > 0 && onSendNewMessage) {
-        onSendNewMessage(inputValue.trim(), composeParticipants);
+        onSendNewMessage(inputValue.trim(), composeParticipants, attachments.length > 0 ? attachments : undefined);
         setInputValue("");
+        setAttachments([]);
         setParticipantsConfirmed(false);
       } else if (conversation) {
-        onSendMessage(inputValue.trim());
+        onSendMessage(inputValue.trim(), attachments.length > 0 ? attachments : undefined);
         setInputValue("");
+        setAttachments([]);
       }
       inputRef.current?.focus();
     }
@@ -284,29 +366,54 @@ export function ConversationView({
         {/* Input - only show when participants are confirmed */}
         {hasParticipants && (
           <form className="conversation-input" onSubmit={handleSubmit}>
-            <button type="button" className="input-action-btn" title="Add attachment">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-              </svg>
-            </button>
-
-            <div className="input-wrapper">
-              <input
-                ref={inputRef}
-                type="text"
-                className="message-input"
-                placeholder="Type your message (first line becomes subject)"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-              />
-              <button type="button" className="emoji-btn" title="Emoji">
+            {/* Attachment preview */}
+            {attachments.length > 0 && (
+              <div className="attachments-preview">
+                <span className="attachments-preview-label">Ready to send</span>
+                {attachments.map((attachment, index) => (
+                  <div key={index} className="attachment-chip">
+                    <span className="attachment-name" title={attachment.name}>
+                      {attachment.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="attachment-remove"
+                      onClick={() => handleRemoveAttachment(index)}
+                      title="Remove attachment"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="input-row">
+              <button type="button" className="input-action-btn" title="Add attachment" onClick={handleAddAttachment}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                  <line x1="9" y1="9" x2="9.01" y2="9" />
-                  <line x1="15" y1="9" x2="15.01" y2="9" />
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                 </svg>
               </button>
+
+              <div className="input-wrapper">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="message-input"
+                  placeholder="Type your message (first line becomes subject)"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                />
+                <button type="button" className="emoji-btn" title="Emoji">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                    <line x1="9" y1="9" x2="9.01" y2="9" />
+                    <line x1="15" y1="9" x2="15.01" y2="9" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </form>
         )}
@@ -523,29 +630,54 @@ export function ConversationView({
 
       {/* Input */}
       <form className="conversation-input" onSubmit={handleSubmit}>
-        <button type="button" className="input-action-btn" title="Add attachment">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-          </svg>
-        </button>
-
-        <div className="input-wrapper">
-          <input
-            ref={inputRef}
-            type="text"
-            className="message-input"
-            placeholder="Message"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-          />
-          <button type="button" className="emoji-btn" title="Emoji">
+        {/* Attachment preview */}
+        {attachments.length > 0 && (
+          <div className="attachments-preview">
+            <span className="attachments-preview-label">Ready to send</span>
+            {attachments.map((attachment, index) => (
+              <div key={index} className="attachment-chip">
+                <span className="attachment-name" title={attachment.name}>
+                  {attachment.name}
+                </span>
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  onClick={() => handleRemoveAttachment(index)}
+                  title="Remove attachment"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="input-row">
+          <button type="button" className="input-action-btn" title="Add attachment" onClick={handleAddAttachment}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-              <line x1="9" y1="9" x2="9.01" y2="9" />
-              <line x1="15" y1="9" x2="15.01" y2="9" />
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
             </svg>
           </button>
+
+          <div className="input-wrapper">
+            <input
+              ref={inputRef}
+              type="text"
+              className="message-input"
+              placeholder="Message"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+            />
+            <button type="button" className="emoji-btn" title="Emoji">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                <line x1="9" y1="9" x2="9.01" y2="9" />
+                <line x1="15" y1="9" x2="15.01" y2="9" />
+              </svg>
+            </button>
+          </div>
         </div>
       </form>
     </div>

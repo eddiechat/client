@@ -828,6 +828,83 @@ body {
   height: 18px;
 }
 
+/* ===== Attachment Preview ===== */
+.conversation-input {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachments-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 12px;
+  border: 1px dashed rgba(76, 175, 80, 0.4);
+  margin-bottom: 8px;
+}
+
+.attachments-preview-label {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4caf50;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 5px 8px 5px 10px;
+  max-width: 200px;
+}
+
+.attachment-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.attachment-remove:hover {
+  opacity: 1;
+}
+
+.attachment-remove svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted);
+}
+
 /* ===== Compose Mode (Messenger-style) ===== */
 .compose-header-mode {
   flex-wrap: wrap;
@@ -1039,6 +1116,32 @@ body {
 
 .footer-spacer {
   flex: 1;
+}
+
+/* ===== Compose Modal Attachments ===== */
+.attachment-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+  color: var(--text-muted);
+}
+
+.attachment-icon-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.compose-attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
 }
 
 .delete-confirm-text {

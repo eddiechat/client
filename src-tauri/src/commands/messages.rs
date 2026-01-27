@@ -1,3 +1,4 @@
+use base64::Engine;
 use std::fs;
 use std::path::PathBuf;
 use tauri::State;
@@ -6,7 +7,7 @@ use tracing::{info, warn};
 use crate::backend::{self, SendMessageResult};
 use crate::commands::sync::SyncManager;
 use crate::config;
-use crate::types::{Message, ReadMessageRequest};
+use crate::types::{ComposeAttachment, Message, ReadMessageRequest};
 
 /// Helper to get account ID from optional parameter
 fn get_account_id(account: Option<&str>) -> Result<String, String> {
@@ -203,6 +204,107 @@ pub async fn save_message(
 
     backend
         .save_message(folder.as_deref(), message.as_bytes())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Send a message with attachments via SMTP and save to Sent folder
+/// Builds a proper MIME multipart message with attachments
+#[tauri::command]
+pub async fn send_message_with_attachments(
+    account: Option<String>,
+    from: String,
+    to: Vec<String>,
+    cc: Option<Vec<String>>,
+    subject: String,
+    body: String,
+    attachments: Vec<ComposeAttachment>,
+) -> Result<Option<SendMessageResult>, String> {
+    info!(
+        "Tauri command: send_message_with_attachments - account: {:?}, to: {:?}, attachments: {}",
+        account,
+        to,
+        attachments.len()
+    );
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Generate a unique boundary for the MIME message
+    let boundary = format!("----=_Part_{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
+
+    // Build headers
+    let mut headers = vec![
+        format!("From: {}", from),
+        format!("To: {}", to.join(", ")),
+        format!("Subject: {}", subject),
+        format!("Date: {}", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")),
+        "MIME-Version: 1.0".to_string(),
+    ];
+
+    // Add Cc if present
+    if let Some(cc_addrs) = &cc {
+        if !cc_addrs.is_empty() {
+            headers.push(format!("Cc: {}", cc_addrs.join(", ")));
+        }
+    }
+
+    // Set content type based on whether we have attachments
+    if attachments.is_empty() {
+        headers.push("Content-Type: text/plain; charset=utf-8".to_string());
+        headers.push("Content-Transfer-Encoding: 8bit".to_string());
+    } else {
+        headers.push(format!("Content-Type: multipart/mixed; boundary=\"{}\"", boundary));
+    }
+
+    let header_str = headers.join("\r\n");
+
+    // Build the message body
+    let raw_message = if attachments.is_empty() {
+        // Simple text message
+        format!("{}\r\n\r\n{}", header_str, body)
+    } else {
+        // Multipart message with attachments
+        let mut parts = Vec::new();
+
+        // Text body part
+        parts.push(format!(
+            "--{}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{}",
+            boundary, body
+        ));
+
+        // Attachment parts
+        for attachment in &attachments {
+            // Read file contents
+            let file_contents = fs::read(&attachment.path)
+                .map_err(|e| format!("Failed to read attachment '{}': {}", attachment.path, e))?;
+
+            // Base64 encode
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&file_contents);
+
+            // Split into 76-character lines for email compatibility
+            let encoded_lines: Vec<&str> = encoded
+                .as_bytes()
+                .chunks(76)
+                .map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
+                .collect();
+            let encoded_formatted = encoded_lines.join("\r\n");
+
+            parts.push(format!(
+                "--{}\r\nContent-Type: {}; name=\"{}\"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"{}\"\r\n\r\n{}",
+                boundary, attachment.mime_type, attachment.name, attachment.name, encoded_formatted
+            ));
+        }
+
+        // Close the multipart
+        parts.push(format!("--{}--", boundary));
+
+        format!("{}\r\n\r\n{}", header_str, parts.join("\r\n"))
+    };
+
+    backend
+        .send_message(raw_message.as_bytes())
         .await
         .map_err(|e| e.to_string())
 }
