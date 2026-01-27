@@ -48,6 +48,13 @@ export interface AccountDetails {
   username: string;
 }
 
+export interface ComposeAttachment {
+  path: string;
+  name: string;
+  mime_type: string;
+  size: number;
+}
+
 export interface ComposeMessageData {
   from?: string;
   to: string[];
@@ -55,6 +62,7 @@ export interface ComposeMessageData {
   subject: string;
   body: string;
   in_reply_to?: string;
+  attachments?: ComposeAttachment[];
 }
 
 // Account configuration for saving new accounts

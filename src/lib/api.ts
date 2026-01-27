@@ -5,6 +5,7 @@ import type {
   SaveAccountRequest,
   Conversation,
   Message,
+  ComposeAttachment,
 } from "../types";
 
 export async function saveAccount(request: SaveAccountRequest): Promise<void> {
@@ -36,6 +37,27 @@ export interface SendMessageResult {
 // Returns the message ID and sent folder name, or null if no Sent folder was found
 export async function sendMessage(message: string, account?: string): Promise<SendMessageResult | null> {
   return invoke("send_message", { account, message });
+}
+
+// Send a message with optional attachments
+export async function sendMessageWithAttachments(
+  from: string,
+  to: string[],
+  subject: string,
+  body: string,
+  attachments: ComposeAttachment[],
+  cc?: string[],
+  account?: string
+): Promise<SendMessageResult | null> {
+  return invoke("send_message_with_attachments", {
+    account,
+    from,
+    to,
+    cc,
+    subject,
+    body,
+    attachments,
+  });
 }
 
 export async function saveMessage(
