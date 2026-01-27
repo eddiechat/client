@@ -4,8 +4,8 @@
         <!-- Customize your theme here. -->
     </style>
 
-    <!-- Splash screen theme -->
+    <!-- Splash screen theme for Android 12+ -->
     <style name="Theme.eddie_chat.Splash" parent="Theme.eddie_chat">
-        <item name="android:windowBackground">@drawable/splash_screen</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
     </style>
 </resources>
