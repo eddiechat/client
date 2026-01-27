@@ -70,6 +70,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
         <div className="emoji-picker-categories">
           {emojiCategories.map((category, index) => (
             <button
+              type="button"
               key={category.name}
               className={`emoji-category-tab ${activeCategory === index ? "active" : ""}`}
               onClick={() => setActiveCategory(index)}
@@ -89,6 +90,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
             <div className="emoji-grid">
               {searchResults.map((emoji) => (
                 <button
+                  type="button"
                   key={emoji.emoji + emoji.name}
                   className="emoji-item"
                   onClick={() => handleEmojiClick(emoji)}
@@ -110,6 +112,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
             <div className="emoji-grid">
               {emojiCategories[activeCategory].emojis.map((emoji) => (
                 <button
+                  type="button"
                   key={emoji.emoji + emoji.name}
                   className="emoji-item"
                   onClick={() => handleEmojiClick(emoji)}
@@ -166,6 +169,7 @@ export function EmojiSuggestions({
     <div className="emoji-suggestions" ref={suggestionsRef}>
       {suggestions.map((emoji, index) => (
         <button
+          type="button"
           key={emoji.emoji + emoji.name}
           className={`emoji-suggestion-item ${index === selectedIndex ? "selected" : ""}`}
           onClick={() => onSelect(emoji.emoji, emoji.name)}
