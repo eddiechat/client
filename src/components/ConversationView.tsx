@@ -9,9 +9,11 @@ import {
   getConversationNameParts,
   parseEmailContent,
 } from "../lib/utils";
+import { searchEmojis } from "../lib/emojiData";
 import { Avatar } from "./Avatar";
 import { GravatarModal } from "./GravatarModal";
 import { AttachmentList } from "./AttachmentList";
+import { EmojiPicker, EmojiSuggestions } from "./EmojiPicker";
 
 interface ConversationViewProps {
   conversation: Conversation | null;
@@ -148,6 +150,9 @@ export function ConversationView({
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
 const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiSuggestion, setEmojiSuggestion] = useState<{ query: string; startPos: number } | null>(null);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
@@ -274,6 +279,98 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
   // Handle removing an attachment
   const handleRemoveAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Handle emoji selection from picker
+  const handleEmojiSelect = (emoji: string) => {
+    if (inputRef.current) {
+      const start = inputRef.current.selectionStart || 0;
+      const end = inputRef.current.selectionEnd || 0;
+      const newValue = inputValue.slice(0, start) + emoji + inputValue.slice(end);
+      setInputValue(newValue);
+      // Set cursor position after emoji
+      setTimeout(() => {
+        if (inputRef.current) {
+          const newPos = start + emoji.length;
+          inputRef.current.setSelectionRange(newPos, newPos);
+          inputRef.current.focus();
+        }
+      }, 0);
+    } else {
+      setInputValue(inputValue + emoji);
+    }
+    setShowEmojiPicker(false);
+  };
+
+  // Handle emoji selection from colon suggestions
+  const handleEmojiSuggestionSelect = (emoji: string, _name: string) => {
+    if (emojiSuggestion && inputRef.current) {
+      const beforeColon = inputValue.slice(0, emojiSuggestion.startPos);
+      const afterQuery = inputValue.slice(
+        inputRef.current.selectionStart || emojiSuggestion.startPos + emojiSuggestion.query.length + 1
+      );
+      const newValue = beforeColon + emoji + afterQuery;
+      setInputValue(newValue);
+      setEmojiSuggestion(null);
+      setSuggestionIndex(0);
+      // Set cursor position after emoji
+      setTimeout(() => {
+        if (inputRef.current) {
+          const newPos = beforeColon.length + emoji.length;
+          inputRef.current.setSelectionRange(newPos, newPos);
+          inputRef.current.focus();
+        }
+      }, 0);
+    }
+  };
+
+  // Handle input change with colon detection
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+
+    // Check for colon emoji suggestion trigger
+    const cursorPos = e.target.selectionStart || 0;
+    const textBeforeCursor = newValue.slice(0, cursorPos);
+
+    // Find the last colon before cursor that could start an emoji shortcode
+    const colonMatch = textBeforeCursor.match(/:([a-zA-Z0-9_]*)$/);
+
+    if (colonMatch && colonMatch[1].length >= 1) {
+      setEmojiSuggestion({
+        query: colonMatch[1],
+        startPos: cursorPos - colonMatch[0].length,
+      });
+      setSuggestionIndex(0);
+    } else {
+      setEmojiSuggestion(null);
+    }
+  };
+
+  // Handle keyboard navigation for emoji suggestions
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (emojiSuggestion) {
+      const suggestions = searchEmojis(emojiSuggestion.query, 8);
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSuggestionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+      } else if (e.key === "Enter" && suggestions.length > 0) {
+        e.preventDefault();
+        const selected = suggestions[suggestionIndex];
+        handleEmojiSuggestionSelect(selected.emoji, selected.name);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setEmojiSuggestion(null);
+      } else if (e.key === "Tab" && suggestions.length > 0) {
+        e.preventDefault();
+        const selected = suggestions[suggestionIndex];
+        handleEmojiSuggestionSelect(selected.emoji, selected.name);
+      }
+    }
   };
 
   // Handle Enter key in To field
@@ -405,20 +502,40 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
               </button>
 
               <div className="input-wrapper">
+                {emojiSuggestion && (
+                  <EmojiSuggestions
+                    query={emojiSuggestion.query}
+                    onSelect={handleEmojiSuggestionSelect}
+                    onClose={() => setEmojiSuggestion(null)}
+                    selectedIndex={suggestionIndex}
+                  />
+                )}
+                {showEmojiPicker && (
+                  <EmojiPicker
+                    onSelect={handleEmojiSelect}
+                    onClose={() => setShowEmojiPicker(false)}
+                  />
+                )}
                 <input
                   ref={inputRef}
                   type="text"
                   className="message-input"
                   placeholder="Type your message (first line becomes subject)"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={handleInputChange}
+                  onKeyDown={handleInputKeyDown}
                 />
-                <button type="button" className="emoji-btn" title="Emoji">
+                <button
+                  type="button"
+                  className="emoji-btn"
+                  title="Emoji"
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10" />
                     <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                    <line x1="9" y1="9" x2="9.01" y2="9" />
-                    <line x1="15" y1="9" x2="15.01" y2="9" />
+                    <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
                   </svg>
                 </button>
               </div>
@@ -689,20 +806,40 @@ const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name
           </button>
 
           <div className="input-wrapper">
+            {emojiSuggestion && (
+              <EmojiSuggestions
+                query={emojiSuggestion.query}
+                onSelect={handleEmojiSuggestionSelect}
+                onClose={() => setEmojiSuggestion(null)}
+                selectedIndex={suggestionIndex}
+              />
+            )}
+            {showEmojiPicker && (
+              <EmojiPicker
+                onSelect={handleEmojiSelect}
+                onClose={() => setShowEmojiPicker(false)}
+              />
+            )}
             <input
               ref={inputRef}
               type="text"
               className="message-input"
               placeholder="Message"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={handleInputChange}
+              onKeyDown={handleInputKeyDown}
             />
-            <button type="button" className="emoji-btn" title="Emoji">
+            <button
+              type="button"
+              className="emoji-btn"
+              title="Emoji"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                <line x1="9" y1="9" x2="9.01" y2="9" />
-                <line x1="15" y1="9" x2="15.01" y2="9" />
+                <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none" />
+                <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
               </svg>
             </button>
           </div>
