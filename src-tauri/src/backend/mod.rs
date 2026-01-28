@@ -67,7 +67,7 @@ impl EmailBackend {
             .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
 
         let account_config = AccountConfig {
-            name: db_config.name.clone(),
+            name: db_config.display_name.clone(),
             default: db_config.active,
             email: db_config.email.clone(),
             display_name: db_config.display_name.clone(),
@@ -77,7 +77,7 @@ impl EmailBackend {
 
         // Build email-lib account config
         let email_account_config = Arc::new(EmailAccountConfig {
-            name: db_config.name.unwrap_or_else(|| account_name.to_string()),
+            name: db_config.display_name.clone().unwrap_or_else(|| account_name.to_string()),
             email: account_config.email.clone(),
             display_name: account_config.display_name.clone(),
             ..Default::default()

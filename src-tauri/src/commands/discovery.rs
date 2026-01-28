@@ -466,9 +466,8 @@ pub async fn save_discovered_account(
         .map(|c| serde_json::to_string(c).unwrap_or_default());
 
     let db_config = ConnectionConfig {
-        account_id: name.clone(),
+        account_id: email.clone(),  // Use email as account_id
         active: true, // New accounts are active by default
-        name: account_config.name,
         email: account_config.email,
         display_name: account_config.display_name,
         imap_config: imap_json,

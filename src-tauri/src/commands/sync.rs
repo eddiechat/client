@@ -85,7 +85,7 @@ impl SyncManager {
             .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
 
         let account = AccountConfig {
-            name: db_config.name.clone(),
+            name: db_config.display_name.clone(),
             default: db_config.active,
             email: db_config.email.clone(),
             display_name: db_config.display_name.clone(),
@@ -93,8 +93,9 @@ impl SyncManager {
             smtp: smtp_config,
         };
 
-        let name = db_config.name.as_ref().unwrap_or(&db_config.account_id);
-        let db_path = self.default_db_dir.join(format!("{}.db", name));
+        // Sanitize email for use as filename (replace @ and . with _)
+        let safe_name = db_config.account_id.replace('@', "_").replace('.', "_");
+        let db_path = self.default_db_dir.join(format!("{}.db", safe_name));
         info!("Database path: {:?}", db_path);
 
         let sync_config = SyncConfig {
@@ -117,7 +118,7 @@ impl SyncManager {
         let app_handle = self.app_handle.read().await.clone();
 
         let engine = SyncEngine::new(
-            name.to_string(),
+            db_config.account_id.clone(),  // account_id is now the email
             account.email.clone(),
             account.clone(),
             sync_config,
