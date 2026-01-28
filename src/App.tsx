@@ -195,7 +195,12 @@ function App() {
   );
 
   const handleEditAccount = useCallback(async () => {
-    if (!currentAccount) return;
+    if (!currentAccount) {
+      // No active account - just open the modal to allow account configuration
+      setAccountEditData(null);
+      setAccountModalOpen(true);
+      return;
+    }
 
     try {
       const details = await api.getAccountDetails(currentAccount);
