@@ -30,14 +30,27 @@ pub struct SyncManager {
 
 impl SyncManager {
     pub fn new() -> Self {
-        // In dev mode, use .sqlite relative to project root for easier debugging
-        let db_dir = if cfg!(debug_assertions) {
-            PathBuf::from("../.sqlite")
-        } else {
-            dirs::data_local_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
+        // On mobile platforms (iOS/Android), always use data_dir() even in debug mode
+        // because the current directory is read-only
+        #[cfg(any(target_os = "ios", target_os = "android"))]
+        let db_dir = {
+            dirs::data_dir()
+                .expect("Failed to determine data directory for iOS/Android")
                 .join("eddie.chat")
                 .join("sync")
+        };
+
+        // On desktop, use ../.sqlite in debug mode for easier debugging
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        let db_dir = {
+            if cfg!(debug_assertions) {
+                PathBuf::from("../.sqlite")
+            } else {
+                dirs::data_local_dir()
+                    .expect("Failed to determine data directory for desktop")
+                    .join("eddie.chat")
+                    .join("sync")
+            }
         };
 
         // Ensure directory exists

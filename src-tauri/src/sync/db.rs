@@ -141,13 +141,27 @@ static CONFIG_DB: OnceCell<RwLock<ConfigDatabase>> = OnceCell::new();
 
 /// Get the config database directory path
 fn get_config_db_dir() -> PathBuf {
-    if cfg!(debug_assertions) {
-        PathBuf::from("../.sqlite")
-    } else {
-        dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
+    // On mobile platforms (iOS/Android), always use data_dir() even in debug mode
+    // because the current directory is read-only
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        dirs::data_dir()
+            .expect("Failed to determine data directory for iOS/Android")
             .join("eddie.chat")
             .join("config")
+    }
+
+    // On desktop, use ../.sqlite in debug mode for easier debugging
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        if cfg!(debug_assertions) {
+            PathBuf::from("../.sqlite")
+        } else {
+            dirs::data_local_dir()
+                .expect("Failed to determine data directory for desktop")
+                .join("eddie.chat")
+                .join("config")
+        }
     }
 }
 
