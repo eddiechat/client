@@ -25,7 +25,8 @@ use secret::Secret;
 use std::path::PathBuf;
 use tracing::info;
 
-use crate::config::{self, AccountConfig, AuthConfig, PasswordSource};
+use crate::config::{AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::sync::db::{get_active_connection_config, get_connection_config, init_config_db};
 use crate::types::error::HimalayaError;
 use crate::types::{Attachment, Envelope, Folder, Message};
 
@@ -47,16 +48,34 @@ pub struct EmailBackend {
 impl EmailBackend {
     /// Create a new email backend for an account
     pub async fn new(account_name: &str) -> Result<Self, HimalayaError> {
-        let config = config::get_config()?;
-        let (name, account_config) = config
-            .get_account(Some(account_name))
+        // Initialize database if needed
+        init_config_db()?;
+
+        // Load account from database
+        let db_config = get_connection_config(account_name)?
             .ok_or_else(|| HimalayaError::AccountNotFound(account_name.to_string()))?;
 
-        let account_config = account_config.clone();
+        // Deserialize IMAP and SMTP configs from JSON
+        let imap_config = db_config
+            .imap_config
+            .and_then(|json| serde_json::from_str::<ImapConfig>(&json).ok());
+
+        let smtp_config = db_config
+            .smtp_config
+            .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
+
+        let account_config = AccountConfig {
+            name: db_config.name.clone(),
+            default: db_config.active,
+            email: db_config.email.clone(),
+            display_name: db_config.display_name.clone(),
+            imap: imap_config,
+            smtp: smtp_config,
+        };
 
         // Build email-lib account config
         let email_account_config = Arc::new(EmailAccountConfig {
-            name: name.to_string(),
+            name: db_config.name.unwrap_or_else(|| account_name.to_string()),
             email: account_config.email.clone(),
             display_name: account_config.display_name.clone(),
             ..Default::default()
@@ -75,13 +94,14 @@ impl EmailBackend {
 
     /// Create backend for default account
     pub async fn default() -> Result<Self, HimalayaError> {
-        let config = config::get_config()?;
-        let account_name = config
-            .default_account_name()
-            .ok_or_else(|| HimalayaError::Config("No accounts configured".to_string()))?
-            .to_string();
+        // Initialize database if needed
+        init_config_db()?;
 
-        Self::new(&account_name).await
+        // Load active account from database
+        let db_config = get_active_connection_config()?
+            .ok_or_else(|| HimalayaError::Config("No active account configured".to_string()))?;
+
+        Self::new(&db_config.account_id).await
     }
 
     /// Get or resolve password from PasswordSource

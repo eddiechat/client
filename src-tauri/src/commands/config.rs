@@ -101,9 +101,7 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), String> {
         }),
     };
 
-    config::save_account(request.name.clone(), account.clone()).map_err(|e| e.to_string())?;
-
-    // Also save to database for account switching support
+    // Save to database
     let imap_json = account
         .imap
         .as_ref()
@@ -202,9 +200,6 @@ pub async fn switch_account(account_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn delete_account(account_id: String) -> Result<(), String> {
     info!("Tauri command: delete_account - {}", account_id);
-
-    // Remove from TOML config
-    config::remove_account(&account_id).map_err(|e| e.to_string())?;
 
     // Remove from database
     init_config_db().map_err(|e| e.to_string())?;
