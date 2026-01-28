@@ -1615,6 +1615,57 @@ body {
   color: var(--text-muted);
 }
 
+/* Touch devices: always show reply button since hover isn't available */
+@media (hover: none) {
+  .message-reply-btn {
+    opacity: 0.5;
+  }
+
+  .message-reply-btn:active {
+    opacity: 1;
+    background: var(--bg-tertiary);
+  }
+}
+
+/* Quote preview inside message bubbles (for replies) */
+.message-quote-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  border-left: 2px solid var(--text-muted);
+}
+
+.message-bubble.sent .message-quote-preview {
+  background: rgba(0, 0, 0, 0.1);
+  border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.message-quote-sender {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.message-bubble.sent .message-quote-sender {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.message-quote-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message-bubble.sent .message-quote-text {
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* For outgoing messages, reverse the order */
 .message-bubble-container.outgoing .message-bubble-row {
   flex-direction: row-reverse;

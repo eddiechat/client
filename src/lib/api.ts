@@ -115,6 +115,7 @@ export interface CachedMessage {
   folder: string;
   uid: number;
   message_id: string | null;
+  in_reply_to: string | null;
   from_address: string;
   from_name: string | null;
   to_addresses: string[];

@@ -82,6 +82,26 @@ function getSenderName(from: string): string {
   return cleanName;
 }
 
+// Get first line of message content (for reply quotes)
+function getFirstLine(text: string | undefined): string {
+  if (!text) return "";
+  const firstLine = text.split("\n")[0].trim();
+  return firstLine.length > 80 ? firstLine.slice(0, 77) + "..." : firstLine;
+}
+
+// Normalize message ID by removing angle brackets for comparison
+function normalizeMessageId(id: string | undefined): string {
+  if (!id) return "";
+  return id.replace(/^<|>$/g, "");
+}
+
+// Find original message by message_id (for showing reply quotes)
+function findOriginalMessage(inReplyTo: string | undefined, messages: Message[]): Message | undefined {
+  if (!inReplyTo) return undefined;
+  const normalizedReplyTo = normalizeMessageId(inReplyTo);
+  return messages.find(m => normalizeMessageId(m.envelope.message_id) === normalizedReplyTo);
+}
+
 // Get tooltip text for avatar (name and email, plus message ID in dev mode)
 function getAvatarTooltip(from: string, messageId?: string): string {
   const name = getSenderName(from);
@@ -286,6 +306,11 @@ export function ConversationView({
   // Handle setting up a reply to a specific message
   const handleReplyToMessage = (message: Message) => {
     const messageId = message.envelope.message_id;
+    console.log("[Reply] Setting up reply to message:", {
+      messageId,
+      subject: message.envelope.subject,
+      in_reply_to: message.envelope.in_reply_to,
+    });
     if (!messageId) {
       // Can't reply to messages without a message_id
       console.warn("Cannot reply to message without message_id");
@@ -692,235 +717,259 @@ export function ConversationView({
                 <p>No messages yet. Start the conversation!</p>
               </div>
             ) : (
-          <>
-            {messages.map((message, index) => {
-              const isOut = isOutgoing(message, currentAccountEmail);
-              const showDateSeparator =
-                index === 0 ||
-                isDifferentDay(
-                  messages[index - 1].envelope.date,
-                  message.envelope.date
-                );
+              <>
+                {messages.map((message, index) => {
+                  const isOut = isOutgoing(message, currentAccountEmail);
+                  const showDateSeparator =
+                    index === 0 ||
+                    isDifferentDay(
+                      messages[index - 1].envelope.date,
+                      message.envelope.date
+                    );
 
-              // Show sender name for incoming group messages
-              const showSender =
-                !isOut && conversation.participant_names.length > 2;
+                  // Show sender name for incoming group messages
+                  const showSender =
+                    !isOut && conversation.participant_names.length > 2;
 
-              return (
-                <div key={message.id}>
-                  {showDateSeparator && (
-                    <div className="date-separator">
-                      <span>{formatDateSeparator(message.envelope.date)}</span>
-                    </div>
-                  )}
-
-                  <div
-                    className={`message-bubble-container ${isOut ? "outgoing" : "incoming"
-                      }`}
-                  >
-                    {!isOut && (
-                      <div
-                        className="message-avatar"
-                        style={{
-                          backgroundColor: getAvatarColor(
-                            message.envelope.from
-                          ),
-                          cursor: "pointer",
-                        }}
-                        title={getAvatarTooltip(message.envelope.from, message.id)}
-                        onClick={() => {
-                          const email = extractEmail(message.envelope.from);
-                          const name = getSenderName(message.envelope.from);
-                          if (email) setGravatarModalData({ email, name });
-                        }}
-                      >
-                        {(() => {
-                          const messageEmail = extractEmail(message.envelope.from);
-                          const messageGravatarUrl = messageEmail ? getGravatarUrl(messageEmail, 32) : null;
-                          return (
-                            <>
-                              {messageGravatarUrl ? (
-                                <img
-                                  src={messageGravatarUrl}
-                                  alt={getSenderName(message.envelope.from)}
-                                  className="chat-avatar-img"
-                                  onError={(e) => {
-                                    const avatar = e.currentTarget.parentElement;
-                                    if (avatar) {
-                                      e.currentTarget.style.display = 'none';
-                                      const initials = avatar.querySelector('.chat-avatar-initials');
-                                      if (initials) {
-                                        (initials as HTMLElement).style.display = 'block';
-                                      }
-                                    }
-                                  }}
-                                  onLoad={(e) => {
-                                    const avatar = e.currentTarget.parentElement;
-                                    if (avatar) {
-                                      const initials = avatar.querySelector('.chat-avatar-initials');
-                                      if (initials) {
-                                        (initials as HTMLElement).style.display = 'none';
-                                      }
-                                    }
-                                  }}
-                                />
-                              ) : null}
-                              <span className="chat-avatar-initials">{getInitials(message.envelope.from)}</span>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    )}
-
-                    <div className="message-bubble-wrapper">
-                      {showSender && (
-                        <span className="message-sender">
-                          {getSenderName(message.envelope.from)}
-                        </span>
+                  return (
+                    <div key={message.id}>
+                      {showDateSeparator && (
+                        <div className="date-separator">
+                          <span>{formatDateSeparator(message.envelope.date)}</span>
+                        </div>
                       )}
 
-                      <div className="message-bubble-row">
-                        <div className={`message-bubble ${isOut ? "sent" : "received"}`}>
-                          <div className="message-text">
-                            {parseEmailContent(message.text_body) || message.envelope.subject || "(No content)"}
-                          </div>
-                          <AttachmentList
-                            messageId={message.id}
-                            hasAttachment={message.envelope.has_attachment}
-                          />
-                          <span className="message-time">
-                            {formatMessageTime(message.envelope.date)}
-                            {isOut && (
-                              <span className="message-status">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
-                                </svg>
-                              </span>
-                            )}
-                          </span>
-                        </div>
-
-                        {/* Reply button - shown on hover */}
-                        {message.envelope.message_id && (
-                          <button
-                            className="message-reply-btn"
-                            onClick={() => handleReplyToMessage(message)}
-                            title="Reply to this message"
+                      <div
+                        className={`message-bubble-container ${isOut ? "outgoing" : "incoming"
+                          }`}
+                      >
+                        {!isOut && (
+                          <div
+                            className="message-avatar"
+                            style={{
+                              backgroundColor: getAvatarColor(
+                                message.envelope.from
+                              ),
+                              cursor: "pointer",
+                            }}
+                            title={getAvatarTooltip(message.envelope.from, message.id)}
+                            onClick={() => {
+                              const email = extractEmail(message.envelope.from);
+                              const name = getSenderName(message.envelope.from);
+                              if (email) setGravatarModalData({ email, name });
+                            }}
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M9 17l-5-5 5-5" />
-                              <path d="M4 12h11a4 4 0 0 1 4 4v1" />
-                            </svg>
-                          </button>
+                            {(() => {
+                              const messageEmail = extractEmail(message.envelope.from);
+                              const messageGravatarUrl = messageEmail ? getGravatarUrl(messageEmail, 32) : null;
+                              return (
+                                <>
+                                  {messageGravatarUrl ? (
+                                    <img
+                                      src={messageGravatarUrl}
+                                      alt={getSenderName(message.envelope.from)}
+                                      className="chat-avatar-img"
+                                      onError={(e) => {
+                                        const avatar = e.currentTarget.parentElement;
+                                        if (avatar) {
+                                          e.currentTarget.style.display = 'none';
+                                          const initials = avatar.querySelector('.chat-avatar-initials');
+                                          if (initials) {
+                                            (initials as HTMLElement).style.display = 'block';
+                                          }
+                                        }
+                                      }}
+                                      onLoad={(e) => {
+                                        const avatar = e.currentTarget.parentElement;
+                                        if (avatar) {
+                                          const initials = avatar.querySelector('.chat-avatar-initials');
+                                          if (initials) {
+                                            (initials as HTMLElement).style.display = 'none';
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  ) : null}
+                                  <span className="chat-avatar-initials">{getInitials(message.envelope.from)}</span>
+                                </>
+                              );
+                            })()}
+                          </div>
                         )}
+
+                        <div className="message-bubble-wrapper">
+                          {showSender && (
+                            <span className="message-sender">
+                              {getSenderName(message.envelope.from)}
+                            </span>
+                          )}
+
+                          <div style={{ "fontSize": 10, "marginLeft": 6 }}>
+                            <b>subject</b>: {message.envelope.subject} <br />
+                            <b>id</b>: {message.envelope.message_id} <br />
+                            <b>in_reply_to</b>: {message.envelope.in_reply_to} <br /></div>
+                          <div className="message-bubble-row">
+                            <div className={`message-bubble ${isOut ? "sent" : "received"}`}>
+                              {/* Quote preview for replies */}
+                              {(() => {
+                                if (message.envelope.in_reply_to) {
+                                  console.log("[Quote] Message has in_reply_to:", message.envelope.in_reply_to);
+                                  console.log("[Quote] Available message_ids:", messages.map(m => m.envelope.message_id));
+                                }
+                                const originalMsg = findOriginalMessage(message.envelope.in_reply_to, messages);
+                                if (!originalMsg) return null;
+                                const content = parseEmailContent(originalMsg.text_body) || originalMsg.envelope.subject || "";
+                                return (
+                                  <div className="message-quote-preview">
+                                    <span className="message-quote-sender">
+                                      {getSenderName(originalMsg.envelope.from)}
+                                    </span>
+                                    <span className="message-quote-text">
+                                      {getFirstLine(content)}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                              <div className="message-text">
+                                {parseEmailContent(message.text_body) || "(No content)"}
+                              </div>
+                              <AttachmentList
+                                messageId={message.id}
+                                hasAttachment={message.envelope.has_attachment}
+                              />
+                              <span className="message-time">
+                                {formatMessageTime(message.envelope.date)}
+                                {isOut && (
+                                  <span className="message-status">
+                                    <svg viewBox="0 0 24 24" fill="currentColor">
+                                      <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Reply button - shown on hover */}
+                            {message.envelope.message_id && (
+                              <button
+                                className="message-reply-btn"
+                                onClick={() => handleReplyToMessage(message)}
+                                title="Reply to this message"
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M9 17l-5-5 5-5" />
+                                  <path d="M4 12h11a4 4 0 0 1 4 4v1" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+
+          {/* Input */}
+          <form className="conversation-input" onSubmit={handleSubmit}>
+            {/* Reply indicator */}
+            {replyTarget && (
+              <div className="reply-indicator">
+                <div className="reply-indicator-content">
+                  <div className="reply-indicator-bar" />
+                  <div className="reply-indicator-info">
+                    <span className="reply-indicator-label">
+                      Replying to {getSenderName(replyTarget.from)}
+                    </span>
+                    <span className="reply-indicator-snippet">{replyTarget.snippet}</span>
                   </div>
                 </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </>
-        )}
-      </div>
-
-      {/* Input */}
-      <form className="conversation-input" onSubmit={handleSubmit}>
-        {/* Reply indicator */}
-        {replyTarget && (
-          <div className="reply-indicator">
-            <div className="reply-indicator-content">
-              <div className="reply-indicator-bar" />
-              <div className="reply-indicator-info">
-                <span className="reply-indicator-label">
-                  Replying to {getSenderName(replyTarget.from)}
-                </span>
-                <span className="reply-indicator-snippet">{replyTarget.snippet}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="reply-indicator-close"
-              onClick={handleCancelReply}
-              title="Cancel reply"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Attachment preview */}
-        {attachments.length > 0 && (
-          <div className="attachments-preview">
-            <span className="attachments-preview-label">Ready to send</span>
-            {attachments.map((attachment, index) => (
-              <div key={index} className="attachment-chip">
-                <span className="attachment-name" title={attachment.name}>
-                  {attachment.name}
-                </span>
                 <button
                   type="button"
-                  className="attachment-remove"
-                  onClick={() => handleRemoveAttachment(index)}
-                  title="Remove attachment"
+                  className="reply-indicator-close"
+                  onClick={handleCancelReply}
+                  title="Cancel reply"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M18 6L6 18M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-        <div className="input-row">
-          <button type="button" className="input-action-btn" title="Add attachment" onClick={handleAddAttachment}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-            </svg>
-          </button>
+            )}
 
-          <div className="input-wrapper">
-            {emojiSuggestion && (
-              <EmojiSuggestions
-                query={emojiSuggestion.query}
-                onSelect={handleEmojiSuggestionSelect}
-                onClose={() => setEmojiSuggestion(null)}
-                selectedIndex={suggestionIndex}
-              />
+            {/* Attachment preview */}
+            {attachments.length > 0 && (
+              <div className="attachments-preview">
+                <span className="attachments-preview-label">Ready to send</span>
+                {attachments.map((attachment, index) => (
+                  <div key={index} className="attachment-chip">
+                    <span className="attachment-name" title={attachment.name}>
+                      {attachment.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="attachment-remove"
+                      onClick={() => handleRemoveAttachment(index)}
+                      title="Remove attachment"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
-            {showEmojiPicker && (
-              <EmojiPicker
-                onSelect={handleEmojiSelect}
-                onClose={() => setShowEmojiPicker(false)}
-              />
-            )}
-            <input
-              ref={inputRef}
-              type="text"
-              className="message-input"
-              placeholder={replyTarget ? "Write a reply..." : "Message"}
-              value={inputValue}
-              onChange={handleInputChange}
-              onKeyDown={handleInputKeyDown}
-            />
-            <button
-              type="button"
-              className="emoji-btn"
-              title="Emoji"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none" />
-                <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </form>
+            <div className="input-row">
+              <button type="button" className="input-action-btn" title="Add attachment" onClick={handleAddAttachment}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                </svg>
+              </button>
+
+              <div className="input-wrapper">
+                {emojiSuggestion && (
+                  <EmojiSuggestions
+                    query={emojiSuggestion.query}
+                    onSelect={handleEmojiSuggestionSelect}
+                    onClose={() => setEmojiSuggestion(null)}
+                    selectedIndex={suggestionIndex}
+                  />
+                )}
+                {showEmojiPicker && (
+                  <EmojiPicker
+                    onSelect={handleEmojiSelect}
+                    onClose={() => setShowEmojiPicker(false)}
+                  />
+                )}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="message-input"
+                  placeholder={replyTarget ? "Write a reply..." : "Message"}
+                  value={inputValue}
+                  onChange={handleInputChange}
+                  onKeyDown={handleInputKeyDown}
+                />
+                <button
+                  type="button"
+                  className="emoji-btn"
+                  title="Emoji"
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                    <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </form>
         </>
       )}
     </div>

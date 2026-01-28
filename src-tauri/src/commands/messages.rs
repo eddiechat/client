@@ -253,11 +253,17 @@ pub async fn send_message_with_attachments(
         "MIME-Version: 1.0".to_string(),
     ];
 
-    // Add In-Reply-To header for threading (RFC 2822)
+    // Add In-Reply-To header for threading (RFC 5322)
     if let Some(ref reply_to_id) = in_reply_to {
-        headers.push(format!("In-Reply-To: {}", reply_to_id));
+        // Ensure angle brackets are present (RFC 5322 requires them for Message-ID)
+        let formatted_id = if reply_to_id.starts_with('<') && reply_to_id.ends_with('>') {
+            reply_to_id.clone()
+        } else {
+            format!("<{}>", reply_to_id)
+        };
+        headers.push(format!("In-Reply-To: {}", formatted_id));
         // Also add References header for proper threading chain
-        headers.push(format!("References: {}", reply_to_id));
+        headers.push(format!("References: {}", formatted_id));
     }
 
     // Add Cc if present
