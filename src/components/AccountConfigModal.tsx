@@ -103,7 +103,7 @@ export function AccountConfigModal({
     }
   }, [isOpen, editData]);
 
-  if (!isOpen) return null;
+  console.log("AccountConfigModal rendering, isOpen:", isOpen, "editData:", editData);
 
   const handleSave = async () => {
     setError(null);
@@ -232,10 +232,8 @@ export function AccountConfigModal({
     }
   }, [isOpen, isProcessing, onClose]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="compose-modal-overlay">
+    <div className="compose-modal-overlay" style={{ display: isOpen ? 'flex' : 'none' }}>
       <div className="compose-modal account-config-modal">
         <div className="compose-header">
           <h2>{isEditMode ? "Edit Account" : "Configure Email Account"}</h2>

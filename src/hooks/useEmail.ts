@@ -11,15 +11,18 @@ export function useAccounts() {
 
   const fetchAccounts = useCallback(async () => {
     try {
+      console.log("useAccounts: Fetching accounts...");
       setLoading(true);
       const [accountList, defaultAccount] = await Promise.all([
         api.listAccounts(),
         api.getDefaultAccount(),
       ]);
+      console.log("useAccounts: Got", accountList.length, "accounts, default:", defaultAccount);
       setAccounts(accountList);
       setCurrentAccount(defaultAccount);
       setError(null);
     } catch (e) {
+      console.error("useAccounts: Error fetching accounts:", e);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);

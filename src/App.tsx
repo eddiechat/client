@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   AccountConfigModal,
+  AccountSetupWizard,
   ChatList,
   ConversationView,
 } from "./components";
@@ -28,6 +29,9 @@ function App() {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [accountEditData, setAccountEditData] = useState<AccountEditData | null>(null);
 
+  // Account setup wizard state
+  const [setupWizardOpen, setSetupWizardOpen] = useState(false);
+
   // Hooks for data fetching
   const {
     accounts,
@@ -40,8 +44,8 @@ function App() {
   // Get current account email for determining message direction
   const currentAccountEmail = currentAccount || undefined;
 
-  // Show config modal when no accounts are configured
-  const showConfigModal = !accountsLoading && accounts.length === 0;
+  // Show setup wizard when no accounts are configured
+  const showSetupWizard = !accountsLoading && accounts.length === 0;
 
   // Conversations hook
   const {
@@ -195,22 +199,35 @@ function App() {
   );
 
   const handleEditAccount = useCallback(async () => {
+    console.log("handleEditAccount called, currentAccount:", currentAccount);
+
+    // Don't open if wizard is still open
+    if (showSetupWizard || setupWizardOpen) {
+      console.log("Setup wizard is open, not opening config modal");
+      return;
+    }
+
     if (!currentAccount) {
-      // No active account - just open the modal to allow account configuration
-      setAccountEditData(null);
-      setAccountModalOpen(true);
+      console.log("No current account, opening setup wizard");
+      // No active account - open the setup wizard
+      setSetupWizardOpen(true);
       return;
     }
 
     try {
+      console.log("Fetching account details for:", currentAccount);
       const details = await api.getAccountDetails(currentAccount);
+      console.log("Got account details:", details);
+
+      // Ensure wizard is closed before opening config modal
+      setSetupWizardOpen(false);
       setAccountEditData(details);
       setAccountModalOpen(true);
     } catch (err) {
       console.error("Failed to get account details:", err);
       alert(`Failed to load account details: ${err}`);
     }
-  }, [currentAccount]);
+  }, [currentAccount, showSetupWizard, setupWizardOpen]);
 
   const handleSaveAccount = async (data: SaveAccountRequest) => {
     await api.saveAccount(data);
@@ -230,11 +247,24 @@ function App() {
     setAccountEditData(null);
   }, []);
 
+  const handleCloseSetupWizard = useCallback(() => {
+    setSetupWizardOpen(false);
+  }, []);
+
+  const handleSetupSuccess = useCallback(async () => {
+    console.log("Account setup completed successfully");
+    await refreshAccounts();
+    await refreshConversations();
+  }, [refreshAccounts, refreshConversations]);
+
   const handleBack = useCallback(() => {
     setSelectedConversation(null);
     setIsComposing(false);
     setComposeParticipants([]);
   }, []);
+
+  // Log account state for debugging
+  console.log("App render: accounts:", accounts.length, "currentAccount:", currentAccount, "accountsLoading:", accountsLoading);
 
   return (
     <main className="app">
@@ -288,9 +318,16 @@ function App() {
         />
       </section>
 
-      {/* Account Config Modal */}
+      {/* Account Setup Wizard */}
+      <AccountSetupWizard
+        isOpen={showSetupWizard || setupWizardOpen}
+        onClose={handleCloseSetupWizard}
+        onSuccess={handleSetupSuccess}
+      />
+
+      {/* Account Config Modal (for editing existing accounts) */}
       <AccountConfigModal
-        isOpen={showConfigModal || accountModalOpen}
+        isOpen={accountModalOpen}
         onClose={handleCloseAccountModal}
         onSave={handleSaveAccount}
         onDelete={handleDeleteAccount}

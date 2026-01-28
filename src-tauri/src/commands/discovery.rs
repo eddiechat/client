@@ -1,5 +1,6 @@
 //! Tauri commands for email autodiscovery and OAuth2 flows
 
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -15,6 +16,9 @@ use crate::config::{
 };
 use crate::credentials::CredentialStore;
 use crate::oauth::{OAuthManager, OAuthTokens};
+use crate::sync::db::{
+    init_config_db, save_connection_config, set_active_account, ConnectionConfig,
+};
 
 /// OAuth manager state for Tauri
 pub struct OAuthState {
@@ -451,18 +455,34 @@ pub async fn save_discovered_account(
         }),
     };
 
-    // Check if this is the first account (make it default)
-    let existing_config = config::get_config().unwrap_or_default();
-    let make_default = existing_config.accounts.is_empty();
+    // Save to database
+    let imap_json = account_config
+        .imap
+        .as_ref()
+        .map(|c| serde_json::to_string(c).unwrap_or_default());
+    let smtp_json = account_config
+        .smtp
+        .as_ref()
+        .map(|c| serde_json::to_string(c).unwrap_or_default());
 
-    let mut final_config = account_config;
-    if make_default {
-        final_config.default = true;
-    }
+    let db_config = ConnectionConfig {
+        account_id: name.clone(),
+        active: true, // New accounts are active by default
+        name: account_config.name,
+        email: account_config.email,
+        display_name: account_config.display_name,
+        imap_config: imap_json,
+        smtp_config: smtp_json,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
 
-    config::save_account(name.clone(), final_config).map_err(|e| e.to_string())?;
+    // Initialize config db if needed and save
+    init_config_db().map_err(|e| e.to_string())?;
+    save_connection_config(&db_config).map_err(|e| e.to_string())?;
+    set_active_account(&db_config.account_id).map_err(|e| e.to_string())?;
 
-    info!("Account {} saved successfully", name);
+    info!("Account {} saved successfully to database", name);
 
     Ok(())
 }
