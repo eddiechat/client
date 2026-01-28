@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error, Serialize, Deserialize)]
-pub enum HimalayaError {
+pub enum EddieError {
     #[error("Configuration error: {0}")]
     Config(String),
 
@@ -34,14 +34,14 @@ pub enum HimalayaError {
     Other(String),
 }
 
-impl From<std::io::Error> for HimalayaError {
+impl From<std::io::Error> for EddieError {
     fn from(err: std::io::Error) -> Self {
-        HimalayaError::Io(err.to_string())
+        EddieError::Io(err.to_string())
     }
 }
 
-impl From<toml::de::Error> for HimalayaError {
+impl From<toml::de::Error> for EddieError {
     fn from(err: toml::de::Error) -> Self {
-        HimalayaError::Config(err.to_string())
+        EddieError::Config(err.to_string())
     }
 }

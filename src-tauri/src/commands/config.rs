@@ -1,8 +1,14 @@
-use serde::Deserialize;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tracing::info;
 
 use crate::config::{self, AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::sync::db::{
+    self as config_db, get_active_connection_config, get_all_connection_configs,
+    get_connection_config, init_config_db, save_connection_config, set_active_account,
+    ConnectionConfig,
+};
 
 /// Initialize configuration from default paths
 #[tauri::command]
@@ -95,5 +101,109 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), String> {
         }),
     };
 
-    config::save_account(request.name, account).map_err(|e| e.to_string())
+    // Save to database
+    let imap_json = account
+        .imap
+        .as_ref()
+        .map(|c| serde_json::to_string(c).unwrap_or_default());
+    let smtp_json = account
+        .smtp
+        .as_ref()
+        .map(|c| serde_json::to_string(c).unwrap_or_default());
+
+    let db_config = ConnectionConfig {
+        account_id: request.name,
+        active: true, // New accounts are active by default
+        name: account.name,
+        email: account.email,
+        display_name: account.display_name,
+        imap_config: imap_json,
+        smtp_config: smtp_json,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+
+    // Initialize config db if needed and save
+    init_config_db().map_err(|e| e.to_string())?;
+    save_connection_config(&db_config).map_err(|e| e.to_string())?;
+    set_active_account(&db_config.account_id).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// ========== Database-backed Account Commands ==========
+
+/// Response structure for account info
+#[derive(Debug, Serialize)]
+pub struct AccountInfo {
+    pub account_id: String,
+    pub active: bool,
+    pub name: Option<String>,
+    pub email: String,
+    pub display_name: Option<String>,
+}
+
+impl From<ConnectionConfig> for AccountInfo {
+    fn from(config: ConnectionConfig) -> Self {
+        Self {
+            account_id: config.account_id,
+            active: config.active,
+            name: config.name,
+            email: config.email,
+            display_name: config.display_name,
+        }
+    }
+}
+
+/// Initialize the config database
+#[tauri::command]
+pub async fn init_config_database() -> Result<(), String> {
+    info!("Tauri command: init_config_database");
+    init_config_db().map_err(|e| e.to_string())
+}
+
+/// Get all accounts from the database
+#[tauri::command]
+pub async fn get_accounts() -> Result<Vec<AccountInfo>, String> {
+    info!("Tauri command: get_accounts");
+    init_config_db().map_err(|e| e.to_string())?;
+    let configs = get_all_connection_configs().map_err(|e| e.to_string())?;
+    Ok(configs.into_iter().map(AccountInfo::from).collect())
+}
+
+/// Get the currently active account
+#[tauri::command]
+pub async fn get_active_account() -> Result<Option<AccountInfo>, String> {
+    info!("Tauri command: get_active_account");
+    init_config_db().map_err(|e| e.to_string())?;
+    let config = get_active_connection_config().map_err(|e| e.to_string())?;
+    Ok(config.map(AccountInfo::from))
+}
+
+/// Set the active account by account_id
+#[tauri::command]
+pub async fn switch_account(account_id: String) -> Result<(), String> {
+    info!("Tauri command: switch_account - {}", account_id);
+    init_config_db().map_err(|e| e.to_string())?;
+
+    // Verify the account exists
+    let config = get_connection_config(&account_id).map_err(|e| e.to_string())?;
+    if config.is_none() {
+        return Err(format!("Account '{}' not found", account_id));
+    }
+
+    set_active_account(&account_id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Delete an account from the database
+#[tauri::command]
+pub async fn delete_account(account_id: String) -> Result<(), String> {
+    info!("Tauri command: delete_account - {}", account_id);
+
+    // Remove from database
+    init_config_db().map_err(|e| e.to_string())?;
+    config_db::delete_connection_config(&account_id).map_err(|e| e.to_string())?;
+
+    Ok(())
 }

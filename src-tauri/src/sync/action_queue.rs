@@ -10,7 +10,7 @@ use tracing::{error, info, warn};
 
 use crate::backend::EmailBackend;
 use crate::sync::db::{QueuedActionRecord, SyncDatabase};
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 
 /// Types of actions that can be queued
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,9 +216,9 @@ impl ActionQueue {
     }
 
     /// Queue a new action
-    pub fn queue(&self, account_id: &str, action: ActionType) -> Result<i64, HimalayaError> {
+    pub fn queue(&self, account_id: &str, action: ActionType) -> Result<i64, EddieError> {
         let payload = serde_json::to_string(&action)
-            .map_err(|e| HimalayaError::Backend(format!("Failed to serialize action: {}", e)))?;
+            .map_err(|e| EddieError::Backend(format!("Failed to serialize action: {}", e)))?;
 
         let record = QueuedActionRecord {
             id: 0,
@@ -242,7 +242,7 @@ impl ActionQueue {
         account_id: &str,
         folder: &str,
         uids: Vec<u32>,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         self.queue(
             account_id,
             ActionType::AddFlags {
@@ -259,7 +259,7 @@ impl ActionQueue {
         account_id: &str,
         folder: &str,
         uids: Vec<u32>,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         self.queue(
             account_id,
             ActionType::RemoveFlags {
@@ -276,7 +276,7 @@ impl ActionQueue {
         account_id: &str,
         folder: &str,
         uids: Vec<u32>,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         self.queue(
             account_id,
             ActionType::Delete {
@@ -293,7 +293,7 @@ impl ActionQueue {
         source: &str,
         target: &str,
         uids: Vec<u32>,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         self.queue(
             account_id,
             ActionType::Move {
@@ -310,7 +310,7 @@ impl ActionQueue {
         account_id: &str,
         raw_message: Vec<u8>,
         save_to_sent: bool,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         self.queue(
             account_id,
             ActionType::Send {
@@ -321,13 +321,13 @@ impl ActionQueue {
     }
 
     /// Get all pending actions for an account
-    pub fn get_pending(&self, account_id: &str) -> Result<Vec<QueuedAction>, HimalayaError> {
+    pub fn get_pending(&self, account_id: &str) -> Result<Vec<QueuedAction>, EddieError> {
         let records = self.db.get_pending_actions(account_id)?;
 
         let mut actions = Vec::new();
         for record in records {
             let action: ActionType = serde_json::from_str(&record.payload).map_err(|e| {
-                HimalayaError::Backend(format!("Failed to deserialize action: {}", e))
+                EddieError::Backend(format!("Failed to deserialize action: {}", e))
             })?;
 
             actions.push(QueuedAction {
@@ -345,25 +345,25 @@ impl ActionQueue {
     }
 
     /// Check if there are pending actions
-    pub fn has_pending(&self, account_id: &str) -> Result<bool, HimalayaError> {
+    pub fn has_pending(&self, account_id: &str) -> Result<bool, EddieError> {
         let actions = self.db.get_pending_actions(account_id)?;
         Ok(!actions.is_empty())
     }
 
     /// Mark an action as processing (does not increment retry_count)
-    pub fn mark_processing(&self, id: i64) -> Result<(), HimalayaError> {
+    pub fn mark_processing(&self, id: i64) -> Result<(), EddieError> {
         self.db
             .update_action_status_no_retry_increment(id, "processing")
     }
 
     /// Mark an action as completed (does not increment retry_count)
-    pub fn mark_completed(&self, id: i64) -> Result<(), HimalayaError> {
+    pub fn mark_completed(&self, id: i64) -> Result<(), EddieError> {
         self.db
             .update_action_status_no_retry_increment(id, "completed")
     }
 
     /// Mark an action as failed
-    pub fn mark_failed(&self, id: i64, error: &str) -> Result<(), HimalayaError> {
+    pub fn mark_failed(&self, id: i64, error: &str) -> Result<(), EddieError> {
         self.db.update_action_status(id, "failed", Some(error))
     }
 
@@ -373,17 +373,17 @@ impl ActionQueue {
     }
 
     /// Retry a failed action (reset to pending)
-    pub fn retry(&self, id: i64) -> Result<(), HimalayaError> {
+    pub fn retry(&self, id: i64) -> Result<(), EddieError> {
         self.db.update_action_status(id, "pending", None)
     }
 
     /// Clean up completed actions
-    pub fn cleanup_completed(&self, account_id: &str) -> Result<u64, HimalayaError> {
+    pub fn cleanup_completed(&self, account_id: &str) -> Result<u64, EddieError> {
         self.db.delete_completed_actions(account_id)
     }
 
     /// Optimize queue by merging similar actions
-    pub fn optimize(&self, account_id: &str) -> Result<(), HimalayaError> {
+    pub fn optimize(&self, account_id: &str) -> Result<(), EddieError> {
         let pending = self.get_pending(account_id)?;
 
         // Group actions by type and folder
@@ -422,7 +422,7 @@ impl ActionQueue {
         &self,
         account_id: &str,
         backend: &EmailBackend,
-    ) -> Result<Vec<ReplayResult>, HimalayaError> {
+    ) -> Result<Vec<ReplayResult>, EddieError> {
         let pending = self.get_pending(account_id)?;
 
         if pending.is_empty() {
@@ -509,7 +509,7 @@ impl ActionQueue {
         &self,
         backend: &EmailBackend,
         action: &ActionType,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         match action {
             ActionType::AddFlags { folder, uids, flags } => {
                 info!(

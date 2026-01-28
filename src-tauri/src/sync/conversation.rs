@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::sync::db::{CachedConversation, CachedMessage, SyncDatabase};
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 
 /// Participant information
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -198,7 +198,7 @@ impl ConversationGrouper {
         account_id: &str,
         user_email: &str,
         message: &CachedMessage,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         // Parse addresses
         let to_addresses: Vec<String> =
             serde_json::from_str(&message.to_addresses).unwrap_or_default();
@@ -217,7 +217,7 @@ impl ConversationGrouper {
 
         // Skip messages with no other participants (self-sent only)
         if participant_key.is_empty() {
-            return Err(HimalayaError::Backend(
+            return Err(EddieError::Backend(
                 "Message has no participants other than user".to_string(),
             ));
         }
@@ -231,7 +231,7 @@ impl ConversationGrouper {
         );
 
         let participants_json = serde_json::to_string(&participants)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Check if message is from user (outgoing)
         let user_normalized = Participant::normalize_email(user_email);
@@ -311,21 +311,21 @@ impl ConversationGrouper {
         &self,
         account_id: &str,
         user_email: &str,
-    ) -> Result<u32, HimalayaError> {
+    ) -> Result<u32, EddieError> {
         // Get all messages for the account across all folders
         let mut conn = self.db.connection()?;
 
         // Start a transaction to ensure atomicity
         let tx = conn
             .transaction()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // First, clear existing conversations
         tx.execute(
             "DELETE FROM conversations WHERE account_id = ?1",
             rusqlite::params![account_id],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Get messages grouped by participant key
         let mut stmt = tx.prepare(
@@ -334,7 +334,7 @@ impl ConversationGrouper {
                     has_attachment, body_cached, text_body, html_body, raw_size, created_at, updated_at
              FROM messages WHERE account_id = ?1
              ORDER BY date ASC"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let messages: Vec<CachedMessage> = stmt
             .query_map(rusqlite::params![account_id], |row| {
@@ -375,7 +375,7 @@ impl ConversationGrouper {
                         .unwrap_or_else(Utc::now),
                 })
             })
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -399,11 +399,11 @@ impl ConversationGrouper {
             )",
             rusqlite::params![account_id],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Commit the transaction
         tx.commit()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(count)
     }
@@ -415,7 +415,7 @@ impl ConversationGrouper {
         account_id: &str,
         user_email: &str,
         message: &CachedMessage,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         // Parse addresses
         let to_addresses: Vec<String> =
             serde_json::from_str(&message.to_addresses).unwrap_or_default();
@@ -434,7 +434,7 @@ impl ConversationGrouper {
 
         // Skip messages with no other participants (self-sent only)
         if participant_key.is_empty() {
-            return Err(HimalayaError::Backend(
+            return Err(EddieError::Backend(
                 "Message has no participants other than user".to_string(),
             ));
         }
@@ -448,7 +448,7 @@ impl ConversationGrouper {
         );
 
         let participants_json = serde_json::to_string(&participants)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Check if message is from user (outgoing)
         let user_normalized = Participant::normalize_email(user_email);
@@ -467,7 +467,7 @@ impl ConversationGrouper {
                 "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
                         last_message_from, message_count, unread_count, is_outgoing, created_at, updated_at
                  FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
-            ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
             stmt.query_row(rusqlite::params![account_id, participant_key], |row| {
                 Ok(CachedConversation {
@@ -499,7 +499,7 @@ impl ConversationGrouper {
                 })
             })
             .optional()
-            .map_err(|e: rusqlite::Error| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e: rusqlite::Error| EddieError::Backend(e.to_string()))?
         };
 
         let conversation = if let Some(mut conv) = existing {
@@ -592,7 +592,7 @@ impl ConversationGrouper {
                 conversation.unread_count,
                 conversation.is_outgoing as i32,
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let conv_id: i64 = tx
             .query_row(
@@ -600,13 +600,13 @@ impl ConversationGrouper {
                 rusqlite::params![account_id, participant_key],
                 |row| row.get(0),
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Link message to conversation using the transaction
         tx.execute(
             "INSERT OR IGNORE INTO conversation_messages (conversation_id, message_id) VALUES (?1, ?2)",
             rusqlite::params![conv_id, message.id],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(conv_id)
     }
@@ -616,7 +616,7 @@ impl ConversationGrouper {
         &self,
         account_id: &str,
         _message_id: i64,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         // The conversation_messages table has ON DELETE CASCADE,
         // so the link is automatically removed.
         // We just need to clean up empty conversations.
@@ -632,7 +632,7 @@ impl ConversationGrouper {
         message: &CachedMessage,
         old_flags: &[String],
         new_flags: &[String],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let was_seen = old_flags.iter().any(|f| f.to_lowercase() == "\\seen");
         let is_seen = new_flags.iter().any(|f| f.to_lowercase() == "\\seen");
 
