@@ -164,10 +164,10 @@ pub struct ConfigDatabase {
 
 impl ConfigDatabase {
     /// Create a new config database at the given path
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, HimalayaError> {
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, EddieError> {
         let manager = SqliteConnectionManager::file(path);
         let pool = Pool::builder().max_size(5).build(manager).map_err(|e| {
-            HimalayaError::Backend(format!("Failed to create config database pool: {}", e))
+            EddieError::Backend(format!("Failed to create config database pool: {}", e))
         })?;
 
         let db = Self { pool };
@@ -176,10 +176,10 @@ impl ConfigDatabase {
     }
 
     /// Create an in-memory database (for testing)
-    pub fn in_memory() -> Result<Self, HimalayaError> {
+    pub fn in_memory() -> Result<Self, EddieError> {
         let manager = SqliteConnectionManager::memory();
         let pool = Pool::builder().max_size(1).build(manager).map_err(|e| {
-            HimalayaError::Backend(format!("Failed to create config database pool: {}", e))
+            EddieError::Backend(format!("Failed to create config database pool: {}", e))
         })?;
 
         let db = Self { pool };
@@ -188,14 +188,14 @@ impl ConfigDatabase {
     }
 
     /// Get a connection from the pool
-    fn connection(&self) -> Result<DbConnection, HimalayaError> {
+    fn connection(&self) -> Result<DbConnection, EddieError> {
         self.pool.get().map_err(|e| {
-            HimalayaError::Backend(format!("Failed to get config database connection: {}", e))
+            EddieError::Backend(format!("Failed to get config database connection: {}", e))
         })
     }
 
     /// Initialize the config database schema
-    fn initialize_schema(&self) -> Result<(), HimalayaError> {
+    fn initialize_schema(&self) -> Result<(), EddieError> {
         let conn = self.connection()?;
 
         conn.execute_batch(
@@ -223,14 +223,14 @@ impl ConfigDatabase {
         "#,
         )
         .map_err(|e| {
-            HimalayaError::Backend(format!("Failed to initialize config schema: {}", e))
+            EddieError::Backend(format!("Failed to initialize config schema: {}", e))
         })?;
 
         Ok(())
     }
 
     /// Save or update a connection configuration
-    pub fn upsert_connection_config(&self, config: &ConnectionConfig) -> Result<(), HimalayaError> {
+    pub fn upsert_connection_config(&self, config: &ConnectionConfig) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO connection_configs (account_id, active, name, email, display_name, imap_config, smtp_config, updated_at)
@@ -253,7 +253,7 @@ impl ConfigDatabase {
                 config.smtp_config,
             ],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -262,36 +262,36 @@ impl ConfigDatabase {
     pub fn get_connection_config(
         &self,
         account_id: &str,
-    ) -> Result<Option<ConnectionConfig>, HimalayaError> {
+    ) -> Result<Option<ConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
                 "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs WHERE account_id = ?1",
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(params![account_id], Self::row_to_connection_config)
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
 
     /// Get all connection configurations
-    pub fn get_all_connection_configs(&self) -> Result<Vec<ConnectionConfig>, HimalayaError> {
+    pub fn get_all_connection_configs(&self) -> Result<Vec<ConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
                 "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs ORDER BY name ASC",
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let configs = stmt
             .query_map([], Self::row_to_connection_config)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -299,55 +299,55 @@ impl ConfigDatabase {
     }
 
     /// Get the currently active connection configuration
-    pub fn get_active_connection_config(&self) -> Result<Option<ConnectionConfig>, HimalayaError> {
+    pub fn get_active_connection_config(&self) -> Result<Option<ConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
                 "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs WHERE active = 1 LIMIT 1",
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row([], Self::row_to_connection_config)
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
 
     /// Set an account as active (deactivates all others)
-    pub fn set_active_account(&self, account_id: &str) -> Result<(), HimalayaError> {
+    pub fn set_active_account(&self, account_id: &str) -> Result<(), EddieError> {
         let mut conn = self.connection()?;
         let tx = conn
             .transaction()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Deactivate all accounts
         tx.execute("UPDATE connection_configs SET active = 0", [])
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Activate the specified account
         tx.execute(
             "UPDATE connection_configs SET active = 1, updated_at = datetime('now') WHERE account_id = ?1",
             params![account_id],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         tx.commit()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
 
     /// Delete a connection configuration
-    pub fn delete_connection_config(&self, account_id: &str) -> Result<(), HimalayaError> {
+    pub fn delete_connection_config(&self, account_id: &str) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "DELETE FROM connection_configs WHERE account_id = ?1",
             params![account_id],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -380,10 +380,10 @@ impl ConfigDatabase {
 // ========== Global Config Database Functions ==========
 
 /// Initialize the global config database
-pub fn init_config_db() -> Result<(), HimalayaError> {
+pub fn init_config_db() -> Result<(), EddieError> {
     let db_dir = get_config_db_dir();
     std::fs::create_dir_all(&db_dir).map_err(|e| {
-        HimalayaError::Backend(format!("Failed to create config database directory: {}", e))
+        EddieError::Backend(format!("Failed to create config database directory: {}", e))
     })?;
 
     let db_path = get_config_db_path();
@@ -395,7 +395,7 @@ pub fn init_config_db() -> Result<(), HimalayaError> {
         Some(lock) => {
             let mut guard = lock
                 .write()
-                .map_err(|e| HimalayaError::Backend(format!("Failed to lock config db: {}", e)))?;
+                .map_err(|e| EddieError::Backend(format!("Failed to lock config db: {}", e)))?;
             *guard = db;
         }
         None => {
@@ -412,7 +412,7 @@ pub fn is_config_db_initialized() -> bool {
 }
 
 /// Get the global config database (initializes if needed)
-pub fn get_config_db() -> Result<std::sync::RwLockReadGuard<'static, ConfigDatabase>, HimalayaError>
+pub fn get_config_db() -> Result<std::sync::RwLockReadGuard<'static, ConfigDatabase>, EddieError>
 {
     if !is_config_db_initialized() {
         init_config_db()?;
@@ -420,43 +420,43 @@ pub fn get_config_db() -> Result<std::sync::RwLockReadGuard<'static, ConfigDatab
 
     CONFIG_DB
         .get()
-        .ok_or_else(|| HimalayaError::Backend("Config database not initialized".to_string()))?
+        .ok_or_else(|| EddieError::Backend("Config database not initialized".to_string()))?
         .read()
-        .map_err(|e| HimalayaError::Backend(format!("Failed to lock config db for read: {}", e)))
+        .map_err(|e| EddieError::Backend(format!("Failed to lock config db for read: {}", e)))
 }
 
 /// Save a connection config to the global database
-pub fn save_connection_config(config: &ConnectionConfig) -> Result<(), HimalayaError> {
+pub fn save_connection_config(config: &ConnectionConfig) -> Result<(), EddieError> {
     let db = get_config_db()?;
     db.upsert_connection_config(config)
 }
 
 /// Get a connection config from the global database
-pub fn get_connection_config(account_id: &str) -> Result<Option<ConnectionConfig>, HimalayaError> {
+pub fn get_connection_config(account_id: &str) -> Result<Option<ConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_connection_config(account_id)
 }
 
 /// Get all connection configs from the global database
-pub fn get_all_connection_configs() -> Result<Vec<ConnectionConfig>, HimalayaError> {
+pub fn get_all_connection_configs() -> Result<Vec<ConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_all_connection_configs()
 }
 
 /// Get the active connection config from the global database
-pub fn get_active_connection_config() -> Result<Option<ConnectionConfig>, HimalayaError> {
+pub fn get_active_connection_config() -> Result<Option<ConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_active_connection_config()
 }
 
 /// Set an account as active in the global database
-pub fn set_active_account(account_id: &str) -> Result<(), HimalayaError> {
+pub fn set_active_account(account_id: &str) -> Result<(), EddieError> {
     let db = get_config_db()?;
     db.set_active_account(account_id)
 }
 
 /// Delete a connection config from the global database
-pub fn delete_connection_config(account_id: &str) -> Result<(), HimalayaError> {
+pub fn delete_connection_config(account_id: &str) -> Result<(), EddieError> {
     let db = get_config_db()?;
     db.delete_connection_config(account_id)
 }
@@ -637,22 +637,6 @@ impl SyncDatabase {
                 supports_idle INTEGER DEFAULT 0,
                 detected_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
-
-            -- Connection configuration (for account switching)
-            CREATE TABLE IF NOT EXISTS connection_configs (
-                account_id TEXT PRIMARY KEY,
-                active INTEGER DEFAULT 0,
-                name TEXT,
-                email TEXT NOT NULL,
-                display_name TEXT,
-                imap_config TEXT,  -- JSON serialized ImapConfig
-                smtp_config TEXT,  -- JSON serialized SmtpConfig
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-
-            -- Index for quickly finding the active account
-            CREATE INDEX IF NOT EXISTS idx_connection_configs_active ON connection_configs(active);
         "#).map_err(|e| EddieError::Backend(format!("Failed to initialize schema: {}", e)))?;
 
         Ok(())
@@ -1775,155 +1759,6 @@ impl SyncDatabase {
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
-    }
-
-    // ========== Connection Config Operations ==========
-
-    /// Save or update a connection configuration
-    pub fn upsert_connection_config(&self, config: &ConnectionConfig) -> Result<(), HimalayaError> {
-        let conn = self.connection()?;
-        conn.execute(
-            "INSERT INTO connection_configs (account_id, active, name, email, display_name, imap_config, smtp_config, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
-             ON CONFLICT(account_id) DO UPDATE SET
-                active = excluded.active,
-                name = excluded.name,
-                email = excluded.email,
-                display_name = excluded.display_name,
-                imap_config = excluded.imap_config,
-                smtp_config = excluded.smtp_config,
-                updated_at = datetime('now')",
-            params![
-                config.account_id,
-                config.active as i32,
-                config.name,
-                config.email,
-                config.display_name,
-                config.imap_config,
-                config.smtp_config,
-            ],
-        )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        Ok(())
-    }
-
-    /// Get a connection configuration by account_id
-    pub fn get_connection_config(
-        &self,
-        account_id: &str,
-    ) -> Result<Option<ConnectionConfig>, HimalayaError> {
-        let conn = self.connection()?;
-        let mut stmt = conn
-            .prepare(
-                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
-                 FROM connection_configs WHERE account_id = ?1",
-            )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        let result = stmt
-            .query_row(params![account_id], Self::row_to_connection_config)
-            .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        Ok(result)
-    }
-
-    /// Get all connection configurations
-    pub fn get_all_connection_configs(&self) -> Result<Vec<ConnectionConfig>, HimalayaError> {
-        let conn = self.connection()?;
-        let mut stmt = conn
-            .prepare(
-                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
-                 FROM connection_configs ORDER BY name ASC",
-            )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        let configs = stmt
-            .query_map([], Self::row_to_connection_config)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        Ok(configs)
-    }
-
-    /// Get the currently active connection configuration
-    pub fn get_active_connection_config(&self) -> Result<Option<ConnectionConfig>, HimalayaError> {
-        let conn = self.connection()?;
-        let mut stmt = conn
-            .prepare(
-                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
-                 FROM connection_configs WHERE active = 1 LIMIT 1",
-            )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        let result = stmt
-            .query_row([], Self::row_to_connection_config)
-            .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        Ok(result)
-    }
-
-    /// Set an account as active (deactivates all others)
-    pub fn set_active_account(&self, account_id: &str) -> Result<(), HimalayaError> {
-        let mut conn = self.connection()?;
-        let tx = conn
-            .transaction()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        // Deactivate all accounts
-        tx.execute("UPDATE connection_configs SET active = 0", [])
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        // Activate the specified account
-        tx.execute(
-            "UPDATE connection_configs SET active = 1, updated_at = datetime('now') WHERE account_id = ?1",
-            params![account_id],
-        )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        tx.commit()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        Ok(())
-    }
-
-    /// Delete a connection configuration
-    pub fn delete_connection_config(&self, account_id: &str) -> Result<(), HimalayaError> {
-        let conn = self.connection()?;
-        conn.execute(
-            "DELETE FROM connection_configs WHERE account_id = ?1",
-            params![account_id],
-        )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
-
-        Ok(())
-    }
-
-    fn row_to_connection_config(row: &Row) -> Result<ConnectionConfig, rusqlite::Error> {
-        Ok(ConnectionConfig {
-            account_id: row.get(0)?,
-            active: row.get::<_, i32>(1)? != 0,
-            name: row.get(2)?,
-            email: row.get(3)?,
-            display_name: row.get(4)?,
-            imap_config: row.get(5)?,
-            smtp_config: row.get(6)?,
-            created_at: row
-                .get::<_, String>(7)
-                .ok()
-                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(Utc::now),
-            updated_at: row
-                .get::<_, String>(8)
-                .ok()
-                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(Utc::now),
-        })
     }
 }
 
