@@ -14,6 +14,12 @@ use tracing_subscriber::EnvFilter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize rustls crypto provider before any TLS operations
+    // This is required for rustls 0.23+ which doesn't auto-select a provider
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Initialize tracing for logging
     // In debug builds, default to debug level for our crate
     // Can be overridden with RUST_LOG environment variable

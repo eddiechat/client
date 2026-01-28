@@ -60,6 +60,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 
 # TLS support for probing
 tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
 
 # Tauri plugins for OAuth
 tauri-plugin-deep-link = "2"
