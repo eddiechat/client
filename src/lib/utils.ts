@@ -132,3 +132,22 @@ export function parseEmailContent(emailBody: string | undefined | null): string 
 
   return visibleText.trim();
 }
+
+// Check if a message has content that differs from the rendered (parsed) content
+// This indicates the message can be expanded to show the full original
+export function hasExpandableContent(textBody: string | undefined | null, htmlBody: string | undefined | null): boolean {
+  if (!textBody && !htmlBody) return false;
+
+  // If there's HTML content, it's expandable
+  if (htmlBody && htmlBody.trim().length > 0) return true;
+
+  // Compare parsed content with original
+  if (textBody) {
+    const parsed = parseEmailContent(textBody);
+    const original = textBody.trim();
+    // Check if content differs (accounting for whitespace normalization)
+    return parsed !== original && original.length > parsed.length;
+  }
+
+  return false;
+}
