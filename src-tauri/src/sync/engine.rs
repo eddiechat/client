@@ -26,7 +26,7 @@ use crate::sync::classifier::MessageClassifier;
 use crate::sync::conversation::ConversationGrouper;
 use crate::sync::db::{CachedConversation, CachedMessage, SyncDatabase};
 use crate::sync::idle::{ChangeNotification, MailboxMonitor, MonitorConfig, MonitorMode};
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 use crate::types::Envelope;
 
 /// Sync engine configuration
@@ -154,7 +154,7 @@ impl SyncEngine {
         account_config: AccountConfig,
         config: SyncConfig,
         app_handle: Option<tauri::AppHandle>,
-    ) -> Result<Self, HimalayaError> {
+    ) -> Result<Self, EddieError> {
         // Ensure parent directory exists
         if let Some(parent) = config.db_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -248,12 +248,12 @@ impl SyncEngine {
     }
 
     /// Create an EmailBackend for this account
-    async fn create_backend(&self) -> Result<EmailBackend, HimalayaError> {
+    async fn create_backend(&self) -> Result<EmailBackend, EddieError> {
         EmailBackend::new(&self.account_id).await
     }
 
     /// Perform a full sync - fetches all messages and rebuilds cache
-    pub async fn full_sync(&self) -> Result<SyncResult, HimalayaError> {
+    pub async fn full_sync(&self) -> Result<SyncResult, EddieError> {
         info!("Starting full sync for account: {}", self.account_id);
 
         self.update_status(|s| {
@@ -299,7 +299,7 @@ impl SyncEngine {
     }
 
     /// Internal full sync implementation
-    async fn do_full_sync(&self) -> Result<SyncResult, HimalayaError> {
+    async fn do_full_sync(&self) -> Result<SyncResult, EddieError> {
         let backend = self.create_backend().await?;
 
         // Replay any pending offline actions first
@@ -397,7 +397,7 @@ impl SyncEngine {
     async fn get_folders_to_sync(
         &self,
         backend: &EmailBackend,
-    ) -> Result<Vec<String>, HimalayaError> {
+    ) -> Result<Vec<String>, EddieError> {
         if !self.config.sync_folders.is_empty() {
             return Ok(self.config.sync_folders.clone());
         }
@@ -428,7 +428,7 @@ impl SyncEngine {
         &self,
         backend: &EmailBackend,
         folder: &str,
-    ) -> Result<Vec<i64>, HimalayaError> {
+    ) -> Result<Vec<i64>, EddieError> {
         info!("Syncing folder: {}", folder);
 
         // Check UIDVALIDITY before processing envelopes
@@ -496,7 +496,7 @@ impl SyncEngine {
     /// be discarded.
     ///
     /// Returns Ok(true) if the cache was invalidated, Ok(false) if UIDVALIDITY matches.
-    fn check_uidvalidity(&self, folder: &str, server_uidvalidity: u32) -> Result<bool, HimalayaError> {
+    fn check_uidvalidity(&self, folder: &str, server_uidvalidity: u32) -> Result<bool, EddieError> {
         let stored_uidvalidity = self.db.get_folder_uidvalidity(&self.account_id, folder)?;
 
         match stored_uidvalidity {
@@ -532,7 +532,7 @@ impl SyncEngine {
         &self,
         folder: &str,
         envelope: &Envelope,
-    ) -> Result<CachedMessage, HimalayaError> {
+    ) -> Result<CachedMessage, EddieError> {
         // Parse the UID from the envelope ID (assuming it's a string representation)
         let uid: u32 = envelope.id.parse().unwrap_or(0);
 
@@ -575,7 +575,7 @@ impl SyncEngine {
     }
 
     /// Sync a specific folder
-    pub async fn sync_folder(&self, folder: &str) -> Result<SyncResult, HimalayaError> {
+    pub async fn sync_folder(&self, folder: &str) -> Result<SyncResult, EddieError> {
         info!("Syncing folder: {}", folder);
 
         self.update_status(|s| {
@@ -630,7 +630,7 @@ impl SyncEngine {
     pub fn get_conversations(
         &self,
         include_hidden: bool,
-    ) -> Result<Vec<CachedConversation>, HimalayaError> {
+    ) -> Result<Vec<CachedConversation>, EddieError> {
         self.db.get_conversations(&self.account_id, include_hidden)
     }
 
@@ -638,12 +638,12 @@ impl SyncEngine {
     pub fn get_conversation_messages(
         &self,
         conversation_id: i64,
-    ) -> Result<Vec<CachedMessage>, HimalayaError> {
+    ) -> Result<Vec<CachedMessage>, EddieError> {
         self.db.get_conversation_messages(conversation_id)
     }
 
     /// Queue a user action
-    pub fn queue_action(&self, action: ActionType) -> Result<i64, HimalayaError> {
+    pub fn queue_action(&self, action: ActionType) -> Result<i64, EddieError> {
         self.action_queue.queue(&self.account_id, action)
     }
 
@@ -651,7 +651,7 @@ impl SyncEngine {
     ///
     /// Executes all pending actions on the IMAP server. This is typically called
     /// at the start of a sync to flush any offline actions before syncing.
-    pub async fn replay_actions(&self) -> Result<Vec<ReplayResult>, HimalayaError> {
+    pub async fn replay_actions(&self) -> Result<Vec<ReplayResult>, EddieError> {
         info!("Replaying pending actions for account: {}", self.account_id);
 
         let backend = self.create_backend().await?;
@@ -670,11 +670,11 @@ impl SyncEngine {
     pub async fn fetch_message_body(
         &self,
         message_id: i64,
-    ) -> Result<CachedMessage, HimalayaError> {
+    ) -> Result<CachedMessage, EddieError> {
         let message = self
             .db
             .get_message_by_id(message_id)?
-            .ok_or_else(|| HimalayaError::MessageNotFound(message_id.to_string()))?;
+            .ok_or_else(|| EddieError::MessageNotFound(message_id.to_string()))?;
 
         // If already cached, return it
         if message.body_cached {
@@ -704,7 +704,7 @@ impl SyncEngine {
     ///
     /// This creates a monitor that polls for changes and triggers syncs when needed.
     /// The monitor runs in a background task and sends notifications via the channel.
-    pub async fn start_monitoring(&mut self) -> Result<(), HimalayaError> {
+    pub async fn start_monitoring(&mut self) -> Result<(), EddieError> {
         if !self.config.enable_monitoring {
             info!("Monitoring disabled in config, skipping");
             return Ok(());

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 use tracing::info;
 
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 
 /// Global configuration instance
 static CONFIG: OnceCell<RwLock<AppConfig>> = OnceCell::new();
@@ -190,7 +190,7 @@ pub fn default_config_paths() -> Vec<PathBuf> {
 }
 
 /// Initialize configuration from default paths
-pub fn init_config() -> Result<(), HimalayaError> {
+pub fn init_config() -> Result<(), EddieError> {
     info!("Initializing configuration from default paths");
 
     for path in default_config_paths() {
@@ -206,25 +206,25 @@ pub fn init_config() -> Result<(), HimalayaError> {
 }
 
 /// Initialize configuration from a specific path
-pub fn init_config_from_path(path: &PathBuf) -> Result<(), HimalayaError> {
+pub fn init_config_from_path(path: &PathBuf) -> Result<(), EddieError> {
     info!("Loading configuration from: {:?}", path);
 
     let content = fs::read_to_string(path)
-        .map_err(|e| HimalayaError::Config(format!("Failed to read config: {}", e)))?;
+        .map_err(|e| EddieError::Config(format!("Failed to read config: {}", e)))?;
 
     let config: AppConfig = toml::from_str(&content)
-        .map_err(|e| HimalayaError::Config(format!("Failed to parse config: {}", e)))?;
+        .map_err(|e| EddieError::Config(format!("Failed to parse config: {}", e)))?;
 
     set_config(config)
 }
 
 /// Set the global configuration
-fn set_config(config: AppConfig) -> Result<(), HimalayaError> {
+fn set_config(config: AppConfig) -> Result<(), EddieError> {
     match CONFIG.get() {
         Some(lock) => {
             let mut guard = lock
                 .write()
-                .map_err(|e| HimalayaError::Config(format!("Failed to lock config: {}", e)))?;
+                .map_err(|e| EddieError::Config(format!("Failed to lock config: {}", e)))?;
             *guard = config;
         }
         None => {
@@ -235,13 +235,13 @@ fn set_config(config: AppConfig) -> Result<(), HimalayaError> {
 }
 
 /// Get a clone of the current configuration
-pub fn get_config() -> Result<AppConfig, HimalayaError> {
+pub fn get_config() -> Result<AppConfig, EddieError> {
     CONFIG
         .get()
-        .ok_or_else(|| HimalayaError::Config("Configuration not initialized".to_string()))?
+        .ok_or_else(|| EddieError::Config("Configuration not initialized".to_string()))?
         .read()
         .map(|guard| guard.clone())
-        .map_err(|e| HimalayaError::Config(format!("Failed to lock config: {}", e)))
+        .map_err(|e| EddieError::Config(format!("Failed to lock config: {}", e)))
 }
 
 /// Check if configuration is initialized
@@ -250,35 +250,35 @@ pub fn is_initialized() -> bool {
 }
 
 /// Get the primary config file path (where we write new config)
-pub fn get_primary_config_path() -> Result<PathBuf, HimalayaError> {
+pub fn get_primary_config_path() -> Result<PathBuf, EddieError> {
     dirs::config_dir()
         .map(|p| p.join("eddie.chat").join("config.toml"))
-        .ok_or_else(|| HimalayaError::Config("Cannot determine config directory".to_string()))
+        .ok_or_else(|| EddieError::Config("Cannot determine config directory".to_string()))
 }
 
 /// Save the current configuration to file
-pub fn save_config_to_file(config: &AppConfig) -> Result<(), HimalayaError> {
+pub fn save_config_to_file(config: &AppConfig) -> Result<(), EddieError> {
     let path = get_primary_config_path()?;
 
     // Ensure directory exists
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| {
-            HimalayaError::Config(format!("Failed to create config directory: {}", e))
+            EddieError::Config(format!("Failed to create config directory: {}", e))
         })?;
     }
 
     let content = toml::to_string_pretty(config)
-        .map_err(|e| HimalayaError::Config(format!("Failed to serialize config: {}", e)))?;
+        .map_err(|e| EddieError::Config(format!("Failed to serialize config: {}", e)))?;
 
     fs::write(&path, content)
-        .map_err(|e| HimalayaError::Config(format!("Failed to write config file: {}", e)))?;
+        .map_err(|e| EddieError::Config(format!("Failed to write config file: {}", e)))?;
 
     info!("Configuration saved to {:?}", path);
     Ok(())
 }
 
 /// Add or update an account in the configuration and save to file
-pub fn save_account(name: String, account: AccountConfig) -> Result<(), HimalayaError> {
+pub fn save_account(name: String, account: AccountConfig) -> Result<(), EddieError> {
     let mut config = get_config()?;
     config.accounts.insert(name, account);
 
@@ -292,11 +292,11 @@ pub fn save_account(name: String, account: AccountConfig) -> Result<(), Himalaya
 }
 
 /// Remove an account from the configuration and save to file
-pub fn remove_account(name: &str) -> Result<(), HimalayaError> {
+pub fn remove_account(name: &str) -> Result<(), EddieError> {
     let mut config = get_config()?;
 
     if !config.accounts.contains_key(name) {
-        return Err(HimalayaError::Config(format!(
+        return Err(EddieError::Config(format!(
             "Account '{}' not found",
             name
         )));

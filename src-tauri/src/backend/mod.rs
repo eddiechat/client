@@ -27,7 +27,7 @@ use tracing::info;
 
 use crate::config::{AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
 use crate::sync::db::{get_active_connection_config, get_connection_config, init_config_db};
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 use crate::types::{Attachment, Envelope, Folder, Message};
 
 /// Result of sending a message - contains the message ID and sent folder name
@@ -47,13 +47,13 @@ pub struct EmailBackend {
 
 impl EmailBackend {
     /// Create a new email backend for an account
-    pub async fn new(account_name: &str) -> Result<Self, HimalayaError> {
+    pub async fn new(account_name: &str) -> Result<Self, EddieError> {
         // Initialize database if needed
         init_config_db()?;
 
         // Load account from database
         let db_config = get_connection_config(account_name)?
-            .ok_or_else(|| HimalayaError::AccountNotFound(account_name.to_string()))?;
+            .ok_or_else(|| EddieError::AccountNotFound(account_name.to_string()))?;
 
         // Deserialize IMAP and SMTP configs from JSON
         let imap_config = db_config
@@ -93,19 +93,19 @@ impl EmailBackend {
     }
 
     /// Create backend for default account
-    pub async fn default() -> Result<Self, HimalayaError> {
+    pub async fn default() -> Result<Self, EddieError> {
         // Initialize database if needed
         init_config_db()?;
 
         // Load active account from database
         let db_config = get_active_connection_config()?
-            .ok_or_else(|| HimalayaError::Config("No active account configured".to_string()))?;
+            .ok_or_else(|| EddieError::Config("No active account configured".to_string()))?;
 
         Self::new(&db_config.account_id).await
     }
 
     /// Get or resolve password from PasswordSource
-    async fn resolve_password(source: &PasswordSource) -> Result<String, HimalayaError> {
+    async fn resolve_password(source: &PasswordSource) -> Result<String, EddieError> {
         match source {
             PasswordSource::Raw(password) => Ok(password.clone()),
             PasswordSource::Command { command } => {
@@ -115,11 +115,11 @@ impl EmailBackend {
                     .arg(command)
                     .output()
                     .map_err(|e| {
-                        HimalayaError::Config(format!("Failed to run password command: {}", e))
+                        EddieError::Config(format!("Failed to run password command: {}", e))
                     })?;
 
                 if !output.status.success() {
-                    return Err(HimalayaError::Config("Password command failed".to_string()));
+                    return Err(EddieError::Config("Password command failed".to_string()));
                 }
 
                 Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -128,12 +128,12 @@ impl EmailBackend {
     }
 
     /// Build IMAP configuration for email-lib
-    async fn build_imap_config(&self) -> Result<EmailImapConfig, HimalayaError> {
+    async fn build_imap_config(&self) -> Result<EmailImapConfig, EddieError> {
         let imap = self
             .account_config
             .imap
             .as_ref()
-            .ok_or_else(|| HimalayaError::Config("No IMAP configuration".to_string()))?;
+            .ok_or_else(|| EddieError::Config("No IMAP configuration".to_string()))?;
 
         let auth = match &imap.auth {
             AuthConfig::Password { user: _, password } => {
@@ -141,7 +141,7 @@ impl EmailBackend {
                 ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
             }
             AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config(
+                return Err(EddieError::Config(
                     "OAuth2 not yet supported".to_string(),
                 ));
             }
@@ -172,12 +172,12 @@ impl EmailBackend {
     }
 
     /// Build SMTP configuration for email-lib
-    async fn build_smtp_config(&self) -> Result<EmailSmtpConfig, HimalayaError> {
+    async fn build_smtp_config(&self) -> Result<EmailSmtpConfig, EddieError> {
         let smtp = self
             .account_config
             .smtp
             .as_ref()
-            .ok_or_else(|| HimalayaError::Config("No SMTP configuration".to_string()))?;
+            .ok_or_else(|| EddieError::Config("No SMTP configuration".to_string()))?;
 
         let auth = match &smtp.auth {
             AuthConfig::Password { user: _, password } => {
@@ -185,7 +185,7 @@ impl EmailBackend {
                 SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
             }
             AuthConfig::OAuth2 { .. } => {
-                return Err(HimalayaError::Config(
+                return Err(EddieError::Config(
                     "OAuth2 not yet supported".to_string(),
                 ));
             }
@@ -216,7 +216,7 @@ impl EmailBackend {
     }
 
     /// Find the Sent folder by checking common folder names
-    pub async fn find_sent_folder(&self) -> Result<Option<String>, HimalayaError> {
+    pub async fn find_sent_folder(&self) -> Result<Option<String>, EddieError> {
         let folders = self.list_folders().await?;
 
         for folder in &folders {
@@ -242,7 +242,7 @@ impl EmailBackend {
     }
 
     /// List all folders
-    pub async fn list_folders(&self) -> Result<Vec<Folder>, HimalayaError> {
+    pub async fn list_folders(&self) -> Result<Vec<Folder>, EddieError> {
         let imap_config = self.build_imap_config().await?;
 
         let ctx = email::imap::ImapContextBuilder::new(
@@ -253,12 +253,12 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let folders = backend
             .list_folders()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(folders
             .into_iter()
@@ -279,7 +279,7 @@ impl EmailBackend {
         folder: Option<&str>,
         page: usize,
         page_size: usize,
-    ) -> Result<Vec<Envelope>, HimalayaError> {
+    ) -> Result<Vec<Envelope>, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
 
@@ -291,7 +291,7 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let opts = ListEnvelopesOptions {
             page,
@@ -302,7 +302,7 @@ impl EmailBackend {
         let envelopes = backend
             .list_envelopes(folder, opts)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result: Vec<Envelope> = envelopes
             .into_iter()
@@ -341,7 +341,7 @@ impl EmailBackend {
         folder: Option<&str>,
         id: &str,
         peek: bool,
-    ) -> Result<Message, HimalayaError> {
+    ) -> Result<Message, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_id = Id::single(id);
@@ -354,28 +354,28 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let messages = if peek {
             backend
                 .peek_messages(folder, &msg_id)
                 .await
-                .map_err(|e| HimalayaError::Backend(e.to_string()))?
+                .map_err(|e| EddieError::Backend(e.to_string()))?
         } else {
             backend
                 .get_messages(folder, &msg_id)
                 .await
-                .map_err(|e| HimalayaError::Backend(e.to_string()))?
+                .map_err(|e| EddieError::Backend(e.to_string()))?
         };
 
         let msg = messages
             .first()
-            .ok_or_else(|| HimalayaError::MessageNotFound(id.to_string()))?;
+            .ok_or_else(|| EddieError::MessageNotFound(id.to_string()))?;
 
         // Parse the message to extract content
         let parsed = msg
             .parsed()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Extract text and html bodies from parsed message
         let text_body = parsed.body_text(0).map(|s| s.to_string());
@@ -384,7 +384,7 @@ impl EmailBackend {
         // Extract attachments info
         let attachments: Vec<Attachment> = msg
             .attachments()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .into_iter()
             .map(|a| Attachment {
                 filename: a.filename,
@@ -465,7 +465,7 @@ impl EmailBackend {
         &self,
         folder: Option<&str>,
         id: &str,
-    ) -> Result<Vec<Attachment>, HimalayaError> {
+    ) -> Result<Vec<Attachment>, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_id = Id::single(id);
@@ -478,20 +478,20 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let messages = backend
             .peek_messages(folder, &msg_id)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let msg = messages
             .first()
-            .ok_or_else(|| HimalayaError::MessageNotFound(id.to_string()))?;
+            .ok_or_else(|| EddieError::MessageNotFound(id.to_string()))?;
 
         let attachments: Vec<Attachment> = msg
             .attachments()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .into_iter()
             .map(|a| Attachment {
                 filename: a.filename,
@@ -510,7 +510,7 @@ impl EmailBackend {
         id: &str,
         attachment_index: usize,
         download_dir: &std::path::Path,
-    ) -> Result<PathBuf, HimalayaError> {
+    ) -> Result<PathBuf, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_id = Id::single(id);
@@ -523,26 +523,26 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let messages = backend
             .peek_messages(folder, &msg_id)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let msg = messages
             .first()
-            .ok_or_else(|| HimalayaError::MessageNotFound(id.to_string()))?;
+            .ok_or_else(|| EddieError::MessageNotFound(id.to_string()))?;
 
         let attachments: Vec<_> = msg
             .attachments()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .into_iter()
             .collect();
 
         let attachment = attachments
             .get(attachment_index)
-            .ok_or_else(|| HimalayaError::Backend(format!("Attachment index {} not found", attachment_index)))?;
+            .ok_or_else(|| EddieError::Backend(format!("Attachment index {} not found", attachment_index)))?;
 
         let filename = attachment
             .filename
@@ -559,7 +559,7 @@ impl EmailBackend {
 
         // Write the attachment content to disk
         std::fs::write(&file_path, &attachment.body)
-            .map_err(|e| HimalayaError::Backend(format!("Failed to write attachment: {}", e)))?;
+            .map_err(|e| EddieError::Backend(format!("Failed to write attachment: {}", e)))?;
 
         info!("Downloaded attachment: {}", file_path.display());
         Ok(file_path)
@@ -571,7 +571,7 @@ impl EmailBackend {
         folder: Option<&str>,
         id: &str,
         download_dir: &std::path::Path,
-    ) -> Result<Vec<PathBuf>, HimalayaError> {
+    ) -> Result<Vec<PathBuf>, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_id = Id::single(id);
@@ -584,20 +584,20 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let messages = backend
             .peek_messages(folder, &msg_id)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let msg = messages
             .first()
-            .ok_or_else(|| HimalayaError::MessageNotFound(id.to_string()))?;
+            .ok_or_else(|| EddieError::MessageNotFound(id.to_string()))?;
 
         let attachments: Vec<_> = msg
             .attachments()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .into_iter()
             .collect();
 
@@ -619,7 +619,7 @@ impl EmailBackend {
 
             // Write the attachment content to disk
             std::fs::write(&file_path, &attachment.body)
-                .map_err(|e| HimalayaError::Backend(format!("Failed to write attachment: {}", e)))?;
+                .map_err(|e| EddieError::Backend(format!("Failed to write attachment: {}", e)))?;
 
             info!("Downloaded attachment: {}", file_path.display());
             saved_files.push(file_path);
@@ -634,7 +634,7 @@ impl EmailBackend {
         folder: Option<&str>,
         ids: &[&str],
         flags: &[&str],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_ids = Id::multiple(ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
@@ -647,14 +647,14 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let flags: Flags = flags.iter().map(|f| Flag::from(*f)).collect();
 
         backend
             .add_flags(folder, &msg_ids, &flags)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Remove flags from messages
@@ -663,7 +663,7 @@ impl EmailBackend {
         folder: Option<&str>,
         ids: &[&str],
         flags: &[&str],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_ids = Id::multiple(ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
@@ -676,14 +676,14 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let flags: Flags = flags.iter().map(|f| Flag::from(*f)).collect();
 
         backend
             .remove_flags(folder, &msg_ids, &flags)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Set flags on messages (replace)
@@ -692,7 +692,7 @@ impl EmailBackend {
         folder: Option<&str>,
         ids: &[&str],
         flags: &[&str],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_ids = Id::multiple(ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
@@ -705,14 +705,14 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let flags: Flags = flags.iter().map(|f| Flag::from(*f)).collect();
 
         backend
             .set_flags(folder, &msg_ids, &flags)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Delete messages
@@ -720,7 +720,7 @@ impl EmailBackend {
         &self,
         folder: Option<&str>,
         ids: &[&str],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_ids = Id::multiple(ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
@@ -733,12 +733,12 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         backend
             .delete_messages(folder, &msg_ids)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Copy messages to another folder
@@ -747,7 +747,7 @@ impl EmailBackend {
         source_folder: Option<&str>,
         target_folder: &str,
         ids: &[&str],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
         let source = source_folder.unwrap_or(INBOX);
         let msg_ids = Id::multiple(ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
@@ -760,12 +760,12 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         backend
             .copy_messages(source, target_folder, &msg_ids)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Move messages to another folder
@@ -774,7 +774,7 @@ impl EmailBackend {
         source_folder: Option<&str>,
         target_folder: &str,
         ids: &[&str],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
         let source = source_folder.unwrap_or(INBOX);
         let msg_ids = Id::multiple(ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
@@ -787,16 +787,16 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         backend
             .move_messages(source, target_folder, &msg_ids)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Create a folder
-    pub async fn create_folder(&self, name: &str) -> Result<(), HimalayaError> {
+    pub async fn create_folder(&self, name: &str) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
 
         let ctx = email::imap::ImapContextBuilder::new(
@@ -807,16 +807,16 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         backend
             .add_folder(name)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Delete a folder
-    pub async fn delete_folder(&self, name: &str) -> Result<(), HimalayaError> {
+    pub async fn delete_folder(&self, name: &str) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
 
         let ctx = email::imap::ImapContextBuilder::new(
@@ -827,16 +827,16 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         backend
             .delete_folder(name)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Expunge folder (permanently remove deleted messages)
-    pub async fn expunge_folder(&self, name: &str) -> Result<(), HimalayaError> {
+    pub async fn expunge_folder(&self, name: &str) -> Result<(), EddieError> {
         let imap_config = self.build_imap_config().await?;
 
         let ctx = email::imap::ImapContextBuilder::new(
@@ -847,12 +847,12 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         backend
             .expunge_folder(name)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))
+            .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
     /// Send a message via SMTP and save to Sent folder
@@ -860,7 +860,7 @@ impl EmailBackend {
     pub async fn send_message(
         &self,
         raw_message: &[u8],
-    ) -> Result<Option<SendMessageResult>, HimalayaError> {
+    ) -> Result<Option<SendMessageResult>, EddieError> {
         // First, send via SMTP
         let smtp_config = self.build_smtp_config().await?;
 
@@ -872,12 +872,12 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         backend
             .send_message(raw_message)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         info!("Message sent via SMTP successfully");
 
@@ -903,7 +903,7 @@ impl EmailBackend {
         &self,
         folder: Option<&str>,
         raw_message: &[u8],
-    ) -> Result<String, HimalayaError> {
+    ) -> Result<String, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or("Drafts");
 
@@ -915,19 +915,19 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let id = backend
             .add_message(folder, raw_message)
             .await
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(id.to_string())
     }
 }
 
 /// Get backend for account (or default)
-pub async fn get_backend(account: Option<&str>) -> Result<EmailBackend, HimalayaError> {
+pub async fn get_backend(account: Option<&str>) -> Result<EmailBackend, EddieError> {
     match account {
         Some(name) => EmailBackend::new(name).await,
         None => EmailBackend::default().await,

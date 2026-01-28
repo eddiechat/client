@@ -19,7 +19,7 @@ use crate::sync::db::{
 };
 use crate::sync::engine::{SyncConfig, SyncEngine, SyncState, SyncStatus};
 use crate::sync::idle::MonitorConfig;
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 
 /// Sync engine manager state - manages engines for multiple accounts
 pub struct SyncManager {
@@ -59,7 +59,7 @@ impl SyncManager {
     }
 
     /// Get or create sync engine for an account
-    pub async fn get_or_create(&self, account_id: &str) -> Result<Arc<RwLock<SyncEngine>>, HimalayaError> {
+    pub async fn get_or_create(&self, account_id: &str) -> Result<Arc<RwLock<SyncEngine>>, EddieError> {
         // Check if engine exists
         {
             let engines = self.engines.read().await;
@@ -73,7 +73,7 @@ impl SyncManager {
 
         init_config_db()?;
         let db_config = get_connection_config(account_id)?
-            .ok_or_else(|| HimalayaError::AccountNotFound(account_id.to_string()))?;
+            .ok_or_else(|| EddieError::AccountNotFound(account_id.to_string()))?;
 
         // Deserialize IMAP and SMTP configs from JSON
         let imap_config = db_config
