@@ -11,7 +11,7 @@ import {
   useConversationMessages,
 } from "./hooks/useConversations";
 import * as api from "./lib/api";
-import type { Conversation, SaveAccountRequest } from "./types";
+import type { Conversation, SaveAccountRequest, ComposeAttachment } from "./types";
 import { extractEmail } from "./lib/utils";
 import "./App.css";
 
@@ -109,25 +109,25 @@ function App() {
 
   // Handle sending a new message in compose mode (no existing conversation)
   const handleSendNewMessage = useCallback(
-    async (text: string, participants: string[]) => {
-      if (!text.trim() || participants.length === 0) return;
+    async (text: string, participants: string[], attachments?: ComposeAttachment[]) => {
+      if ((!text.trim() && (!attachments || attachments.length === 0)) || participants.length === 0) return;
 
       // Extract first line as subject
       const lines = text.split('\n');
       const subject = lines[0].trim() || '(No subject)';
       const body = lines.length > 1 ? lines.slice(1).join('\n').trim() || lines[0] : text;
 
-      const headers = [
-        `From: ${currentAccount || "user@example.com"}`,
-        `To: ${participants.join(", ")}`,
-        `Subject: ${subject}`,
-        `Date: ${new Date().toUTCString()}`,
-        "MIME-Version: 1.0",
-        "Content-Type: text/plain; charset=utf-8",
-      ].join("\r\n");
+      // Use the new API if we have attachments, otherwise use the legacy API for compatibility
+      const result = await api.sendMessageWithAttachments(
+        currentAccount || "user@example.com",
+        participants,
+        subject,
+        body,
+        attachments || [],
+        undefined,
+        currentAccount || undefined
+      );
 
-      const rawMessage = `${headers}\r\n\r\n${body}`;
-      const result = await api.sendMessage(rawMessage, currentAccount || undefined);
       // Sync the sent folder to pull the message into local database
       if (result?.sent_folder) {
         await api.syncFolder(result.sent_folder, currentAccount || undefined);
@@ -156,8 +156,8 @@ function App() {
   );
 
   const handleSendFromConversation = useCallback(
-    async (text: string) => {
-      if (!selectedConversation || !text.trim()) return;
+    async (text: string, attachments?: ComposeAttachment[]) => {
+      if (!selectedConversation || (!text.trim() && (!attachments || attachments.length === 0))) return;
 
       // Get all recipients (all participants except current user)
       const recipients = selectedConversation.participants.filter(
@@ -173,17 +173,17 @@ function App() {
       const subject = firstLine || `Re: ${selectedConversation.last_message_preview}`;
       const body = lines.length > 1 ? lines.slice(1).join('\n').trim() || text : text;
 
-      const headers = [
-        `From: ${currentAccount || "user@example.com"}`,
-        `To: ${to.join(", ")}`,
-        `Subject: ${subject}`,
-        `Date: ${new Date().toUTCString()}`,
-        "MIME-Version: 1.0",
-        "Content-Type: text/plain; charset=utf-8",
-      ].join("\r\n");
+      // Use the new API with attachments support
+      const result = await api.sendMessageWithAttachments(
+        currentAccount || "user@example.com",
+        to,
+        subject,
+        body,
+        attachments || [],
+        undefined,
+        currentAccount || undefined
+      );
 
-      const rawMessage = `${headers}\r\n\r\n${body}`;
-      const result = await api.sendMessage(rawMessage, currentAccount || undefined);
       // Sync the sent folder to pull the message into local database
       if (result?.sent_folder) {
         await api.syncFolder(result.sent_folder, currentAccount || undefined);

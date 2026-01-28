@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::sync::db::{CachedMessage, MessageClassification, SyncDatabase};
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 
 /// Message classification categories
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -295,7 +295,7 @@ impl MessageClassifier {
     pub fn classify_and_store(
         &self,
         message: &CachedMessage,
-    ) -> Result<ClassificationResult, HimalayaError> {
+    ) -> Result<ClassificationResult, EddieError> {
         let result = self.classify(message);
 
         let classification = MessageClassification {
@@ -315,7 +315,7 @@ impl MessageClassifier {
     pub fn classify_batch(
         &self,
         messages: &[CachedMessage],
-    ) -> Result<Vec<ClassificationResult>, HimalayaError> {
+    ) -> Result<Vec<ClassificationResult>, EddieError> {
         let mut results = Vec::with_capacity(messages.len());
 
         for message in messages {
@@ -330,7 +330,7 @@ impl MessageClassifier {
     pub fn get_or_classify(
         &self,
         message: &CachedMessage,
-    ) -> Result<ClassificationResult, HimalayaError> {
+    ) -> Result<ClassificationResult, EddieError> {
         // Try to get from cache
         if let Some(cached) = self.db.get_message_classification(message.id)? {
             return Ok(ClassificationResult {
@@ -345,14 +345,14 @@ impl MessageClassifier {
     }
 
     /// Check if a message should be shown in chat UI
-    pub fn is_chat_message(&self, message: &CachedMessage) -> Result<bool, HimalayaError> {
+    pub fn is_chat_message(&self, message: &CachedMessage) -> Result<bool, EddieError> {
         let result = self.get_or_classify(message)?;
         Ok(result.classification == Classification::Chat
             || result.classification == Classification::Unknown)
     }
 
     /// Update classification settings (mark a message as chat/non-chat)
-    pub fn set_hidden(&self, message_id: i64, hidden: bool) -> Result<(), HimalayaError> {
+    pub fn set_hidden(&self, message_id: i64, hidden: bool) -> Result<(), EddieError> {
         if let Some(mut classification) = self.db.get_message_classification(message_id)? {
             classification.is_hidden_from_chat = hidden;
             self.db.set_message_classification(&classification)?;

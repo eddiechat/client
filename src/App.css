@@ -828,6 +828,83 @@ body {
   height: 18px;
 }
 
+/* ===== Attachment Preview ===== */
+.conversation-input {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachments-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 12px;
+  border: 1px dashed rgba(76, 175, 80, 0.4);
+  margin-bottom: 8px;
+}
+
+.attachments-preview-label {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4caf50;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 5px 8px 5px 10px;
+  max-width: 200px;
+}
+
+.attachment-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.attachment-remove:hover {
+  opacity: 1;
+}
+
+.attachment-remove svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted);
+}
+
 /* ===== Compose Mode (Messenger-style) ===== */
 .compose-header-mode {
   flex-wrap: wrap;
@@ -1041,6 +1118,32 @@ body {
   flex: 1;
 }
 
+/* ===== Compose Modal Attachments ===== */
+.attachment-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+  color: var(--text-muted);
+}
+
+.attachment-icon-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.compose-attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
 .delete-confirm-text {
   color: #ff453a;
   font-size: 14px;
@@ -1151,6 +1254,111 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* ===== Gravatar Panel ===== */
+.gravatar-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: white;
+}
+
+.gravatar-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.gravatar-panel-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.gravatar-panel-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gravatar-panel-email {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gravatar-panel-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.gravatar-panel-close:hover {
+  background: #f0f0f0;
+}
+
+.gravatar-panel-close svg {
+  width: 20px;
+  height: 20px;
+  color: #666;
+}
+
+.gravatar-panel-content {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.gravatar-panel-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.gravatar-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+
+.gravatar-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px;
+}
+
+.gravatar-fallback-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 600;
+  color: white;
 }
 
 /* ===== Responsive ===== */
@@ -1367,4 +1575,325 @@ body {
     max-height: 100dvh;
     border-radius: 0;
   }
+}
+
+/* ===== Attachment Styles ===== */
+.attachment-container {
+  margin-top: 8px;
+}
+
+.attachment-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.8;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.attachment-toggle:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.attachment-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.attachment-count {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.attachment-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachment-loading,
+.attachment-error,
+.attachment-empty {
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 4px 0;
+}
+
+.attachment-error {
+  color: #ff6b6b;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.15);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.attachment-item:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.attachment-item:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.attachment-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.attachment-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.attachment-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attachment-size {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.attachment-download-icon,
+.attachment-downloading {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.attachment-download-icon svg,
+.attachment-downloading svg {
+  width: 16px;
+  height: 16px;
+}
+
+.attachment-downloading .spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Style adjustments for sent vs received bubbles */
+.message-bubble.sent .attachment-toggle {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.message-bubble.sent .attachment-toggle:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.message-bubble.sent .attachment-item {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.message-bubble.sent .attachment-item:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.message-bubble.sent .attachment-icon {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* ===== Emoji Picker ===== */
+.emoji-picker {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  width: 320px;
+  max-height: 360px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.emoji-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.emoji-picker-search svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.emoji-picker-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.emoji-picker-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.emoji-picker-categories {
+  display: flex;
+  gap: 2px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.emoji-category-tab {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background var(--transition-fast);
+}
+
+.emoji-category-tab:hover {
+  background: var(--bg-hover);
+}
+
+.emoji-category-tab.active {
+  background: var(--bg-tertiary);
+}
+
+.emoji-picker-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.emoji-category-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 4px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+}
+
+.emoji-item {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 22px;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.emoji-item:hover {
+  background: var(--bg-hover);
+  transform: scale(1.15);
+}
+
+.emoji-no-results {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ===== Emoji Suggestions (Colon Autocomplete) ===== */
+.emoji-suggestions {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  z-index: 100;
+}
+
+.emoji-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.emoji-suggestion-item:hover,
+.emoji-suggestion-item.selected {
+  background: var(--bg-hover);
+}
+
+.emoji-suggestion-emoji {
+  font-size: 20px;
+  width: 28px;
+  text-align: center;
+}
+
+.emoji-suggestion-name {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* Position emoji picker relative to input wrapper */
+.input-wrapper {
+  position: relative;
 }

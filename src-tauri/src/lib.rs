@@ -32,6 +32,7 @@ pub fn run() {
     info!("Starting eddie ...");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(SyncManager::new())
@@ -40,6 +41,11 @@ pub fn run() {
             // Try to initialize config on startup
             if let Err(e) = config::init_config() {
                 tracing::warn!("Could not load config on startup: {}", e);
+            }
+
+            // Initialize the config database
+            if let Err(e) = sync::db::init_config_db() {
+                tracing::warn!("Could not initialize config database on startup: {}", e);
             }
 
             // Set app handle on sync manager for event emission
@@ -58,6 +64,12 @@ pub fn run() {
             commands::is_config_initialized,
             commands::get_config_paths,
             commands::save_account,
+            // Account database commands
+            commands::init_config_database,
+            commands::get_accounts,
+            commands::get_active_account,
+            commands::switch_account,
+            commands::delete_account,
             // Account commands
             commands::list_accounts,
             commands::get_default_account,
@@ -93,7 +105,10 @@ pub fn run() {
             commands::copy_messages,
             commands::move_messages,
             commands::send_message,
+            commands::send_message_with_attachments,
             commands::save_message,
+            commands::get_message_attachments,
+            commands::download_attachment,
             commands::download_attachments,
             // Flag commands
             commands::add_flags,

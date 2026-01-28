@@ -7,6 +7,7 @@ import type {
   Message,
   DiscoveryResult,
   OAuthStatus,
+  ComposeAttachment,
 } from "../types";
 
 export async function saveAccount(request: SaveAccountRequest): Promise<void> {
@@ -38,6 +39,27 @@ export interface SendMessageResult {
 // Returns the message ID and sent folder name, or null if no Sent folder was found
 export async function sendMessage(message: string, account?: string): Promise<SendMessageResult | null> {
   return invoke("send_message", { account, message });
+}
+
+// Send a message with optional attachments
+export async function sendMessageWithAttachments(
+  from: string,
+  to: string[],
+  subject: string,
+  body: string,
+  attachments: ComposeAttachment[],
+  cc?: string[],
+  account?: string
+): Promise<SendMessageResult | null> {
+  return invoke("send_message_with_attachments", {
+    account,
+    from,
+    to,
+    cc,
+    subject,
+    body,
+    attachments,
+  });
 }
 
 export async function saveMessage(
@@ -319,4 +341,49 @@ export async function saveDiscoveredAccount(
     oauthProvider: request.oauthProvider,
     password: request.password,
   });
+}
+
+// ========== Attachment Commands ==========
+
+export interface AttachmentInfo {
+  index: number;
+  filename: string;
+  mime_type: string;
+  size: number;
+}
+
+/** Get attachment information for a message */
+export async function getMessageAttachments(
+  folder: string,
+  id: string,
+  account?: string
+): Promise<AttachmentInfo[]> {
+  return invoke("get_message_attachments", { account, folder, id });
+}
+
+/** Download a specific attachment from a message */
+export async function downloadAttachment(
+  folder: string,
+  id: string,
+  attachmentIndex: number,
+  downloadDir?: string,
+  account?: string
+): Promise<string> {
+  return invoke("download_attachment", {
+    account,
+    folder,
+    id,
+    attachmentIndex,
+    downloadDir,
+  });
+}
+
+/** Download all attachments from a message */
+export async function downloadAttachments(
+  folder: string,
+  id: string,
+  downloadDir?: string,
+  account?: string
+): Promise<string[]> {
+  return invoke("download_attachments", { account, folder, id, downloadDir });
 }

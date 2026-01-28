@@ -1,3 +1,4 @@
+use base64::Engine;
 use std::fs;
 use std::path::PathBuf;
 use tauri::State;
@@ -5,19 +6,19 @@ use tracing::{info, warn};
 
 use crate::backend::{self, SendMessageResult};
 use crate::commands::sync::SyncManager;
-use crate::config;
-use crate::types::{Message, ReadMessageRequest};
+use crate::sync::db::{get_active_connection_config, init_config_db};
+use crate::types::{ComposeAttachment, Message, ReadMessageRequest};
 
 /// Helper to get account ID from optional parameter
 fn get_account_id(account: Option<&str>) -> Result<String, String> {
     if let Some(id) = account {
         Ok(id.to_string())
     } else {
-        let app_config = config::get_config().map_err(|e| e.to_string())?;
-        app_config
-            .default_account_name()
-            .map(|s| s.to_string())
-            .ok_or_else(|| "No default account configured".to_string())
+        init_config_db().map_err(|e| e.to_string())?;
+        let active_config = get_active_connection_config().map_err(|e| e.to_string())?;
+        active_config
+            .map(|c| c.account_id)
+            .ok_or_else(|| "No active account configured".to_string())
     }
 }
 
@@ -207,7 +208,187 @@ pub async fn save_message(
         .map_err(|e| e.to_string())
 }
 
-/// Download attachments from a message
+/// Send a message with attachments via SMTP and save to Sent folder
+/// Builds a proper MIME multipart message with attachments
+#[tauri::command]
+pub async fn send_message_with_attachments(
+    account: Option<String>,
+    from: String,
+    to: Vec<String>,
+    cc: Option<Vec<String>>,
+    subject: String,
+    body: String,
+    attachments: Vec<ComposeAttachment>,
+) -> Result<Option<SendMessageResult>, String> {
+    info!(
+        "Tauri command: send_message_with_attachments - account: {:?}, to: {:?}, attachments: {}",
+        account,
+        to,
+        attachments.len()
+    );
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Generate a unique boundary for the MIME message
+    let boundary = format!("----=_Part_{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
+
+    // Build headers
+    let mut headers = vec![
+        format!("From: {}", from),
+        format!("To: {}", to.join(", ")),
+        format!("Subject: {}", subject),
+        format!("Date: {}", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")),
+        "MIME-Version: 1.0".to_string(),
+    ];
+
+    // Add Cc if present
+    if let Some(cc_addrs) = &cc {
+        if !cc_addrs.is_empty() {
+            headers.push(format!("Cc: {}", cc_addrs.join(", ")));
+        }
+    }
+
+    // Set content type based on whether we have attachments
+    if attachments.is_empty() {
+        headers.push("Content-Type: text/plain; charset=utf-8".to_string());
+        headers.push("Content-Transfer-Encoding: 8bit".to_string());
+    } else {
+        headers.push(format!("Content-Type: multipart/mixed; boundary=\"{}\"", boundary));
+    }
+
+    let header_str = headers.join("\r\n");
+
+    // Build the message body
+    let raw_message = if attachments.is_empty() {
+        // Simple text message
+        format!("{}\r\n\r\n{}", header_str, body)
+    } else {
+        // Multipart message with attachments
+        let mut parts = Vec::new();
+
+        // Text body part
+        parts.push(format!(
+            "--{}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{}",
+            boundary, body
+        ));
+
+        // Attachment parts
+        for attachment in &attachments {
+            // Read file contents
+            let file_contents = fs::read(&attachment.path)
+                .map_err(|e| format!("Failed to read attachment '{}': {}", attachment.path, e))?;
+
+            // Base64 encode
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&file_contents);
+
+            // Split into 76-character lines for email compatibility
+            let encoded_lines: Vec<&str> = encoded
+                .as_bytes()
+                .chunks(76)
+                .map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
+                .collect();
+            let encoded_formatted = encoded_lines.join("\r\n");
+
+            parts.push(format!(
+                "--{}\r\nContent-Type: {}; name=\"{}\"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"{}\"\r\n\r\n{}",
+                boundary, attachment.mime_type, attachment.name, attachment.name, encoded_formatted
+            ));
+        }
+
+        // Close the multipart
+        parts.push(format!("--{}--", boundary));
+
+        format!("{}\r\n\r\n{}", header_str, parts.join("\r\n"))
+    };
+
+    backend
+        .send_message(raw_message.as_bytes())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Attachment info for frontend display
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AttachmentInfo {
+    pub index: usize,
+    pub filename: String,
+    pub mime_type: String,
+    pub size: usize,
+}
+
+/// Get attachment information for a message (without downloading content)
+#[tauri::command]
+pub async fn get_message_attachments(
+    account: Option<String>,
+    folder: Option<String>,
+    id: String,
+) -> Result<Vec<AttachmentInfo>, String> {
+    info!(
+        "Tauri command: get_message_attachments - account: {:?}, folder: {:?}, id: {}",
+        account, folder, id
+    );
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Get attachment info from the backend
+    let attachments = backend
+        .get_attachment_info(folder.as_deref(), &id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(attachments
+        .into_iter()
+        .enumerate()
+        .map(|(index, a)| AttachmentInfo {
+            index,
+            filename: a.filename.unwrap_or_else(|| format!("attachment_{}", index)),
+            mime_type: a.mime_type,
+            size: a.size,
+        })
+        .collect())
+}
+
+/// Download a specific attachment from a message
+#[tauri::command]
+pub async fn download_attachment(
+    account: Option<String>,
+    folder: Option<String>,
+    id: String,
+    attachment_index: usize,
+    download_dir: Option<String>,
+) -> Result<String, String> {
+    info!(
+        "Tauri command: download_attachment - account: {:?}, folder: {:?}, id: {}, index: {}, dir: {:?}",
+        account, folder, id, attachment_index, download_dir
+    );
+
+    let backend = backend::get_backend(account.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Determine download directory
+    let download_path: PathBuf = match download_dir {
+        Some(dir) => dir.into(),
+        None => dirs::download_dir().unwrap_or_else(|| PathBuf::from(".")),
+    };
+
+    // Create directory if it doesn't exist
+    fs::create_dir_all(&download_path).map_err(|e| e.to_string())?;
+
+    // Download the attachment
+    let file_path = backend
+        .download_attachment(folder.as_deref(), &id, attachment_index, &download_path)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Download all attachments from a message
 #[tauri::command]
 pub async fn download_attachments(
     account: Option<String>,
@@ -224,12 +405,6 @@ pub async fn download_attachments(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Get the message to access attachments
-    let message = backend
-        .get_message(folder.as_deref(), &id, true)
-        .await
-        .map_err(|e| e.to_string())?;
-
     // Determine download directory
     let download_path: PathBuf = match download_dir {
         Some(dir) => dir.into(),
@@ -239,16 +414,14 @@ pub async fn download_attachments(
     // Create directory if it doesn't exist
     fs::create_dir_all(&download_path).map_err(|e| e.to_string())?;
 
-    let mut downloaded_files = Vec::new();
+    // Download all attachments
+    let files = backend
+        .download_all_attachments(folder.as_deref(), &id, &download_path)
+        .await
+        .map_err(|e| e.to_string())?;
 
-    // Note: To actually download attachment contents, we'd need to fetch the raw message
-    // and parse attachments. For now, return the attachment info.
-    for attachment in &message.attachments {
-        if let Some(filename) = &attachment.filename {
-            let file_path = download_path.join(filename);
-            downloaded_files.push(file_path.to_string_lossy().to_string());
-        }
-    }
-
-    Ok(downloaded_files)
+    Ok(files
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect())
 }
