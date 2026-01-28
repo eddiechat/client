@@ -5,6 +5,8 @@ import type {
   SaveAccountRequest,
   Conversation,
   Message,
+  DiscoveryResult,
+  OAuthStatus,
   ComposeAttachment,
 } from "../types";
 
@@ -210,6 +212,135 @@ export async function markConversationRead(
   account?: string
 ): Promise<void> {
   return invoke("mark_conversation_read", { account, conversationId });
+}
+
+// ========== Email Autodiscovery Commands ==========
+
+/** Discover email configuration for an email address */
+export async function discoverEmailConfig(email: string): Promise<DiscoveryResult> {
+  return invoke("discover_email_config", { email });
+}
+
+/** Test connection to email servers */
+export async function testEmailConnection(
+  email: string,
+  imapHost: string,
+  imapPort: number,
+  imapTls: boolean,
+  smtpHost: string,
+  smtpPort: number,
+  smtpTls: boolean,
+  authMethod: string,
+  password?: string,
+  oauthProvider?: string
+): Promise<boolean> {
+  return invoke("test_email_connection", {
+    email,
+    imapHost,
+    imapPort,
+    imapTls,
+    smtpHost,
+    smtpPort,
+    smtpTls,
+    authMethod,
+    password,
+    oauthProvider,
+  });
+}
+
+// ========== OAuth2 Commands ==========
+
+/** Start OAuth2 authorization flow. Returns the authorization URL. */
+export async function startOAuthFlow(
+  provider: string,
+  email: string,
+  redirectUri: string
+): Promise<string> {
+  return invoke("start_oauth_flow", { provider, email, redirectUri });
+}
+
+/** Complete OAuth2 authorization flow with callback parameters */
+export async function completeOAuthFlow(
+  code: string,
+  callbackState: string,
+  redirectUri: string
+): Promise<string> {
+  return invoke("complete_oauth_flow", { code, callbackState, redirectUri });
+}
+
+/** Refresh OAuth2 tokens for an account */
+export async function refreshOAuthTokens(
+  email: string,
+  provider: string
+): Promise<boolean> {
+  return invoke("refresh_oauth_tokens", { email, provider });
+}
+
+/** Check OAuth token status for an account */
+export async function checkOAuthStatus(email: string): Promise<OAuthStatus> {
+  return invoke("check_oauth_status", { email });
+}
+
+// ========== Credential Storage Commands ==========
+
+/** Store a password securely */
+export async function storePassword(email: string, password: string): Promise<void> {
+  return invoke("store_password", { email, password });
+}
+
+/** Store an app-specific password securely */
+export async function storeAppPassword(email: string, password: string): Promise<void> {
+  return invoke("store_app_password", { email, password });
+}
+
+/** Delete all credentials for an account */
+export async function deleteCredentials(email: string): Promise<void> {
+  return invoke("delete_credentials", { email });
+}
+
+/** Check if credentials exist for an account */
+export async function hasCredentials(
+  email: string,
+  credentialType: "password" | "oauth" | "app_password"
+): Promise<boolean> {
+  return invoke("has_credentials", { email, credentialType });
+}
+
+// ========== Account Setup with Autodiscovery ==========
+
+export interface SaveDiscoveredAccountRequest {
+  name: string;
+  email: string;
+  displayName?: string;
+  imapHost: string;
+  imapPort: number;
+  imapTls: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpTls: boolean;
+  authMethod: string;
+  oauthProvider?: string;
+  password?: string;
+}
+
+/** Save account with discovered configuration */
+export async function saveDiscoveredAccount(
+  request: SaveDiscoveredAccountRequest
+): Promise<void> {
+  return invoke("save_discovered_account", {
+    name: request.name,
+    email: request.email,
+    displayName: request.displayName,
+    imapHost: request.imapHost,
+    imapPort: request.imapPort,
+    imapTls: request.imapTls,
+    smtpHost: request.smtpHost,
+    smtpPort: request.smtpPort,
+    smtpTls: request.smtpTls,
+    authMethod: request.authMethod,
+    oauthProvider: request.oauthProvider,
+    password: request.password,
+  });
 }
 
 // ========== Attachment Commands ==========

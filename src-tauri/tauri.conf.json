@@ -25,6 +25,16 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        { "host": "oauth.eddie.chat", "pathPrefix": ["/callback"] }
+      ],
+      "desktop": {
+        "schemes": ["eddie-chat"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

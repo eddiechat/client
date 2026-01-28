@@ -96,3 +96,40 @@ export interface Conversation {
   user_name: string;
   user_in_conversation: boolean;
 }
+
+// Email autodiscovery result
+export interface DiscoveryResult {
+  /** Provider name (if detected) */
+  provider?: string;
+  /** Provider ID for known providers */
+  provider_id?: string;
+  /** IMAP host */
+  imap_host: string;
+  /** IMAP port */
+  imap_port: number;
+  /** Whether IMAP uses TLS */
+  imap_tls: boolean;
+  /** SMTP host */
+  smtp_host: string;
+  /** SMTP port */
+  smtp_port: number;
+  /** Whether SMTP uses TLS */
+  smtp_tls: boolean;
+  /** Authentication method: "password", "oauth2", "app_password" */
+  auth_method: string;
+  /** OAuth provider if OAuth2: "google", "microsoft", "yahoo", "fastmail" */
+  oauth_provider?: string;
+  /** Whether app-specific password is required */
+  requires_app_password: boolean;
+  /** Username format hint */
+  username_hint: string;
+  /** Discovery source for debugging */
+  source: string;
+}
+
+// OAuth token status
+export interface OAuthStatus {
+  has_tokens: boolean;
+  needs_refresh: boolean;
+  is_expired: boolean;
+}
