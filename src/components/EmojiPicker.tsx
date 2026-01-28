@@ -12,31 +12,24 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
   const pickerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus search input on mount
   useEffect(() => {
     searchInputRef.current?.focus();
   }, []);
 
-  // Close on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
-  // Close on escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
+      if (e.key === "Escape") onClose();
     };
-
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
@@ -49,16 +42,20 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
   const searchResults = search ? searchEmojis(search, 50) : null;
 
   return (
-    <div className="emoji-picker" ref={pickerRef}>
+    <div
+      ref={pickerRef}
+      className="absolute bottom-full left-0 mb-2 w-72 max-h-80 bg-bg-secondary rounded-xl shadow-xl border border-divider flex flex-col overflow-hidden z-50"
+    >
       {/* Search bar */}
-      <div className="emoji-picker-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <div className="flex items-center gap-2 p-2.5 border-b border-divider">
+        <svg className="w-4 h-4 text-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
           <path d="m21 21-4.35-4.35" />
         </svg>
         <input
           ref={searchInputRef}
           type="text"
+          className="flex-1 bg-transparent border-none text-text-primary text-sm outline-none placeholder:text-text-muted"
           placeholder="Search emoji..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -67,12 +64,14 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
 
       {/* Category tabs */}
       {!search && (
-        <div className="emoji-picker-categories">
+        <div className="flex border-b border-divider">
           {emojiCategories.map((category, index) => (
             <button
               type="button"
               key={category.name}
-              className={`emoji-category-tab ${activeCategory === index ? "active" : ""}`}
+              className={`flex-1 py-2 text-base transition-colors ${
+                activeCategory === index ? "bg-bg-hover" : "hover:bg-bg-hover"
+              }`}
               onClick={() => setActiveCategory(index)}
               title={category.name}
             >
@@ -83,16 +82,15 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
       )}
 
       {/* Emoji grid */}
-      <div className="emoji-picker-content">
+      <div className="flex-1 overflow-y-auto p-2">
         {searchResults ? (
-          // Search results
           searchResults.length > 0 ? (
-            <div className="emoji-grid">
+            <div className="grid grid-cols-8 gap-0.5">
               {searchResults.map((emoji) => (
                 <button
                   type="button"
                   key={emoji.emoji + emoji.name}
-                  className="emoji-item"
+                  className="w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-bg-hover transition-colors"
                   onClick={() => handleEmojiClick(emoji)}
                   title={`:${emoji.name}:`}
                 >
@@ -101,20 +99,19 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
               ))}
             </div>
           ) : (
-            <div className="emoji-no-results">No emojis found</div>
+            <div className="py-6 text-center text-text-muted text-sm">No emojis found</div>
           )
         ) : (
-          // Category view
           <>
-            <div className="emoji-category-header">
+            <div className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2 px-1">
               {emojiCategories[activeCategory].name}
             </div>
-            <div className="emoji-grid">
+            <div className="grid grid-cols-8 gap-0.5">
               {emojiCategories[activeCategory].emojis.map((emoji) => (
                 <button
                   type="button"
                   key={emoji.emoji + emoji.name}
-                  className="emoji-item"
+                  className="w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-bg-hover transition-colors"
                   onClick={() => handleEmojiClick(emoji)}
                   title={`:${emoji.name}:`}
                 >
@@ -137,45 +134,38 @@ interface EmojiSuggestionsProps {
   selectedIndex: number;
 }
 
-export function EmojiSuggestions({
-  query,
-  onSelect,
-  onClose,
-  selectedIndex,
-}: EmojiSuggestionsProps) {
+export function EmojiSuggestions({ query, onSelect, onClose, selectedIndex }: EmojiSuggestionsProps) {
   const suggestions = searchEmojis(query, 8);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(e.target as Node)
-      ) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
-  if (suggestions.length === 0) {
-    return null;
-  }
+  if (suggestions.length === 0) return null;
 
   return (
-    <div className="emoji-suggestions" ref={suggestionsRef}>
+    <div
+      ref={suggestionsRef}
+      className="absolute bottom-full left-0 mb-2 w-56 bg-bg-secondary rounded-xl shadow-xl border border-divider overflow-hidden z-50"
+    >
       {suggestions.map((emoji, index) => (
         <button
           type="button"
           key={emoji.emoji + emoji.name}
-          className={`emoji-suggestion-item ${index === selectedIndex ? "selected" : ""}`}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+            index === selectedIndex ? "bg-bg-hover" : "hover:bg-bg-hover"
+          }`}
           onClick={() => onSelect(emoji.emoji, emoji.name)}
         >
-          <span className="emoji-suggestion-emoji">{emoji.emoji}</span>
-          <span className="emoji-suggestion-name">:{emoji.name}:</span>
+          <span className="text-lg">{emoji.emoji}</span>
+          <span className="text-sm text-text-secondary truncate">:{emoji.name}:</span>
         </button>
       ))}
     </div>
