@@ -4,14 +4,17 @@
 //! The database is a cache of server state - all data can be rebuilt from IMAP.
 
 use chrono::{DateTime, Utc};
+use once_cell::sync::OnceCell;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::RwLock;
+use tracing::info;
 
-use crate::types::error::HimalayaError;
+use crate::types::error::EddieError;
 
 /// Database connection pool type
 pub type DbPool = Pool<SqliteConnectionManager>;
@@ -118,17 +121,53 @@ pub struct SyncProgress {
     pub updated_at: DateTime<Utc>,
 }
 
-/// SQLite database for sync cache
-pub struct SyncDatabase {
+/// Connection configuration stored in database
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionConfig {
+    pub account_id: String,
+    pub active: bool,
+    pub name: Option<String>,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub imap_config: Option<String>, // JSON serialized ImapConfig
+    pub smtp_config: Option<String>, // JSON serialized SmtpConfig
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ========== Global Config Database ==========
+
+/// Global config database instance
+static CONFIG_DB: OnceCell<RwLock<ConfigDatabase>> = OnceCell::new();
+
+/// Get the config database directory path
+fn get_config_db_dir() -> PathBuf {
+    if cfg!(debug_assertions) {
+        PathBuf::from("../.sqlite")
+    } else {
+        dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("eddie.chat")
+            .join("config")
+    }
+}
+
+/// Get the config database file path
+fn get_config_db_path() -> PathBuf {
+    get_config_db_dir().join("config.db")
+}
+
+/// Configuration database for storing connection configs
+pub struct ConfigDatabase {
     pool: DbPool,
 }
 
-impl SyncDatabase {
-    /// Create a new database at the given path
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, HimalayaError> {
+impl ConfigDatabase {
+    /// Create a new config database at the given path
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, EddieError> {
         let manager = SqliteConnectionManager::file(path);
-        let pool = Pool::builder().max_size(10).build(manager).map_err(|e| {
-            HimalayaError::Backend(format!("Failed to create database pool: {}", e))
+        let pool = Pool::builder().max_size(5).build(manager).map_err(|e| {
+            EddieError::Backend(format!("Failed to create config database pool: {}", e))
         })?;
 
         let db = Self { pool };
@@ -137,10 +176,10 @@ impl SyncDatabase {
     }
 
     /// Create an in-memory database (for testing)
-    pub fn in_memory() -> Result<Self, HimalayaError> {
+    pub fn in_memory() -> Result<Self, EddieError> {
         let manager = SqliteConnectionManager::memory();
         let pool = Pool::builder().max_size(1).build(manager).map_err(|e| {
-            HimalayaError::Backend(format!("Failed to create database pool: {}", e))
+            EddieError::Backend(format!("Failed to create config database pool: {}", e))
         })?;
 
         let db = Self { pool };
@@ -149,14 +188,318 @@ impl SyncDatabase {
     }
 
     /// Get a connection from the pool
-    pub fn connection(&self) -> Result<DbConnection, HimalayaError> {
+    fn connection(&self) -> Result<DbConnection, EddieError> {
         self.pool.get().map_err(|e| {
-            HimalayaError::Backend(format!("Failed to get database connection: {}", e))
+            EddieError::Backend(format!("Failed to get config database connection: {}", e))
+        })
+    }
+
+    /// Initialize the config database schema
+    fn initialize_schema(&self) -> Result<(), EddieError> {
+        let conn = self.connection()?;
+
+        conn.execute_batch(
+            r#"
+            -- Enable foreign keys and WAL mode
+            PRAGMA foreign_keys = ON;
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+
+            -- Connection configuration (for account switching)
+            CREATE TABLE IF NOT EXISTS connection_configs (
+                account_id TEXT PRIMARY KEY,
+                active INTEGER DEFAULT 0,
+                name TEXT,
+                email TEXT NOT NULL,
+                display_name TEXT,
+                imap_config TEXT,  -- JSON serialized ImapConfig
+                smtp_config TEXT,  -- JSON serialized SmtpConfig
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            -- Index for quickly finding the active account
+            CREATE INDEX IF NOT EXISTS idx_connection_configs_active ON connection_configs(active);
+        "#,
+        )
+        .map_err(|e| {
+            EddieError::Backend(format!("Failed to initialize config schema: {}", e))
+        })?;
+
+        Ok(())
+    }
+
+    /// Save or update a connection configuration
+    pub fn upsert_connection_config(&self, config: &ConnectionConfig) -> Result<(), EddieError> {
+        let conn = self.connection()?;
+        conn.execute(
+            "INSERT INTO connection_configs (account_id, active, name, email, display_name, imap_config, smtp_config, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+             ON CONFLICT(account_id) DO UPDATE SET
+                active = excluded.active,
+                name = excluded.name,
+                email = excluded.email,
+                display_name = excluded.display_name,
+                imap_config = excluded.imap_config,
+                smtp_config = excluded.smtp_config,
+                updated_at = datetime('now')",
+            params![
+                config.account_id,
+                config.active as i32,
+                config.name,
+                config.email,
+                config.display_name,
+                config.imap_config,
+                config.smtp_config,
+            ],
+        )
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Get a connection configuration by account_id
+    pub fn get_connection_config(
+        &self,
+        account_id: &str,
+    ) -> Result<Option<ConnectionConfig>, EddieError> {
+        let conn = self.connection()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
+                 FROM connection_configs WHERE account_id = ?1",
+            )
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let result = stmt
+            .query_row(params![account_id], Self::row_to_connection_config)
+            .optional()
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Get all connection configurations
+    pub fn get_all_connection_configs(&self) -> Result<Vec<ConnectionConfig>, EddieError> {
+        let conn = self.connection()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
+                 FROM connection_configs ORDER BY name ASC",
+            )
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let configs = stmt
+            .query_map([], Self::row_to_connection_config)
+            .map_err(|e| EddieError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(configs)
+    }
+
+    /// Get the currently active connection configuration
+    pub fn get_active_connection_config(&self) -> Result<Option<ConnectionConfig>, EddieError> {
+        let conn = self.connection()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
+                 FROM connection_configs WHERE active = 1 LIMIT 1",
+            )
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let result = stmt
+            .query_row([], Self::row_to_connection_config)
+            .optional()
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Set an account as active (deactivates all others)
+    pub fn set_active_account(&self, account_id: &str) -> Result<(), EddieError> {
+        let mut conn = self.connection()?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        // Deactivate all accounts
+        tx.execute("UPDATE connection_configs SET active = 0", [])
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        // Activate the specified account
+        tx.execute(
+            "UPDATE connection_configs SET active = 1, updated_at = datetime('now') WHERE account_id = ?1",
+            params![account_id],
+        )
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        tx.commit()
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Delete a connection configuration
+    pub fn delete_connection_config(&self, account_id: &str) -> Result<(), EddieError> {
+        let conn = self.connection()?;
+        conn.execute(
+            "DELETE FROM connection_configs WHERE account_id = ?1",
+            params![account_id],
+        )
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    fn row_to_connection_config(row: &Row) -> Result<ConnectionConfig, rusqlite::Error> {
+        Ok(ConnectionConfig {
+            account_id: row.get(0)?,
+            active: row.get::<_, i32>(1)? != 0,
+            name: row.get(2)?,
+            email: row.get(3)?,
+            display_name: row.get(4)?,
+            imap_config: row.get(5)?,
+            smtp_config: row.get(6)?,
+            created_at: row
+                .get::<_, String>(7)
+                .ok()
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(Utc::now),
+            updated_at: row
+                .get::<_, String>(8)
+                .ok()
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(Utc::now),
+        })
+    }
+}
+
+// ========== Global Config Database Functions ==========
+
+/// Initialize the global config database
+pub fn init_config_db() -> Result<(), EddieError> {
+    let db_dir = get_config_db_dir();
+    std::fs::create_dir_all(&db_dir).map_err(|e| {
+        EddieError::Backend(format!("Failed to create config database directory: {}", e))
+    })?;
+
+    let db_path = get_config_db_path();
+    info!("Initializing config database at: {:?}", db_path);
+
+    let db = ConfigDatabase::new(&db_path)?;
+
+    match CONFIG_DB.get() {
+        Some(lock) => {
+            let mut guard = lock
+                .write()
+                .map_err(|e| EddieError::Backend(format!("Failed to lock config db: {}", e)))?;
+            *guard = db;
+        }
+        None => {
+            CONFIG_DB.set(RwLock::new(db)).ok();
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if config database is initialized
+pub fn is_config_db_initialized() -> bool {
+    CONFIG_DB.get().is_some()
+}
+
+/// Get the global config database (initializes if needed)
+pub fn get_config_db() -> Result<std::sync::RwLockReadGuard<'static, ConfigDatabase>, EddieError>
+{
+    if !is_config_db_initialized() {
+        init_config_db()?;
+    }
+
+    CONFIG_DB
+        .get()
+        .ok_or_else(|| EddieError::Backend("Config database not initialized".to_string()))?
+        .read()
+        .map_err(|e| EddieError::Backend(format!("Failed to lock config db for read: {}", e)))
+}
+
+/// Save a connection config to the global database
+pub fn save_connection_config(config: &ConnectionConfig) -> Result<(), EddieError> {
+    let db = get_config_db()?;
+    db.upsert_connection_config(config)
+}
+
+/// Get a connection config from the global database
+pub fn get_connection_config(account_id: &str) -> Result<Option<ConnectionConfig>, EddieError> {
+    let db = get_config_db()?;
+    db.get_connection_config(account_id)
+}
+
+/// Get all connection configs from the global database
+pub fn get_all_connection_configs() -> Result<Vec<ConnectionConfig>, EddieError> {
+    let db = get_config_db()?;
+    db.get_all_connection_configs()
+}
+
+/// Get the active connection config from the global database
+pub fn get_active_connection_config() -> Result<Option<ConnectionConfig>, EddieError> {
+    let db = get_config_db()?;
+    db.get_active_connection_config()
+}
+
+/// Set an account as active in the global database
+pub fn set_active_account(account_id: &str) -> Result<(), EddieError> {
+    let db = get_config_db()?;
+    db.set_active_account(account_id)
+}
+
+/// Delete a connection config from the global database
+pub fn delete_connection_config(account_id: &str) -> Result<(), EddieError> {
+    let db = get_config_db()?;
+    db.delete_connection_config(account_id)
+}
+
+/// SQLite database for sync cache
+pub struct SyncDatabase {
+    pool: DbPool,
+}
+
+impl SyncDatabase {
+    /// Create a new database at the given path
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, EddieError> {
+        let manager = SqliteConnectionManager::file(path);
+        let pool = Pool::builder().max_size(10).build(manager).map_err(|e| {
+            EddieError::Backend(format!("Failed to create database pool: {}", e))
+        })?;
+
+        let db = Self { pool };
+        db.initialize_schema()?;
+        Ok(db)
+    }
+
+    /// Create an in-memory database (for testing)
+    pub fn in_memory() -> Result<Self, EddieError> {
+        let manager = SqliteConnectionManager::memory();
+        let pool = Pool::builder().max_size(1).build(manager).map_err(|e| {
+            EddieError::Backend(format!("Failed to create database pool: {}", e))
+        })?;
+
+        let db = Self { pool };
+        db.initialize_schema()?;
+        Ok(db)
+    }
+
+    /// Get a connection from the pool
+    pub fn connection(&self) -> Result<DbConnection, EddieError> {
+        self.pool.get().map_err(|e| {
+            EddieError::Backend(format!("Failed to get database connection: {}", e))
         })
     }
 
     /// Initialize the database schema
-    fn initialize_schema(&self) -> Result<(), HimalayaError> {
+    fn initialize_schema(&self) -> Result<(), EddieError> {
         let conn = self.connection()?;
 
         conn.execute_batch(r#"
@@ -294,7 +637,7 @@ impl SyncDatabase {
                 supports_idle INTEGER DEFAULT 0,
                 detected_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
-        "#).map_err(|e| HimalayaError::Backend(format!("Failed to initialize schema: {}", e)))?;
+        "#).map_err(|e| EddieError::Backend(format!("Failed to initialize schema: {}", e)))?;
 
         Ok(())
     }
@@ -306,12 +649,12 @@ impl SyncDatabase {
         &self,
         account_id: &str,
         folder_name: &str,
-    ) -> Result<Option<FolderSyncState>, HimalayaError> {
+    ) -> Result<Option<FolderSyncState>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT account_id, folder_name, uidvalidity, highestmodseq, last_seen_uid, last_sync_timestamp, sync_in_progress
              FROM folder_sync_state WHERE account_id = ?1 AND folder_name = ?2"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(params![account_id, folder_name], |row| {
@@ -329,13 +672,13 @@ impl SyncDatabase {
                 })
             })
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
 
     /// Update or insert folder sync state
-    pub fn upsert_folder_sync_state(&self, state: &FolderSyncState) -> Result<(), HimalayaError> {
+    pub fn upsert_folder_sync_state(&self, state: &FolderSyncState) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO folder_sync_state (account_id, folder_name, uidvalidity, highestmodseq, last_seen_uid, last_sync_timestamp, sync_in_progress)
@@ -355,7 +698,7 @@ impl SyncDatabase {
                 state.last_sync_timestamp.map(|dt| dt.to_rfc3339()),
                 state.sync_in_progress as i32,
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -365,18 +708,18 @@ impl SyncDatabase {
         &self,
         account_id: &str,
         folder_name: &str,
-    ) -> Result<Option<u32>, HimalayaError> {
+    ) -> Result<Option<u32>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
                 "SELECT uidvalidity FROM folder_sync_state WHERE account_id = ?1 AND folder_name = ?2",
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(params![account_id, folder_name], |row| row.get(0))
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -387,7 +730,7 @@ impl SyncDatabase {
         account_id: &str,
         folder_name: &str,
         uidvalidity: u32,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO folder_sync_state (account_id, folder_name, uidvalidity)
@@ -396,7 +739,7 @@ impl SyncDatabase {
                 uidvalidity = excluded.uidvalidity",
             params![account_id, folder_name, uidvalidity],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -406,35 +749,35 @@ impl SyncDatabase {
         &self,
         account_id: &str,
         folder_name: &str,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let mut conn = self.connection()?;
         let tx = conn
             .transaction()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Delete all messages in this folder
         tx.execute(
             "DELETE FROM messages WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Reset sync state
         tx.execute(
             "DELETE FROM folder_sync_state WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Reset sync progress
         tx.execute(
             "DELETE FROM sync_progress WHERE account_id = ?1 AND folder_name = ?2",
             params![account_id, folder_name],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         tx.commit()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -442,7 +785,7 @@ impl SyncDatabase {
     // ========== Message Operations ==========
 
     /// Insert or update a message
-    pub fn upsert_message(&self, msg: &CachedMessage) -> Result<i64, HimalayaError> {
+    pub fn upsert_message(&self, msg: &CachedMessage) -> Result<i64, EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO messages (account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -486,7 +829,7 @@ impl SyncDatabase {
                 msg.html_body,
                 msg.raw_size,
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Get the row ID
         let id = conn
@@ -495,7 +838,7 @@ impl SyncDatabase {
                 params![msg.account_id, msg.folder_name, msg.uid],
                 |row| row.get(0),
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(id)
     }
@@ -506,14 +849,14 @@ impl SyncDatabase {
         account_id: &str,
         folder_name: &str,
         uid: u32,
-    ) -> Result<Option<CachedMessage>, HimalayaError> {
+    ) -> Result<Option<CachedMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
                     from_address, from_name, to_addresses, cc_addresses, subject, date, flags,
                     has_attachment, body_cached, text_body, html_body, raw_size, created_at, updated_at
              FROM messages WHERE account_id = ?1 AND folder_name = ?2 AND uid = ?3"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(
@@ -521,25 +864,25 @@ impl SyncDatabase {
                 Self::row_to_cached_message,
             )
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
 
     /// Get a message by its internal ID
-    pub fn get_message_by_id(&self, id: i64) -> Result<Option<CachedMessage>, HimalayaError> {
+    pub fn get_message_by_id(&self, id: i64) -> Result<Option<CachedMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
                     from_address, from_name, to_addresses, cc_addresses, subject, date, flags,
                     has_attachment, body_cached, text_body, html_body, raw_size, created_at, updated_at
              FROM messages WHERE id = ?1"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(params![id], Self::row_to_cached_message)
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -551,14 +894,14 @@ impl SyncDatabase {
         folder_name: &str,
         uid: u32,
         flags: &str,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "UPDATE messages SET flags = ?1, updated_at = datetime('now')
              WHERE account_id = ?2 AND folder_name = ?3 AND uid = ?4",
             params![flags, account_id, folder_name, uid],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -570,7 +913,7 @@ impl SyncDatabase {
         folder_name: &str,
         uid: u32,
         flags_to_add: &[String],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
 
         // Get current flags
@@ -581,7 +924,7 @@ impl SyncDatabase {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .flatten();
 
         let mut flags: Vec<String> = current_flags
@@ -597,14 +940,14 @@ impl SyncDatabase {
         }
 
         let flags_json =
-            serde_json::to_string(&flags).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            serde_json::to_string(&flags).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         conn.execute(
             "UPDATE messages SET flags = ?1, updated_at = datetime('now')
              WHERE account_id = ?2 AND folder_name = ?3 AND uid = ?4",
             params![flags_json, account_id, folder_name, uid],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -616,7 +959,7 @@ impl SyncDatabase {
         folder_name: &str,
         uid: u32,
         flags_to_remove: &[String],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
 
         // Get current flags
@@ -627,7 +970,7 @@ impl SyncDatabase {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .flatten();
 
         let mut flags: Vec<String> = current_flags
@@ -639,14 +982,14 @@ impl SyncDatabase {
         flags.retain(|f| !flags_to_remove.contains(f));
 
         let flags_json =
-            serde_json::to_string(&flags).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            serde_json::to_string(&flags).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         conn.execute(
             "UPDATE messages SET flags = ?1, updated_at = datetime('now')
              WHERE account_id = ?2 AND folder_name = ?3 AND uid = ?4",
             params![flags_json, account_id, folder_name, uid],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -658,9 +1001,9 @@ impl SyncDatabase {
         folder_name: &str,
         uid: u32,
         flags: &[String],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let flags_json =
-            serde_json::to_string(flags).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            serde_json::to_string(flags).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         self.update_message_flags(account_id, folder_name, uid, &flags_json)
     }
@@ -671,7 +1014,7 @@ impl SyncDatabase {
         account_id: &str,
         folder_name: &str,
         uids: &[u32],
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         if uids.is_empty() {
             return Ok(());
         }
@@ -693,7 +1036,7 @@ impl SyncDatabase {
 
         let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
         conn.execute(&sql, params_refs.as_slice())
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -703,15 +1046,15 @@ impl SyncDatabase {
         &self,
         account_id: &str,
         folder_name: &str,
-    ) -> Result<HashSet<u32>, HimalayaError> {
+    ) -> Result<HashSet<u32>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare("SELECT uid FROM messages WHERE account_id = ?1 AND folder_name = ?2")
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let uids = stmt
             .query_map(params![account_id, folder_name], |row| row.get(0))
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -725,7 +1068,7 @@ impl SyncDatabase {
         folder_name: &str,
         limit: Option<u32>,
         offset: Option<u32>,
-    ) -> Result<Vec<CachedMessage>, HimalayaError> {
+    ) -> Result<Vec<CachedMessage>, EddieError> {
         let conn = self.connection()?;
         let sql = format!(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -738,7 +1081,7 @@ impl SyncDatabase {
 
         let mut stmt = conn
             .prepare(&sql)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let messages = stmt
             .query_map(
@@ -750,7 +1093,7 @@ impl SyncDatabase {
                 ],
                 Self::row_to_cached_message,
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -799,7 +1142,7 @@ impl SyncDatabase {
     // ========== Conversation Operations ==========
 
     /// Insert or update a conversation
-    pub fn upsert_conversation(&self, conv: &CachedConversation) -> Result<i64, HimalayaError> {
+    pub fn upsert_conversation(&self, conv: &CachedConversation) -> Result<i64, EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO conversations (account_id, participant_key, participants, last_message_date,
@@ -825,7 +1168,7 @@ impl SyncDatabase {
                 conv.unread_count,
                 conv.is_outgoing as i32,
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let id = conn
             .query_row(
@@ -833,7 +1176,7 @@ impl SyncDatabase {
                 params![conv.account_id, conv.participant_key],
                 |row| row.get(0),
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(id)
     }
@@ -843,13 +1186,13 @@ impl SyncDatabase {
         &self,
         account_id: &str,
         participant_key: &str,
-    ) -> Result<Option<CachedConversation>, HimalayaError> {
+    ) -> Result<Option<CachedConversation>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
                     last_message_from, message_count, unread_count, is_outgoing, created_at, updated_at
              FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(
@@ -857,7 +1200,7 @@ impl SyncDatabase {
                 Self::row_to_conversation,
             )
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -867,7 +1210,7 @@ impl SyncDatabase {
         &self,
         account_id: &str,
         include_hidden: bool,
-    ) -> Result<Vec<CachedConversation>, HimalayaError> {
+    ) -> Result<Vec<CachedConversation>, EddieError> {
         let conn = self.connection()?;
 
         let sql = if include_hidden {
@@ -892,11 +1235,11 @@ impl SyncDatabase {
 
         let mut stmt = conn
             .prepare(sql)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let conversations = stmt
             .query_map(params![account_id], Self::row_to_conversation)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -908,12 +1251,12 @@ impl SyncDatabase {
         &self,
         conversation_id: i64,
         message_id: i64,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT OR IGNORE INTO conversation_messages (conversation_id, message_id) VALUES (?1, ?2)",
             params![conversation_id, message_id],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -922,7 +1265,7 @@ impl SyncDatabase {
     pub fn get_conversation_messages(
         &self,
         conversation_id: i64,
-    ) -> Result<Vec<CachedMessage>, HimalayaError> {
+    ) -> Result<Vec<CachedMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT m.id, m.account_id, m.folder_name, m.uid, m.message_id, m.in_reply_to, m.references_header,
@@ -932,11 +1275,11 @@ impl SyncDatabase {
              JOIN conversation_messages cm ON cm.message_id = m.id
              WHERE cm.conversation_id = ?1
              ORDER BY m.date ASC"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let messages = stmt
             .query_map(params![conversation_id], Self::row_to_cached_message)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -948,7 +1291,7 @@ impl SyncDatabase {
     pub fn insert_conversation_if_not_exists(
         &self,
         conv: &CachedConversation,
-    ) -> Result<i64, HimalayaError> {
+    ) -> Result<i64, EddieError> {
         let conn = self.connection()?;
 
         // INSERT OR IGNORE - creates if not exists, does nothing if exists
@@ -967,7 +1310,7 @@ impl SyncDatabase {
                 conv.is_outgoing as i32,
             ],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         // Get the ID (works whether we just inserted or it already existed)
         let id = conn
@@ -976,7 +1319,7 @@ impl SyncDatabase {
                 params![conv.account_id, conv.participant_key],
                 |row| row.get(0),
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(id)
     }
@@ -991,7 +1334,7 @@ impl SyncDatabase {
         new_last_message_preview: Option<&str>,
         new_last_message_from: Option<&str>,
         new_is_outgoing: bool,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
 
         // Atomically increment counters and conditionally update last message info
@@ -1031,7 +1374,7 @@ impl SyncDatabase {
                 conversation_id,
             ],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -1041,7 +1384,7 @@ impl SyncDatabase {
         &self,
         conversation_id: i64,
         delta: i32,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
 
         // Use MAX(0, ...) to prevent negative unread counts
@@ -1052,13 +1395,13 @@ impl SyncDatabase {
              WHERE id = ?2",
             params![delta, conversation_id],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
 
     /// Delete empty conversations
-    pub fn delete_empty_conversations(&self, account_id: &str) -> Result<u64, HimalayaError> {
+    pub fn delete_empty_conversations(&self, account_id: &str) -> Result<u64, EddieError> {
         let conn = self.connection()?;
         let deleted = conn
             .execute(
@@ -1067,7 +1410,7 @@ impl SyncDatabase {
             )",
                 params![account_id],
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(deleted as u64)
     }
@@ -1105,7 +1448,7 @@ impl SyncDatabase {
     // ========== Action Queue Operations ==========
 
     /// Queue an action for later execution
-    pub fn queue_action(&self, action: &QueuedActionRecord) -> Result<i64, HimalayaError> {
+    pub fn queue_action(&self, action: &QueuedActionRecord) -> Result<i64, EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO action_queue (account_id, action_type, folder_name, uid, payload, status)
@@ -1119,7 +1462,7 @@ impl SyncDatabase {
                 action.status,
             ],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(conn.last_insert_rowid())
     }
@@ -1128,17 +1471,17 @@ impl SyncDatabase {
     pub fn get_pending_actions(
         &self,
         account_id: &str,
-    ) -> Result<Vec<QueuedActionRecord>, HimalayaError> {
+    ) -> Result<Vec<QueuedActionRecord>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, action_type, folder_name, uid, payload, created_at, retry_count, last_error, status
              FROM action_queue WHERE account_id = ?1 AND status = 'pending'
              ORDER BY created_at ASC"
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let actions = stmt
             .query_map(params![account_id], Self::row_to_action)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?
+            .map_err(|e| EddieError::Backend(e.to_string()))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -1151,14 +1494,14 @@ impl SyncDatabase {
         id: i64,
         status: &str,
         error: Option<&str>,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "UPDATE action_queue SET status = ?1, last_error = ?2, retry_count = retry_count + 1
              WHERE id = ?3",
             params![status, error, id],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -1168,26 +1511,26 @@ impl SyncDatabase {
         &self,
         id: i64,
         status: &str,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "UPDATE action_queue SET status = ?1 WHERE id = ?2",
             params![status, id],
         )
-        .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
 
     /// Delete completed actions
-    pub fn delete_completed_actions(&self, account_id: &str) -> Result<u64, HimalayaError> {
+    pub fn delete_completed_actions(&self, account_id: &str) -> Result<u64, EddieError> {
         let conn = self.connection()?;
         let deleted = conn
             .execute(
                 "DELETE FROM action_queue WHERE account_id = ?1 AND status = 'completed'",
                 params![account_id],
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(deleted as u64)
     }
@@ -1218,7 +1561,7 @@ impl SyncDatabase {
     pub fn set_message_classification(
         &self,
         classification: &MessageClassification,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO message_classifications (message_id, classification, confidence, is_hidden_from_chat, classified_at)
@@ -1235,7 +1578,7 @@ impl SyncDatabase {
                 classification.is_hidden_from_chat as i32,
                 classification.classified_at.to_rfc3339(),
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -1244,14 +1587,14 @@ impl SyncDatabase {
     pub fn get_message_classification(
         &self,
         message_id: i64,
-    ) -> Result<Option<MessageClassification>, HimalayaError> {
+    ) -> Result<Option<MessageClassification>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
                 "SELECT message_id, classification, confidence, is_hidden_from_chat, classified_at
              FROM message_classifications WHERE message_id = ?1",
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(params![message_id], |row| {
@@ -1269,7 +1612,7 @@ impl SyncDatabase {
                 })
             })
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -1277,7 +1620,7 @@ impl SyncDatabase {
     // ========== Sync Progress Operations ==========
 
     /// Update sync progress
-    pub fn update_sync_progress(&self, progress: &SyncProgress) -> Result<(), HimalayaError> {
+    pub fn update_sync_progress(&self, progress: &SyncProgress) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO sync_progress (account_id, folder_name, phase, total_messages, synced_messages,
@@ -1299,7 +1642,7 @@ impl SyncDatabase {
                 progress.oldest_synced_date.map(|dt| dt.to_rfc3339()),
                 progress.last_batch_uid,
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -1309,7 +1652,7 @@ impl SyncDatabase {
         &self,
         account_id: &str,
         folder_name: &str,
-    ) -> Result<Option<SyncProgress>, HimalayaError> {
+    ) -> Result<Option<SyncProgress>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
@@ -1317,7 +1660,7 @@ impl SyncDatabase {
                     oldest_synced_date, last_batch_uid, started_at, updated_at
              FROM sync_progress WHERE account_id = ?1 AND folder_name = ?2",
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(params![account_id, folder_name], |row| {
@@ -1347,7 +1690,7 @@ impl SyncDatabase {
                 })
             })
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
@@ -1362,10 +1705,10 @@ impl SyncDatabase {
         supports_qresync: bool,
         supports_condstore: bool,
         supports_idle: bool,
-    ) -> Result<(), HimalayaError> {
+    ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         let capabilities_json = serde_json::to_string(capabilities)
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         conn.execute(
             "INSERT INTO server_capabilities (account_id, capabilities, supports_qresync, supports_condstore, supports_idle, detected_at)
@@ -1383,7 +1726,7 @@ impl SyncDatabase {
                 supports_condstore as i32,
                 supports_idle as i32,
             ],
-        ).map_err(|e| HimalayaError::Backend(e.to_string()))?;
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -1392,14 +1735,14 @@ impl SyncDatabase {
     pub fn get_capabilities(
         &self,
         account_id: &str,
-    ) -> Result<Option<(Vec<String>, bool, bool, bool)>, HimalayaError> {
+    ) -> Result<Option<(Vec<String>, bool, bool, bool)>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
                 "SELECT capabilities, supports_qresync, supports_condstore, supports_idle
              FROM server_capabilities WHERE account_id = ?1",
             )
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         let result = stmt
             .query_row(params![account_id], |row| {
@@ -1413,7 +1756,7 @@ impl SyncDatabase {
                 ))
             })
             .optional()
-            .map_err(|e| HimalayaError::Backend(e.to_string()))?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
     }
