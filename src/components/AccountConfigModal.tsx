@@ -181,7 +181,58 @@ export function AccountConfigModal({
     setConfirmDelete(false);
   };
 
+  const handleClearForm = () => {
+    if (isEditMode && editData) {
+      // Reset to original edit data
+      setName(editData.name);
+      setEmail(editData.email);
+      setDisplayName(editData.display_name || "");
+      setImapHost(editData.imap_host);
+      setImapPort(editData.imap_port);
+      setImapTls(editData.imap_tls);
+      setImapTlsCert(editData.imap_tls_cert || "");
+      setSmtpHost(editData.smtp_host);
+      setSmtpPort(editData.smtp_port);
+      setSmtpTls(editData.smtp_tls);
+      setSmtpTlsCert(editData.smtp_tls_cert || "");
+      setUsername(editData.username);
+      setPassword("");
+    } else {
+      // Reset to defaults for new account
+      setName("");
+      setEmail("");
+      setDisplayName("");
+      setImapHost("");
+      setImapPort(993);
+      setImapTls(true);
+      setImapTlsCert("");
+      setSmtpHost("");
+      setSmtpPort(465);
+      setSmtpTls(true);
+      setSmtpTlsCert("");
+      setUsername("");
+      setPassword("");
+    }
+    setError(null);
+  };
+
   const isProcessing = saving || deleting;
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !isProcessing) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen, isProcessing, onClose]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="compose-modal-overlay">
@@ -351,44 +402,58 @@ export function AccountConfigModal({
         </div>
 
         <div className="compose-footer">
-          {isEditMode && onDelete && !confirmDelete && (
-            <button
-              type="button"
-              onClick={handleDeleteClick}
-              disabled={isProcessing}
-              className="delete-btn"
-            >
-              Delete Account
-            </button>
-          )}
-          {isEditMode && onDelete && confirmDelete && (
-            <>
-              <span className="delete-confirm-text">Delete this account?</span>
+          <div className="footer-left">
+            {isEditMode && onDelete && !confirmDelete && (
               <button
                 type="button"
-                onClick={handleDeleteConfirm}
-                disabled={deleting}
+                onClick={handleDeleteClick}
+                disabled={isProcessing}
                 className="delete-btn"
               >
-                {deleting ? "Deleting..." : "Yes, Delete"}
+                Delete Account
               </button>
+            )}
+            {isEditMode && onDelete && confirmDelete && (
+              <>
+                <span className="delete-confirm-text">Delete this account?</span>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting}
+                  className="delete-btn"
+                >
+                  {deleting ? "Deleting..." : "Yes, Delete"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteCancel}
+                  disabled={deleting}
+                  className="cancel-btn"
+                >
+                  No
+                </button>
+              </>
+            )}
+            {!confirmDelete && (
               <button
                 type="button"
-                onClick={handleDeleteCancel}
-                disabled={deleting}
-                className="cancel-btn"
+                onClick={handleClearForm}
+                disabled={isProcessing}
+                className="clear-btn"
+                title="Clear all form fields"
               >
-                No
+                Clear Form
               </button>
-            </>
-          )}
-          <div className="footer-spacer" />
-          <button type="button" onClick={onClose} disabled={isProcessing} className="cancel-btn">
-            Cancel
-          </button>
-          <button type="button" onClick={handleSave} disabled={isProcessing} className="send-btn">
-            {saving ? "Saving..." : "Save Account"}
-          </button>
+            )}
+          </div>
+          <div className="footer-right">
+            <button type="button" onClick={onClose} disabled={isProcessing} className="cancel-btn">
+              Cancel
+            </button>
+            <button type="button" onClick={handleSave} disabled={isProcessing} className="send-btn">
+              {saving ? "Saving..." : "Save Account"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

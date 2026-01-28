@@ -1,10 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
-import { open } from "@tauri-apps/plugin-opener";
+import { useState, useEffect } from "react";
 import type { DiscoveryResult } from "../types";
 import {
   discoverEmailConfig,
   startOAuthFlow,
-  completeOAuthFlow,
   saveDiscoveredAccount,
   checkOAuthStatus,
 } from "../lib/api";
@@ -129,7 +127,7 @@ export function AccountSetupWizard({
       );
 
       // Open browser for OAuth
-      await open(authUrl);
+      window.open(authUrl, '_blank');
 
       // Note: In a real implementation, we would need to:
       // 1. Start a local HTTP server to receive the callback
@@ -364,6 +362,15 @@ export function AccountSetupWizard({
       <div className="wizard-step-header">
         <h3>Manual Configuration</h3>
         <p>Enter your email server settings</p>
+        {discovery && (
+          <button
+            type="button"
+            className="back-link"
+            onClick={() => setStep("auth")}
+          >
+            ← Back to auto-detected settings
+          </button>
+        )}
       </div>
 
       <fieldset className="config-section">
@@ -506,34 +513,58 @@ export function AccountSetupWizard({
         <div className="compose-footer">
           {step !== "discovering" && step !== "saving" && (
             <>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={processing}
-                className="cancel-btn"
-              >
-                Cancel
-              </button>
-              {step === "email" && (
+              <div className="footer-left">
+                {step === "auth" && discovery && (
+                  <button
+                    type="button"
+                    onClick={() => setStep("email")}
+                    disabled={processing}
+                    className="back-btn"
+                  >
+                    ← Back
+                  </button>
+                )}
+                {step === "manual" && (
+                  <button
+                    type="button"
+                    onClick={() => setStep(discovery ? "auth" : "email")}
+                    disabled={processing}
+                    className="back-btn"
+                  >
+                    ← Back
+                  </button>
+                )}
+              </div>
+              <div className="footer-right">
                 <button
                   type="button"
-                  onClick={handleEmailSubmit}
-                  disabled={!canProceed() || processing}
-                  className="send-btn"
+                  onClick={onClose}
+                  disabled={processing}
+                  className="cancel-btn"
                 >
-                  Continue
+                  Cancel
                 </button>
-              )}
-              {(step === "auth" || step === "manual") && (
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!canProceed() || processing}
-                  className="send-btn"
-                >
-                  {processing ? "Saving..." : "Add Account"}
-                </button>
-              )}
+                {step === "email" && (
+                  <button
+                    type="button"
+                    onClick={handleEmailSubmit}
+                    disabled={!canProceed() || processing}
+                    className="send-btn"
+                  >
+                    Continue
+                  </button>
+                )}
+                {(step === "auth" || step === "manual") && (
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!canProceed() || processing}
+                    className="send-btn"
+                  >
+                    {processing ? "Saving..." : "Add Account"}
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
