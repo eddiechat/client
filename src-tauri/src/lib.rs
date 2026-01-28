@@ -38,6 +38,11 @@ pub fn run() {
                 tracing::warn!("Could not load config on startup: {}", e);
             }
 
+            // Initialize the config database
+            if let Err(e) = sync::db::init_config_db() {
+                tracing::warn!("Could not initialize config database on startup: {}", e);
+            }
+
             // Set app handle on sync manager for event emission
             let sync_manager = app.state::<SyncManager>();
             let handle = app.handle().clone();
@@ -54,6 +59,12 @@ pub fn run() {
             commands::is_config_initialized,
             commands::get_config_paths,
             commands::save_account,
+            // Account database commands
+            commands::init_config_database,
+            commands::get_accounts,
+            commands::get_active_account,
+            commands::switch_account,
+            commands::delete_account,
             // Account commands
             commands::list_accounts,
             commands::get_default_account,

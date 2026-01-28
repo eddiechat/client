@@ -6,7 +6,7 @@ use tracing::{info, warn};
 
 use crate::backend::{self, SendMessageResult};
 use crate::commands::sync::SyncManager;
-use crate::config;
+use crate::sync::db::{get_active_connection_config, init_config_db};
 use crate::types::{ComposeAttachment, Message, ReadMessageRequest};
 
 /// Helper to get account ID from optional parameter
@@ -14,11 +14,11 @@ fn get_account_id(account: Option<&str>) -> Result<String, String> {
     if let Some(id) = account {
         Ok(id.to_string())
     } else {
-        let app_config = config::get_config().map_err(|e| e.to_string())?;
-        app_config
-            .default_account_name()
-            .map(|s| s.to_string())
-            .ok_or_else(|| "No default account configured".to_string())
+        init_config_db().map_err(|e| e.to_string())?;
+        let active_config = get_active_connection_config().map_err(|e| e.to_string())?;
+        active_config
+            .map(|c| c.account_id)
+            .ok_or_else(|| "No active account configured".to_string())
     }
 }
 
