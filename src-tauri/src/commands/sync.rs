@@ -11,9 +11,12 @@ use tauri::State;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
-use crate::config;
+use crate::config::{AccountConfig, ImapConfig, SmtpConfig};
 use crate::sync::action_queue::ActionType;
-use crate::sync::db::{CachedConversation, CachedMessage};
+use crate::sync::db::{
+    get_active_connection_config, get_connection_config, init_config_db, CachedConversation,
+    CachedMessage,
+};
 use crate::sync::engine::{SyncConfig, SyncEngine, SyncState, SyncStatus};
 use crate::sync::idle::MonitorConfig;
 use crate::types::error::EddieError;
@@ -68,11 +71,29 @@ impl SyncManager {
         // Create new engine
         info!("Creating sync engine for account: {}", account_id);
 
-        let app_config = config::get_config()?;
-        let (name, account) = app_config
-            .get_account(Some(account_id))
+        init_config_db()?;
+        let db_config = get_connection_config(account_id)?
             .ok_or_else(|| EddieError::AccountNotFound(account_id.to_string()))?;
 
+        // Deserialize IMAP and SMTP configs from JSON
+        let imap_config = db_config
+            .imap_config
+            .and_then(|json| serde_json::from_str::<ImapConfig>(&json).ok());
+
+        let smtp_config = db_config
+            .smtp_config
+            .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
+
+        let account = AccountConfig {
+            name: db_config.name.clone(),
+            default: db_config.active,
+            email: db_config.email.clone(),
+            display_name: db_config.display_name.clone(),
+            imap: imap_config,
+            smtp: smtp_config,
+        };
+
+        let name = db_config.name.as_ref().unwrap_or(&db_config.account_id);
         let db_path = self.default_db_dir.join(format!("{}.db", name));
         info!("Database path: {:?}", db_path);
 
@@ -722,10 +743,10 @@ fn get_account_id(account: Option<String>) -> Result<String, String> {
     if let Some(id) = account {
         Ok(id)
     } else {
-        let app_config = config::get_config().map_err(|e| e.to_string())?;
-        app_config
-            .default_account_name()
-            .map(|s| s.to_string())
-            .ok_or_else(|| "No default account configured".to_string())
+        init_config_db().map_err(|e| e.to_string())?;
+        let active_config = get_active_connection_config().map_err(|e| e.to_string())?;
+        active_config
+            .map(|c| c.account_id)
+            .ok_or_else(|| "No active account configured".to_string())
     }
 }
