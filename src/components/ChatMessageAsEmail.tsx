@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-interface MessageFullViewProps {
+interface ChatMessageAsEmailProps {
   message: Message;
   onClose: () => void;
 }
@@ -27,7 +27,7 @@ function formatFullViewTime(dateStr: string): string {
   });
 }
 
-export function MessageFullView({ message, onClose }: MessageFullViewProps) {
+export function ChatMessageAsEmail({ message, onClose }: ChatMessageAsEmailProps) {
   const senderName = getSenderName(message.envelope.from);
   const hasHtml = message.html_body && message.html_body.trim().length > 0;
 

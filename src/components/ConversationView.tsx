@@ -14,7 +14,7 @@ import { searchEmojis } from "../lib/emojiData";
 import { Avatar } from "./Avatar";
 import { GravatarModal } from "./GravatarModal";
 import { AttachmentList } from "./AttachmentList";
-import { MessageFullView } from "./MessageFullView";
+import { ChatMessageAsEmail } from "./ChatMessageAsEmail";
 import { EmojiPicker, EmojiSuggestions } from "./EmojiPicker";
 
 interface ConversationViewProps {
@@ -413,7 +413,7 @@ export function ConversationView({
 
       {/* Content area */}
       {fullViewMessage ? (
-        <MessageFullView message={fullViewMessage} onClose={() => setFullViewMessage(null)} />
+        <ChatMessageAsEmail message={fullViewMessage} onClose={() => setFullViewMessage(null)} />
       ) : gravatarModalData ? (
         <GravatarModal email={gravatarModalData.email} name={gravatarModalData.name} isOpen={!!gravatarModalData} onClose={() => setGravatarModalData(null)} />
       ) : (

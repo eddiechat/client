@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import {
   AccountConfigModal,
   AccountSetupWizard,
-  ChatList,
+  ChatMessages,
   ConversationView,
   SidebarHeader,
 } from "./components";
@@ -290,7 +290,7 @@ function App() {
           onCompose={handleCompose}
         />
 
-        <ChatList
+        <ChatMessages
           conversations={conversations}
           selectedId={selectedConversation?.id || null}
           onSelect={handleConversationSelect}
