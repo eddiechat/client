@@ -183,8 +183,13 @@ pub async fn send_message_with_attachments(
     subject: String,
     body: String,
     attachments: Vec<ComposeAttachment>,
+    in_reply_to: Option<String>,
 ) -> Result<Option<SendMessageResult>, EddieError> {
-    info!("Sending message with {} attachments", attachments.len());
+    info!(
+        "Sending message with {} attachments, in_reply_to: {:?}",
+        attachments.len(),
+        in_reply_to
+    );
 
     let backend = backend::get_backend(account.as_deref())
         .await
@@ -198,6 +203,7 @@ pub async fn send_message_with_attachments(
         subject,
         body,
         attachments,
+        in_reply_to,
     })?;
 
     backend

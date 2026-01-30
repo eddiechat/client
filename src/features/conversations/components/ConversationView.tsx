@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { Conversation, ChatMessage, ComposeAttachment } from "../../../tauri";
+import type { Conversation, ChatMessage, ComposeAttachment, ReplyTarget } from "../../../tauri";
 import {
   getAvatarColor,
   getInitials,
@@ -32,7 +32,7 @@ interface ConversationViewProps {
   loading?: boolean;
   error?: string | null;
   currentAccountEmail?: string;
-  onSendMessage: (text: string, attachments?: ComposeAttachment[]) => void;
+  onSendMessage: (text: string, attachments?: ComposeAttachment[], replyTarget?: ReplyTarget) => void;
   onBack?: () => void;
   isComposing?: boolean;
   composeParticipants?: string[];
@@ -66,6 +66,7 @@ export function ConversationView({
   } | null>(null);
   const [fullViewMessage, setFullViewMessage] = useState<ChatMessage | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiSuggestion, setEmojiSuggestion] = useState<{
     query: string;
@@ -78,10 +79,11 @@ export function ConversationView({
   const prevConversationRef = useRef<Conversation | null>(null);
   const wasComposingRef = useRef(false);
 
-  // Reset modals when conversation changes
+  // Reset modals and reply target when conversation changes
   useEffect(() => {
     setGravatarModalData(null);
     setFullViewMessage(null);
+    setReplyTarget(null);
   }, [conversation?.id]);
 
   // Scroll to bottom when messages change
@@ -293,10 +295,12 @@ export function ConversationView({
       } else if (conversation) {
         onSendMessage(
           inputValue.trim(),
-          attachments.length > 0 ? attachments : undefined
+          attachments.length > 0 ? attachments : undefined,
+          replyTarget || undefined
         );
         setInputValue("");
         setAttachments([]);
+        setReplyTarget(null);
       }
       inputRef.current?.focus();
     }

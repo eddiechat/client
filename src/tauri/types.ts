@@ -135,6 +135,7 @@ export interface CachedChatMessage {
   folder: string;
   uid: number;
   message_id: string | null;
+  in_reply_to: string | null;
   from_address: string;
   from_name: string | null;
   to_addresses: string[];
@@ -149,6 +150,14 @@ export interface CachedChatMessage {
 }
 
 // ========== Message Compose Types ==========
+
+/** Reply target for the hybrid subject strategy */
+export interface ReplyTarget {
+  messageId: string; // The message_id header (for In-Reply-To)
+  subject: string; // Original subject (for Re: prefix)
+  snippet: string; // Preview text to show in UI
+  from: string; // Who sent the message
+}
 
 export interface ComposeAttachment {
   path: string;

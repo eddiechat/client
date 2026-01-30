@@ -16,6 +16,7 @@ pub struct ComposeParams {
     pub subject: String,
     pub body: String,
     pub attachments: Vec<ComposeAttachment>,
+    pub in_reply_to: Option<String>,
 }
 
 /// Build a raw email message with optional attachments
@@ -44,6 +45,13 @@ pub fn build_message(params: ComposeParams) -> Result<Vec<u8>> {
 
 /// Build email headers
 fn build_headers(params: &ComposeParams, boundary: &str) -> String {
+    // Generate a unique Message-ID for proper threading
+    let message_id = format!(
+        "<{}.{}@eddie.local>",
+        uuid::Uuid::new_v4().to_string().replace('-', ""),
+        chrono::Utc::now().timestamp()
+    );
+
     let mut headers = vec![
         format!("From: {}", params.from),
         format!("To: {}", params.to.join(", ")),
@@ -52,8 +60,22 @@ fn build_headers(params: &ComposeParams, boundary: &str) -> String {
             "Date: {}",
             chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")
         ),
+        format!("Message-ID: {}", message_id),
         "MIME-Version: 1.0".to_string(),
     ];
+
+    // Add In-Reply-To header for threading (RFC 5322)
+    if let Some(ref reply_to_id) = params.in_reply_to {
+        // Ensure angle brackets are present (RFC 5322 requires them for Message-ID)
+        let formatted_id = if reply_to_id.starts_with('<') && reply_to_id.ends_with('>') {
+            reply_to_id.clone()
+        } else {
+            format!("<{}>", reply_to_id)
+        };
+        headers.push(format!("In-Reply-To: {}", formatted_id));
+        // Also add References header for proper threading chain
+        headers.push(format!("References: {}", formatted_id));
+    }
 
     // Add Cc if present
     if let Some(cc_addrs) = &params.cc {
@@ -142,6 +164,7 @@ mod tests {
             subject: "Test Subject".to_string(),
             body: "Test body content".to_string(),
             attachments: vec![],
+            in_reply_to: None,
         };
 
         let result = build_message(params);
