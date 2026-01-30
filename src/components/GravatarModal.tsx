@@ -14,7 +14,6 @@ export function GravatarModal({ email, name, isOpen, onClose }: GravatarModalPro
 
   useEffect(() => {
     if (!email) return;
-
     setHasGravatar(null);
     const img = new Image();
     img.onload = () => setHasGravatar(true);
@@ -29,36 +28,40 @@ export function GravatarModal({ email, name, isOpen, onClose }: GravatarModalPro
   const displayName = name || email;
 
   return (
-    <div className="gravatar-panel">
-      <div className="gravatar-panel-header">
-        <div className="gravatar-panel-info">
-          <h2 className="gravatar-panel-title">{displayName}</h2>
-          {name && <span className="gravatar-panel-email">{email}</span>}
+    <div className="flex-1 flex flex-col bg-bg-secondary">
+      <div className="flex items-center justify-between p-4 border-b border-divider">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold text-text-primary truncate">{displayName}</h2>
+          {name && <span className="text-sm text-text-muted">{email}</span>}
         </div>
-        <button className="gravatar-panel-close" onClick={onClose} title="Close">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <button
+          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-bg-hover transition-colors"
+          onClick={onClose}
+          title="Close"
+        >
+          <svg className="w-5 h-5 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
       </div>
-      <div className="gravatar-panel-content">
+      <div className="flex-1 flex items-center justify-center p-6">
         {hasGravatar === null ? (
-          <div className="gravatar-loading">
-            <div className="loading-spinner" />
-          </div>
+          <div className="spinner spinner-lg" />
         ) : hasGravatar ? (
           <iframe
             src={cardUrl}
             title="Gravatar Profile"
+            className="w-full h-full min-h-[300px] border-none rounded-lg bg-white"
           />
         ) : (
-          <div className="gravatar-fallback">
+          <div className="flex flex-col items-center gap-4">
             <div
-              className="gravatar-fallback-avatar"
+              className="w-32 h-32 rounded-full flex items-center justify-center text-4xl font-bold text-white"
               style={{ backgroundColor: getAvatarColor(email) }}
             >
               {getInitials(displayName)}
             </div>
+            <p className="text-text-muted text-sm">No Gravatar profile</p>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod config;
 pub mod conversations;
+pub mod discovery;
 pub mod envelopes;
 pub mod flags;
 pub mod folders;
@@ -10,6 +11,7 @@ pub mod sync;
 pub use accounts::*;
 pub use config::*;
 pub use conversations::*;
+pub use discovery::*;
 pub use envelopes::*;
 pub use flags::*;
 pub use folders::*;

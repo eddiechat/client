@@ -13,6 +13,7 @@ import { searchEmojis } from "../lib/emojiData";
 import { Avatar } from "./Avatar";
 import { GravatarModal } from "./GravatarModal";
 import { AttachmentList } from "./AttachmentList";
+import { MessageFullView } from "./MessageFullView";
 import { EmojiPicker, EmojiSuggestions } from "./EmojiPicker";
 
 interface ConversationViewProps {
@@ -169,6 +170,7 @@ export function ConversationView({
   const [toInputValue, setToInputValue] = useState("");
   const [participantsConfirmed, setParticipantsConfirmed] = useState(false);
   const [gravatarModalData, setGravatarModalData] = useState<{ email: string; name: string } | null>(null);
+  const [fullViewMessage, setFullViewMessage] = useState<Message | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -182,9 +184,10 @@ export function ConversationView({
   const prevConversationRef = useRef<Conversation | null>(null);
   const wasComposingRef = useRef(false);
 
-  // Close gravatar panel when conversation changes
+  // Close modals when conversation changes
   useEffect(() => {
     setGravatarModalData(null);
+    setFullViewMessage(null);
   }, [conversation?.id]);
 
   // Scroll to bottom when messages change
@@ -691,8 +694,10 @@ export function ConversationView({
         </div>
       </div>
 
-      {/* Gravatar Panel or Messages */}
-      {gravatarModalData ? (
+      {/* Full View, Gravatar Panel, or Messages */}
+      {fullViewMessage ? (
+        <MessageFullView message={fullViewMessage} onClose={() => setFullViewMessage(null)} />
+      ) : gravatarModalData ? (
         <GravatarModal
           email={gravatarModalData.email}
           name={gravatarModalData.name}

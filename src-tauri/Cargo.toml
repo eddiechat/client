@@ -45,8 +45,25 @@ flume = "0.11"
 # Email address parsing
 mailparse = "0.15"
 
-# Base64 encoding for attachments
+# Email autodiscovery and OAuth2
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+hickory-resolver = { version = "0.24", features = ["tokio-runtime"] }
+quick-xml = { version = "0.36", features = ["serialize"] }
+oauth2 = { version = "4.4", features = ["reqwest"] }
 base64 = "0.22"
+sha2 = "0.10"
+rand = "0.8"
+url = "2"
+
+# Secure credential storage
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# TLS support for probing
+tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
+
+# Tauri plugins for OAuth
+tauri-plugin-deep-link = "2"
 
 # Desktop-only features (tray icon not supported on mobile)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

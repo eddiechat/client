@@ -83,8 +83,8 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), String> {
     let account = AccountConfig {
         name: Some(request.name.clone()),
         default: true,
-        email: request.email,
-        display_name: request.display_name,
+        email: request.email.clone(),
+        display_name: request.display_name.clone(),
         imap: Some(ImapConfig {
             host: request.imap_host,
             port: request.imap_port,
@@ -112,11 +112,10 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), String> {
         .map(|c| serde_json::to_string(c).unwrap_or_default());
 
     let db_config = ConnectionConfig {
-        account_id: request.name,
+        account_id: request.email.clone(),  // Use email as account_id
         active: true, // New accounts are active by default
-        name: account.name,
-        email: account.email,
-        display_name: account.display_name,
+        email: request.email,
+        display_name: request.display_name,
         imap_config: imap_json,
         smtp_config: smtp_json,
         created_at: Utc::now(),
@@ -138,7 +137,6 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), String> {
 pub struct AccountInfo {
     pub account_id: String,
     pub active: bool,
-    pub name: Option<String>,
     pub email: String,
     pub display_name: Option<String>,
 }
@@ -148,7 +146,6 @@ impl From<ConnectionConfig> for AccountInfo {
         Self {
             account_id: config.account_id,
             active: config.active,
-            name: config.name,
             email: config.email,
             display_name: config.display_name,
         }
@@ -198,11 +195,49 @@ pub async fn switch_account(account_id: String) -> Result<(), String> {
 
 /// Delete an account from the database
 #[tauri::command]
-pub async fn delete_account(account_id: String) -> Result<(), String> {
+pub async fn delete_account(
+    account_id: String,
+    sync_manager: tauri::State<'_, crate::commands::sync::SyncManager>,
+) -> Result<(), String> {
     info!("Tauri command: delete_account - {}", account_id);
 
-    // Remove from database
     init_config_db().map_err(|e| e.to_string())?;
+
+    // Get the connection config to retrieve the account name (needed for DB file path)
+    let db_config = config_db::get_connection_config(&account_id).map_err(|e| e.to_string())?;
+
+    // Shutdown the sync engine if it's running
+    info!("Shutting down sync engine for account: {}", account_id);
+    sync_manager.remove(&account_id).await;
+
+    // Delete the sync database file
+    if let Some(config) = db_config {
+        // Sanitize email for use as filename (replace @ and . with _)
+        let safe_name = config.account_id.replace('@', "_").replace('.', "_");
+
+        // Construct database path using the same logic as SyncManager
+        let db_dir = if cfg!(debug_assertions) {
+            std::path::PathBuf::from("../.sqlite")
+        } else {
+            dirs::data_local_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("eddie.chat")
+                .join("sync")
+        };
+
+        let db_path = db_dir.join(format!("{}.db", safe_name));
+
+        if db_path.exists() {
+            info!("Deleting sync database file: {:?}", db_path);
+            std::fs::remove_file(&db_path).map_err(|e| {
+                format!("Failed to delete sync database file: {}", e)
+            })?;
+        } else {
+            info!("Sync database file not found: {:?}", db_path);
+        }
+    }
+
+    // Remove connection config from database
     config_db::delete_connection_config(&account_id).map_err(|e| e.to_string())?;
 
     Ok(())

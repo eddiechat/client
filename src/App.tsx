@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   AccountConfigModal,
+  AccountSetupWizard,
   ChatList,
   ConversationView,
 } from "./components";
@@ -28,6 +29,9 @@ function App() {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [accountEditData, setAccountEditData] = useState<AccountEditData | null>(null);
 
+  // Account setup wizard state
+  const [setupWizardOpen, setSetupWizardOpen] = useState(false);
+
   // Hooks for data fetching
   const {
     accounts,
@@ -40,8 +44,8 @@ function App() {
   // Get current account email for determining message direction
   const currentAccountEmail = currentAccount || undefined;
 
-  // Show config modal when no accounts are configured
-  const showConfigModal = !accountsLoading && accounts.length === 0;
+  // Show setup wizard when no accounts are configured
+  const showSetupWizard = !accountsLoading && accounts.length === 0;
 
   // Conversations hook
   const {
@@ -223,17 +227,35 @@ function App() {
   );
 
   const handleEditAccount = useCallback(async () => {
-    if (!currentAccount) return;
+    console.log("handleEditAccount called, currentAccount:", currentAccount);
+
+    // Don't open if wizard is still open
+    if (showSetupWizard || setupWizardOpen) {
+      console.log("Setup wizard is open, not opening config modal");
+      return;
+    }
+
+    if (!currentAccount) {
+      console.log("No current account, opening setup wizard");
+      // No active account - open the setup wizard
+      setSetupWizardOpen(true);
+      return;
+    }
 
     try {
+      console.log("Fetching account details for:", currentAccount);
       const details = await api.getAccountDetails(currentAccount);
+      console.log("Got account details:", details);
+
+      // Ensure wizard is closed before opening config modal
+      setSetupWizardOpen(false);
       setAccountEditData(details);
       setAccountModalOpen(true);
     } catch (err) {
       console.error("Failed to get account details:", err);
       alert(`Failed to load account details: ${err}`);
     }
-  }, [currentAccount]);
+  }, [currentAccount, showSetupWizard, setupWizardOpen]);
 
   const handleSaveAccount = async (data: SaveAccountRequest) => {
     await api.saveAccount(data);
@@ -253,30 +275,62 @@ function App() {
     setAccountEditData(null);
   }, []);
 
+  const handleCloseSetupWizard = useCallback(() => {
+    setSetupWizardOpen(false);
+  }, []);
+
+  const handleSetupSuccess = useCallback(async () => {
+    console.log("Account setup completed successfully");
+    await refreshAccounts();
+    await refreshConversations();
+  }, [refreshAccounts, refreshConversations]);
+
   const handleBack = useCallback(() => {
     setSelectedConversation(null);
     setIsComposing(false);
     setComposeParticipants([]);
   }, []);
 
+  // Log account state for debugging
+  console.log("App render: accounts:", accounts.length, "currentAccount:", currentAccount, "accountsLoading:", accountsLoading);
+
+  // Determine if sidebar should be hidden on mobile (when conversation is selected)
+  const sidebarHidden = selectedConversation || isComposing;
+
   return (
-    <main className="app">
+    <main className="flex h-dvh max-h-dvh overflow-hidden">
       {/* Sidebar with chat list */}
-      <aside className={`sidebar${selectedConversation ? ' hidden' : ''}`}>
-        <div className="sidebar-header">
-          <div className="sidebar-title">
-            <div className="sidebar-brand">
-              <img src="/eddie-swirl-green.svg" alt="Eddie logo" className="sidebar-logo" />
-              <h1>eddie</h1>
+      <aside
+        className={`
+          w-full md:w-80 md:min-w-80 bg-bg-secondary border-r border-divider
+          flex flex-col overflow-hidden
+          absolute md:relative inset-0 z-50 md:z-auto
+          transition-transform duration-250 ease-out
+          h-full min-h-0
+          ${sidebarHidden ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}
+        `}
+      >
+        <div className="flex items-center justify-between px-4" style={{ minHeight: '4rem', paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <img src="/eddie-swirl-green.svg" alt="Eddie logo" className="w-6 h-6" />
+              <h1 className="text-xl font-semibold text-text-primary tracking-tight">eddie</h1>
             </div>
             {accounts.length > 0 && (
-              <span className="account-badge" onClick={handleEditAccount}>
+              <span
+                className="text-xs text-text-muted cursor-pointer hover:text-accent-blue transition-colors"
+                onClick={handleEditAccount}
+              >
                 {currentAccount || "No account"}
               </span>
             )}
           </div>
-          <button className="new-message-btn" onClick={handleCompose} title="New message">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <button
+            className="w-9 h-9 rounded-full bg-bg-tertiary flex items-center justify-center hover:bg-bg-hover transition-colors"
+            onClick={handleCompose}
+            title="New message"
+          >
+            <svg className="w-5 h-5 text-text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
@@ -295,7 +349,7 @@ function App() {
       </aside>
 
       {/* Main conversation view */}
-      <section className="main-panel">
+      <section className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full min-h-0">
         <ConversationView
           conversation={selectedConversation}
           messages={messages}
@@ -311,9 +365,16 @@ function App() {
         />
       </section>
 
-      {/* Account Config Modal */}
+      {/* Account Setup Wizard */}
+      <AccountSetupWizard
+        isOpen={showSetupWizard || setupWizardOpen}
+        onClose={handleCloseSetupWizard}
+        onSuccess={handleSetupSuccess}
+      />
+
+      {/* Account Config Modal (for editing existing accounts) */}
       <AccountConfigModal
-        isOpen={showConfigModal || accountModalOpen}
+        isOpen={accountModalOpen}
         onClose={handleCloseAccountModal}
         onSave={handleSaveAccount}
         onDelete={handleDeleteAccount}
