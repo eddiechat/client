@@ -137,8 +137,12 @@ impl EmailBackend {
             .as_ref()
             .ok_or_else(|| EddieError::Config("No IMAP configuration".to_string()))?;
 
+        info!("Building IMAP config for {} ({}:{})", self.account_config.email, imap.host, imap.port);
         let email = &self.account_config.email;
-        let (login, auth) = Self::build_auth_config(&imap.auth, email).await?;
+        let (login, auth) = Self::build_auth_config(&imap.auth, email).await.map_err(|e| {
+            warn!("Failed to build auth config for {}: {}", email, e);
+            e
+        })?;
 
         let tls_config = Tls {
             cert: imap.tls_cert.as_ref().map(PathBuf::from),
@@ -323,7 +327,16 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| EddieError::Backend(e.to_string()))?;
+            .map_err(|e| {
+                let error_msg = format!("Failed to build IMAP backend: {}. Config: host={}, port={}, encryption={:?}",
+                    e,
+                    self.account_config.imap.as_ref().map(|i| i.host.as_str()).unwrap_or("unknown"),
+                    self.account_config.imap.as_ref().map(|i| i.port).unwrap_or(0),
+                    self.account_config.imap.as_ref().map(|i| i.tls).unwrap_or(false)
+                );
+                warn!("{}", error_msg);
+                EddieError::Backend(error_msg)
+            })?;
 
         let folders = backend
             .list_folders()
