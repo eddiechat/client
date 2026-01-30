@@ -6,10 +6,10 @@
 
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioAsyncResolver;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::{
-    providers, AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, OAuthProvider, Security,
+    providers, AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, Security,
     ServerConfig, UsernameHint,
 };
 
@@ -81,7 +81,6 @@ pub async fn try_srv_records(domain: &str) -> Result<EmailDiscoveryConfig, Autod
             security: smtp_security,
         },
         auth_method: AuthMethod::Password,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "srv".to_string(),
@@ -213,7 +212,6 @@ fn detect_provider_from_mx(mx_host: &str, domain: &str) -> Option<EmailDiscovery
                 security: Security::Tls,
             },
             auth_method: AuthMethod::Password,
-            oauth_provider: None,
             username_hint: UsernameHint::FullEmail,
             requires_app_password: false,
             source: "mx".to_string(),
@@ -236,7 +234,6 @@ fn detect_provider_from_mx(mx_host: &str, domain: &str) -> Option<EmailDiscovery
                 security: Security::Starttls,
             },
             auth_method: AuthMethod::Password,
-            oauth_provider: None,
             username_hint: UsernameHint::FullEmail,
             requires_app_password: false,
             source: "mx".to_string(),

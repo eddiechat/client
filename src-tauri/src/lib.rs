@@ -12,7 +12,6 @@
 //! - `sync/`: Sync engine for offline support
 //! - `config/`: Configuration management
 //! - `credentials/`: Secure credential storage
-//! - `oauth/`: OAuth2 implementation
 //! - `autodiscovery/`: Email provider auto-configuration
 
 mod autodiscovery;
@@ -20,13 +19,12 @@ mod backend;
 mod commands;
 mod config;
 mod credentials;
-mod oauth;
 mod services;
 mod state;
 mod sync;
 mod types;
 
-use state::{OAuthState, SyncManager};
+use state::SyncManager;
 use tauri::Manager;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -61,7 +59,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(SyncManager::new())
-        .manage(OAuthState::new())
         .setup(|app| {
             // Try to initialize config on startup
             if let Err(e) = config::init_config() {
@@ -104,11 +101,6 @@ pub fn run() {
             // Autodiscovery commands
             commands::discover_email_config,
             commands::test_email_connection,
-            // OAuth2 commands
-            commands::start_oauth_flow,
-            commands::complete_oauth_flow,
-            commands::refresh_oauth_tokens,
-            commands::check_oauth_status,
             // Credential commands
             commands::store_password,
             commands::store_app_password,

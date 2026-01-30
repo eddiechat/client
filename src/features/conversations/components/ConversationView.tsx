@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { Conversation, Message, ComposeAttachment, ReplyTarget } from "../../../tauri";
+import type { Conversation, ChatMessage, ComposeAttachment, ReplyTarget } from "../../../tauri";
 import {
   getAvatarColor,
   getInitials,
@@ -28,7 +28,7 @@ import {
 
 interface ConversationViewProps {
   conversation: Conversation | null;
-  messages: Message[];
+  messages: ChatMessage[];
   loading?: boolean;
   error?: string | null;
   currentAccountEmail?: string;
@@ -64,7 +64,7 @@ export function ConversationView({
     email: string;
     name: string;
   } | null>(null);
-  const [fullViewMessage, setFullViewMessage] = useState<Message | null>(null);
+  const [fullViewMessage, setFullViewMessage] = useState<ChatMessage | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -686,7 +686,7 @@ function ConversationHeader({
 }
 
 interface MessageBubbleProps {
-  message: Message;
+  message: ChatMessage;
   isOutgoing: boolean;
   showDateSeparator: boolean;
   showSender: boolean;

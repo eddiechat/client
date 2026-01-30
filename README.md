@@ -19,23 +19,6 @@ We believe that an open and shared repository of agent skills, and the ability f
 
 [Read the Manifesto →](https://eddie.chat)
 
----
-
-## Features
-
-- **Conversation Threading** - Emails grouped by participants, not just subject lines
-- **Multi-Account Support** - Manage multiple email accounts with easy switching
-- **Modern Dark UI** - Signal-inspired design with green accents
-- **Full IMAP/SMTP Support** - Works with any standard email provider
-- **Draft Auto-Save** - Never lose your in-progress messages
-- **Gravatar Integration** - Automatic avatars for your contacts
-- **Folder Management** - Create, delete, and organize folders
-- **Message Operations** - Read/unread, flag, delete, move, and copy
-- **Search** - Quickly find conversations by name or content
-- **Cross-Platform** - Runs on macOS, Windows, and Linux
-
----
-
 ## Architecture
 
 ### High-Level Overview
@@ -459,7 +442,7 @@ The frontend follows a **feature-based architecture** with these principles:
 
    // Tauri layer
    import { saveAccount, onSyncEvent } from './tauri';
-   import type { Account, SyncStatus } from './tauri';
+   import type { EmailAccount, SyncStatus } from './tauri';
 
    // Shared utilities
    import { Avatar, getAvatarColor } from './shared';

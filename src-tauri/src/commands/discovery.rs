@@ -1,25 +1,17 @@
-//! Tauri commands for email autodiscovery and OAuth2 flows
+//! Tauri commands for email autodiscovery
 //!
-//! These commands handle email configuration discovery and OAuth2 authentication.
+//! These commands handle email configuration discovery.
 
-use tauri::State;
 use tracing::info;
 
 use crate::autodiscovery::{
     AuthMethod, DiscoveryPipeline, DiscoveryProgress, DiscoveryStage, EmailDiscoveryConfig,
-    OAuthProvider as DiscoveryOAuthProvider, Security, UsernameHint,
+    Security, UsernameHint,
 };
 use crate::credentials::CredentialStore;
-use crate::oauth::OAuthManager;
-use crate::services::{
-    create_account, parse_oauth_provider, AuthMethod as ServiceAuthMethod, CreateAccountParams,
-};
-use crate::state::OAuthState;
-use crate::types::responses::{DiscoveryResult, OAuthStatus, ProgressUpdate};
+use crate::services::{create_account, AuthMethod as ServiceAuthMethod, CreateEmailAccountParams};
+use crate::types::responses::{DiscoveryResult, ProgressUpdate};
 use crate::types::EddieError;
-
-// Re-export OAuthState for backward compatibility
-pub use crate::state::OAuthState as OAuthStateType;
 
 // ============================================================================
 // Discovery result conversion
@@ -38,15 +30,8 @@ impl From<EmailDiscoveryConfig> for DiscoveryResult {
             smtp_tls: matches!(config.smtp.security, Security::Tls),
             auth_method: match config.auth_method {
                 AuthMethod::Password => "password".to_string(),
-                AuthMethod::OAuth2 => "oauth2".to_string(),
                 AuthMethod::AppPassword => "app_password".to_string(),
             },
-            oauth_provider: config.oauth_provider.map(|p| match p {
-                DiscoveryOAuthProvider::Google => "google".to_string(),
-                DiscoveryOAuthProvider::Microsoft => "microsoft".to_string(),
-                DiscoveryOAuthProvider::Yahoo => "yahoo".to_string(),
-                DiscoveryOAuthProvider::Fastmail => "fastmail".to_string(),
-            }),
             requires_app_password: config.requires_app_password,
             username_hint: match config.username_hint {
                 UsernameHint::FullEmail => "full_email".to_string(),
@@ -106,127 +91,10 @@ pub async fn test_email_connection(
     _smtp_tls: bool,
     _auth_method: String,
     _password: Option<String>,
-    _oauth_provider: Option<String>,
 ) -> Result<bool, EddieError> {
     info!("Testing email connection for: {}", email);
     // TODO: Implement actual connection testing
     Ok(true)
-}
-
-// ============================================================================
-// OAuth2 commands
-// ============================================================================
-
-/// Start OAuth2 authorization flow
-/// Returns the authorization URL to open in browser
-#[tauri::command]
-pub async fn start_oauth_flow(
-    state: State<'_, OAuthState>,
-    provider: String,
-    email: String,
-    redirect_uri: String,
-) -> Result<String, EddieError> {
-    info!("Starting OAuth flow for {} with provider {}", email, provider);
-
-    let oauth_provider = parse_discovery_oauth_provider(&provider)?;
-    let manager = state.manager.read().await;
-    let auth_url = manager
-        .start_auth_flow(&oauth_provider, &email, &redirect_uri)
-        .map_err(|e| EddieError::OAuth(e.to_string()))?;
-
-    Ok(auth_url)
-}
-
-/// Complete OAuth2 authorization flow with the callback parameters
-#[tauri::command]
-pub async fn complete_oauth_flow(
-    state: State<'_, OAuthState>,
-    code: String,
-    callback_state: String,
-    redirect_uri: String,
-) -> Result<String, EddieError> {
-    info!("Completing OAuth flow");
-
-    let manager = state.manager.read().await;
-    let (tokens, email) = manager
-        .complete_auth_flow(&code, &callback_state, &redirect_uri)
-        .await
-        .map_err(|e| EddieError::OAuth(e.to_string()))?;
-
-    // Store tokens in credential store
-    let cred_store = CredentialStore::new();
-    cred_store
-        .store_oauth_tokens(&email, &tokens)
-        .map_err(|e| EddieError::Credential(e.to_string()))?;
-
-    info!("OAuth flow completed successfully for {}", email);
-    Ok(email)
-}
-
-/// Refresh OAuth2 tokens for an account
-#[tauri::command]
-pub async fn refresh_oauth_tokens(
-    state: State<'_, OAuthState>,
-    email: String,
-    provider: String,
-) -> Result<bool, EddieError> {
-    info!("Refreshing OAuth tokens for: {}", email);
-
-    let cred_store = CredentialStore::new();
-    let tokens = cred_store
-        .get_oauth_tokens(&email)
-        .map_err(|e| EddieError::Credential(e.to_string()))?;
-
-    let refresh_token = tokens
-        .refresh_token
-        .ok_or_else(|| EddieError::OAuth("No refresh token available".into()))?;
-
-    let oauth_provider = parse_discovery_oauth_provider(&provider)?;
-    let manager = state.manager.read().await;
-    let new_tokens = manager
-        .refresh_tokens(&oauth_provider, &refresh_token)
-        .await
-        .map_err(|e| EddieError::OAuth(e.to_string()))?;
-
-    // Store refreshed tokens
-    cred_store
-        .store_oauth_tokens(&email, &new_tokens)
-        .map_err(|e| EddieError::Credential(e.to_string()))?;
-
-    info!("OAuth tokens refreshed for {}", email);
-    Ok(true)
-}
-
-/// Check if OAuth tokens exist and are valid for an account
-#[tauri::command]
-pub async fn check_oauth_status(email: String) -> Result<OAuthStatus, EddieError> {
-    info!("Checking OAuth status for: {}", email);
-
-    let cred_store = CredentialStore::new();
-
-    match cred_store.get_oauth_tokens(&email) {
-        Ok(tokens) => {
-            let needs_refresh = OAuthManager::should_refresh(&tokens);
-            let is_expired = tokens
-                .expires_at
-                .map(|exp| {
-                    let now = chrono::Utc::now().timestamp();
-                    exp < now
-                })
-                .unwrap_or(false);
-
-            Ok(OAuthStatus {
-                has_tokens: true,
-                needs_refresh,
-                is_expired,
-            })
-        }
-        Err(_) => Ok(OAuthStatus {
-            has_tokens: false,
-            needs_refresh: false,
-            is_expired: false,
-        }),
-    }
 }
 
 // ============================================================================
@@ -275,7 +143,6 @@ pub async fn has_credentials(email: String, credential_type: String) -> Result<b
 
     let exists = match credential_type.as_str() {
         "password" => cred_store.has_password(&email),
-        "oauth" => cred_store.has_oauth_tokens(&email),
         "app_password" => cred_store.get_app_password(&email).is_ok(),
         _ => {
             return Err(EddieError::InvalidInput(format!(
@@ -305,17 +172,11 @@ pub async fn save_discovered_account(
     smtp_port: u16,
     smtp_tls: bool,
     auth_method: String,
-    oauth_provider: Option<String>,
     password: Option<String>,
 ) -> Result<(), EddieError> {
     info!("Saving discovered account: {}", name);
 
     let auth = match auth_method.as_str() {
-        "oauth2" => {
-            let provider = oauth_provider
-                .ok_or_else(|| EddieError::InvalidInput("OAuth provider required".into()))?;
-            ServiceAuthMethod::OAuth2 { provider }
-        }
         "app_password" => {
             let pwd = password
                 .ok_or_else(|| EddieError::InvalidInput("App password required".into()))?;
@@ -331,7 +192,7 @@ pub async fn save_discovered_account(
         }
     };
 
-    create_account(CreateAccountParams {
+    create_account(CreateEmailAccountParams {
         name,
         email,
         display_name,
@@ -345,22 +206,4 @@ pub async fn save_discovered_account(
         smtp_tls_cert: None,
         auth_method: auth,
     })
-}
-
-// ============================================================================
-// Helper functions
-// ============================================================================
-
-/// Parse discovery OAuth provider from string
-fn parse_discovery_oauth_provider(provider: &str) -> Result<DiscoveryOAuthProvider, EddieError> {
-    match provider.to_lowercase().as_str() {
-        "google" => Ok(DiscoveryOAuthProvider::Google),
-        "microsoft" => Ok(DiscoveryOAuthProvider::Microsoft),
-        "yahoo" => Ok(DiscoveryOAuthProvider::Yahoo),
-        "fastmail" => Ok(DiscoveryOAuthProvider::Fastmail),
-        _ => Err(EddieError::InvalidInput(format!(
-            "Unknown OAuth provider: {}",
-            provider
-        ))),
-    }
 }

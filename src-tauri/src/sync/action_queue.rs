@@ -183,15 +183,6 @@ pub enum ActionStatus {
 }
 
 impl ActionStatus {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Processing => "processing",
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-        }
-    }
-
     pub fn from_str(s: &str) -> Self {
         match s {
             "pending" => Self::Pending,
@@ -234,90 +225,6 @@ impl ActionQueue {
         };
 
         self.db.queue_action(&record)
-    }
-
-    /// Queue a mark-as-read action
-    pub fn queue_mark_read(
-        &self,
-        account_id: &str,
-        folder: &str,
-        uids: Vec<u32>,
-    ) -> Result<i64, EddieError> {
-        self.queue(
-            account_id,
-            ActionType::AddFlags {
-                folder: folder.to_string(),
-                uids,
-                flags: vec!["\\Seen".to_string()],
-            },
-        )
-    }
-
-    /// Queue a mark-as-unread action
-    pub fn queue_mark_unread(
-        &self,
-        account_id: &str,
-        folder: &str,
-        uids: Vec<u32>,
-    ) -> Result<i64, EddieError> {
-        self.queue(
-            account_id,
-            ActionType::RemoveFlags {
-                folder: folder.to_string(),
-                uids,
-                flags: vec!["\\Seen".to_string()],
-            },
-        )
-    }
-
-    /// Queue a delete action
-    pub fn queue_delete(
-        &self,
-        account_id: &str,
-        folder: &str,
-        uids: Vec<u32>,
-    ) -> Result<i64, EddieError> {
-        self.queue(
-            account_id,
-            ActionType::Delete {
-                folder: folder.to_string(),
-                uids,
-            },
-        )
-    }
-
-    /// Queue a move action
-    pub fn queue_move(
-        &self,
-        account_id: &str,
-        source: &str,
-        target: &str,
-        uids: Vec<u32>,
-    ) -> Result<i64, EddieError> {
-        self.queue(
-            account_id,
-            ActionType::Move {
-                source_folder: source.to_string(),
-                target_folder: target.to_string(),
-                uids,
-            },
-        )
-    }
-
-    /// Queue a send action
-    pub fn queue_send(
-        &self,
-        account_id: &str,
-        raw_message: Vec<u8>,
-        save_to_sent: bool,
-    ) -> Result<i64, EddieError> {
-        self.queue(
-            account_id,
-            ActionType::Send {
-                raw_message,
-                save_to_sent,
-            },
-        )
     }
 
     /// Get all pending actions for an account
@@ -380,36 +287,6 @@ impl ActionQueue {
     /// Clean up completed actions
     pub fn cleanup_completed(&self, account_id: &str) -> Result<u64, EddieError> {
         self.db.delete_completed_actions(account_id)
-    }
-
-    /// Optimize queue by merging similar actions
-    pub fn optimize(&self, account_id: &str) -> Result<(), EddieError> {
-        let pending = self.get_pending(account_id)?;
-
-        // Group actions by type and folder
-        let mut merged: Vec<QueuedAction> = Vec::new();
-
-        for action in pending {
-            let mut found_merge = false;
-
-            for existing in &mut merged {
-                if existing.action.can_merge(&action.action) {
-                    existing.action.merge_uids(&action.action);
-                    // Mark the original as completed since it's merged
-                    if let Some(id) = action.id {
-                        self.mark_completed(id)?;
-                    }
-                    found_merge = true;
-                    break;
-                }
-            }
-
-            if !found_merge {
-                merged.push(action);
-            }
-        }
-
-        Ok(())
     }
 
     /// Replay all pending actions for an account

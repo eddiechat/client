@@ -32,8 +32,3 @@ pub fn resolve_account_id_string(account: Option<String>) -> Result<String> {
 pub fn sanitize_email_for_filename(email: &str) -> String {
     email.replace('@', "_").replace('.', "_")
 }
-
-/// Get the default folder name if none is specified
-pub fn default_folder(folder: Option<&str>) -> &str {
-    folder.unwrap_or("INBOX")
-}

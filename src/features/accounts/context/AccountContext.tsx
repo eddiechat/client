@@ -1,9 +1,9 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useAccounts } from "../hooks/useAccounts";
-import type { Account } from "../../../tauri";
+import type { EmailAccount } from "../../../tauri";
 
 interface AccountContextValue {
-  accounts: Account[];
+  accounts: EmailAccount[];
   currentAccount: string | null;
   setCurrentAccount: (account: string | null) => void;
   loading: boolean;

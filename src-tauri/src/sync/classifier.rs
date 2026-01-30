@@ -3,12 +3,14 @@
 //! Classifies messages as chat-worthy or non-chat (newsletters, automated, transactional).
 //! Non-chat messages can be hidden from the chat UI but remain in cache.
 
+#![allow(dead_code)]
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::sync::db::{CachedMessage, MessageClassification, SyncDatabase};
+use crate::sync::db::{CachedChatMessage, MessageClassification, SyncDatabase};
 use crate::types::error::EddieError;
 
 /// Message classification categories
@@ -170,7 +172,7 @@ impl MessageClassifier {
     }
 
     /// Classify a message
-    pub fn classify(&self, message: &CachedMessage) -> ClassificationResult {
+    pub fn classify(&self, message: &CachedChatMessage) -> ClassificationResult {
         let mut reasons: Vec<String> = Vec::new();
         let mut scores: Vec<(Classification, f32)> = Vec::new();
 
@@ -294,7 +296,7 @@ impl MessageClassifier {
     /// Classify and store result in database
     pub fn classify_and_store(
         &self,
-        message: &CachedMessage,
+        message: &CachedChatMessage,
     ) -> Result<ClassificationResult, EddieError> {
         let result = self.classify(message);
 
@@ -314,7 +316,7 @@ impl MessageClassifier {
     /// Batch classify messages
     pub fn classify_batch(
         &self,
-        messages: &[CachedMessage],
+        messages: &[CachedChatMessage],
     ) -> Result<Vec<ClassificationResult>, EddieError> {
         let mut results = Vec::with_capacity(messages.len());
 
@@ -329,7 +331,7 @@ impl MessageClassifier {
     /// Get classification for a message (from cache or compute)
     pub fn get_or_classify(
         &self,
-        message: &CachedMessage,
+        message: &CachedChatMessage,
     ) -> Result<ClassificationResult, EddieError> {
         // Try to get from cache
         if let Some(cached) = self.db.get_message_classification(message.id)? {
@@ -345,7 +347,7 @@ impl MessageClassifier {
     }
 
     /// Check if a message should be shown in chat UI
-    pub fn is_chat_message(&self, message: &CachedMessage) -> Result<bool, EddieError> {
+    pub fn is_chat_message(&self, message: &CachedChatMessage) -> Result<bool, EddieError> {
         let result = self.get_or_classify(message)?;
         Ok(result.classification == Classification::Chat
             || result.classification == Classification::Unknown)
@@ -376,8 +378,8 @@ mod tests {
     use super::*;
     use chrono::Utc;
 
-    fn make_test_message(from: &str, subject: &str, body: Option<&str>) -> CachedMessage {
-        CachedMessage {
+    fn make_test_message(from: &str, subject: &str, body: Option<&str>) -> CachedChatMessage {
+        CachedChatMessage {
             id: 1,
             account_id: "test@example.com".to_string(),
             folder_name: "INBOX".to_string(),

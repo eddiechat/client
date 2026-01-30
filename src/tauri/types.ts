@@ -17,7 +17,7 @@ export interface Envelope {
   has_attachment: boolean;
 }
 
-export interface Message {
+export interface ChatMessage {
   id: string;
   envelope: Envelope;
   headers: [string, string][];
@@ -34,13 +34,13 @@ export interface Attachment {
 
 // ========== Account Types ==========
 
-export interface Account {
+export interface EmailAccount {
   name: string;
   is_default: boolean;
   backend: string;
 }
 
-export interface AccountDetails {
+export interface EmailAccountDetails {
   name: string;
   email: string;
   display_name?: string;
@@ -55,7 +55,7 @@ export interface AccountDetails {
   username: string;
 }
 
-export interface SaveAccountRequest {
+export interface SaveEmailAccountRequest {
   name: string;
   email: string;
   display_name?: string;
@@ -71,7 +71,7 @@ export interface SaveAccountRequest {
   password: string;
 }
 
-export interface SaveDiscoveredAccountRequest {
+export interface SaveDiscoveredEmailAccountRequest {
   name: string;
   email: string;
   displayName?: string;
@@ -82,7 +82,6 @@ export interface SaveDiscoveredAccountRequest {
   smtpPort: number;
   smtpTls: boolean;
   authMethod: string;
-  oauthProvider?: string;
   password?: string;
 }
 
@@ -131,7 +130,7 @@ export interface CachedConversation {
   is_outgoing: boolean;
 }
 
-export interface CachedMessage {
+export interface CachedChatMessage {
   id: number;
   folder: string;
   uid: number;
@@ -203,18 +202,9 @@ export interface DiscoveryResult {
   smtp_port: number;
   smtp_tls: boolean;
   auth_method: string;
-  oauth_provider?: string;
   requires_app_password: boolean;
   username_hint: string;
   source: string;
-}
-
-// ========== OAuth Types ==========
-
-export interface OAuthStatus {
-  has_tokens: boolean;
-  needs_refresh: boolean;
-  is_expired: boolean;
 }
 
 // ========== Sync Event Types ==========

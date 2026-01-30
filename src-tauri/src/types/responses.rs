@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::sync::db::{CachedConversation, CachedMessage};
+use crate::sync::db::{CachedConversation, CachedChatMessage};
 use crate::sync::engine::{SyncState, SyncStatus};
 
 // ============================================================================
@@ -129,7 +129,7 @@ impl From<CachedConversation> for ConversationResponse {
 
 /// Cached message for frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedMessageResponse {
+pub struct CachedChatMessageResponse {
     pub id: i64,
     pub folder: String,
     pub uid: u32,
@@ -147,8 +147,8 @@ pub struct CachedMessageResponse {
     pub body_cached: bool,
 }
 
-impl From<CachedMessage> for CachedMessageResponse {
-    fn from(m: CachedMessage) -> Self {
+impl From<CachedChatMessage> for CachedChatMessageResponse {
+    fn from(m: CachedChatMessage) -> Self {
         Self {
             id: m.id,
             folder: m.folder_name,
@@ -179,15 +179,15 @@ impl From<CachedMessage> for CachedMessageResponse {
 
 /// Response structure for account info
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountInfo {
+pub struct EmailAccountInfo {
     pub account_id: String,
     pub active: bool,
     pub email: String,
     pub display_name: Option<String>,
 }
 
-impl From<crate::sync::db::ConnectionConfig> for AccountInfo {
-    fn from(config: crate::sync::db::ConnectionConfig) -> Self {
+impl From<crate::sync::db::EmailConnectionConfig> for EmailAccountInfo {
+    fn from(config: crate::sync::db::EmailConnectionConfig) -> Self {
         Self {
             account_id: config.account_id,
             active: config.active,
@@ -216,11 +216,9 @@ pub struct DiscoveryResult {
     pub smtp_host: String,
     pub smtp_port: u16,
     pub smtp_tls: bool,
-    /// Authentication method: "password", "oauth2", "app_password"
+    /// Authentication method: "password", "app_password"
     pub auth_method: String,
-    /// OAuth provider if OAuth2: "google", "microsoft", "yahoo", "fastmail"
-    pub oauth_provider: Option<String>,
-    /// Whether app-specific password is required (iCloud)
+    /// Whether app-specific password is required (iCloud, Gmail, Yahoo)
     pub requires_app_password: bool,
     /// Username format hint: "full_email", "local_part", or custom
     pub username_hint: String,
@@ -230,18 +228,11 @@ pub struct DiscoveryResult {
 
 /// Progress update for frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ProgressUpdate {
     pub stage: String,
     pub progress: u8,
     pub message: String,
-}
-
-/// OAuth status response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OAuthStatus {
-    pub has_tokens: bool,
-    pub needs_refresh: bool,
-    pub is_expired: bool,
 }
 
 // ============================================================================

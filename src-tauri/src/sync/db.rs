@@ -22,6 +22,7 @@ pub type DbConnection = PooledConnection<SqliteConnectionManager>;
 
 /// Sync state for a folder
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct FolderSyncState {
     pub account_id: String,
     pub folder_name: String,
@@ -34,7 +35,7 @@ pub struct FolderSyncState {
 
 /// Cached message envelope
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedMessage {
+pub struct CachedChatMessage {
     pub id: i64,
     pub account_id: String,
     pub folder_name: String,
@@ -123,7 +124,7 @@ pub struct SyncProgress {
 
 /// Connection configuration stored in database
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectionConfig {
+pub struct EmailConnectionConfig {
     pub account_id: String,  // Primary key - stores email address
     pub active: bool,
     pub email: String,
@@ -299,7 +300,7 @@ impl ConfigDatabase {
     }
 
     /// Save or update a connection configuration
-    pub fn upsert_connection_config(&self, config: &ConnectionConfig) -> Result<(), EddieError> {
+    pub fn upsert_connection_config(&self, config: &EmailConnectionConfig) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO connection_configs (account_id, active, email, display_name, imap_config, smtp_config, updated_at)
@@ -329,7 +330,7 @@ impl ConfigDatabase {
     pub fn get_connection_config(
         &self,
         account_id: &str,
-    ) -> Result<Option<ConnectionConfig>, EddieError> {
+    ) -> Result<Option<EmailConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
@@ -347,7 +348,7 @@ impl ConfigDatabase {
     }
 
     /// Get all connection configurations
-    pub fn get_all_connection_configs(&self) -> Result<Vec<ConnectionConfig>, EddieError> {
+    pub fn get_all_connection_configs(&self) -> Result<Vec<EmailConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
@@ -366,7 +367,7 @@ impl ConfigDatabase {
     }
 
     /// Get the currently active connection configuration
-    pub fn get_active_connection_config(&self) -> Result<Option<ConnectionConfig>, EddieError> {
+    pub fn get_active_connection_config(&self) -> Result<Option<EmailConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
@@ -419,8 +420,8 @@ impl ConfigDatabase {
         Ok(())
     }
 
-    fn row_to_connection_config(row: &Row) -> Result<ConnectionConfig, rusqlite::Error> {
-        Ok(ConnectionConfig {
+    fn row_to_connection_config(row: &Row) -> Result<EmailConnectionConfig, rusqlite::Error> {
+        Ok(EmailConnectionConfig {
             account_id: row.get(0)?,
             active: row.get::<_, i32>(1)? != 0,
             email: row.get(2)?,
@@ -492,25 +493,25 @@ pub fn get_config_db() -> Result<std::sync::RwLockReadGuard<'static, ConfigDatab
 }
 
 /// Save a connection config to the global database
-pub fn save_connection_config(config: &ConnectionConfig) -> Result<(), EddieError> {
+pub fn save_connection_config(config: &EmailConnectionConfig) -> Result<(), EddieError> {
     let db = get_config_db()?;
     db.upsert_connection_config(config)
 }
 
 /// Get a connection config from the global database
-pub fn get_connection_config(account_id: &str) -> Result<Option<ConnectionConfig>, EddieError> {
+pub fn get_connection_config(account_id: &str) -> Result<Option<EmailConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_connection_config(account_id)
 }
 
 /// Get all connection configs from the global database
-pub fn get_all_connection_configs() -> Result<Vec<ConnectionConfig>, EddieError> {
+pub fn get_all_connection_configs() -> Result<Vec<EmailConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_all_connection_configs()
 }
 
 /// Get the active connection config from the global database
-pub fn get_active_connection_config() -> Result<Option<ConnectionConfig>, EddieError> {
+pub fn get_active_connection_config() -> Result<Option<EmailConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_active_connection_config()
 }
@@ -851,7 +852,7 @@ impl SyncDatabase {
     // ========== Message Operations ==========
 
     /// Insert or update a message
-    pub fn upsert_message(&self, msg: &CachedMessage) -> Result<i64, EddieError> {
+    pub fn upsert_message(&self, msg: &CachedChatMessage) -> Result<i64, EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO messages (account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -915,7 +916,7 @@ impl SyncDatabase {
         account_id: &str,
         folder_name: &str,
         uid: u32,
-    ) -> Result<Option<CachedMessage>, EddieError> {
+    ) -> Result<Option<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -936,7 +937,7 @@ impl SyncDatabase {
     }
 
     /// Get a message by its internal ID
-    pub fn get_message_by_id(&self, id: i64) -> Result<Option<CachedMessage>, EddieError> {
+    pub fn get_message_by_id(&self, id: i64) -> Result<Option<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -1134,7 +1135,7 @@ impl SyncDatabase {
         folder_name: &str,
         limit: Option<u32>,
         offset: Option<u32>,
-    ) -> Result<Vec<CachedMessage>, EddieError> {
+    ) -> Result<Vec<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let sql = format!(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -1166,8 +1167,8 @@ impl SyncDatabase {
         Ok(messages)
     }
 
-    fn row_to_cached_message(row: &Row) -> Result<CachedMessage, rusqlite::Error> {
-        Ok(CachedMessage {
+    fn row_to_cached_message(row: &Row) -> Result<CachedChatMessage, rusqlite::Error> {
+        Ok(CachedChatMessage {
             id: row.get(0)?,
             account_id: row.get(1)?,
             folder_name: row.get(2)?,
@@ -1331,7 +1332,7 @@ impl SyncDatabase {
     pub fn get_conversation_messages(
         &self,
         conversation_id: i64,
-    ) -> Result<Vec<CachedMessage>, EddieError> {
+    ) -> Result<Vec<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT m.id, m.account_id, m.folder_name, m.uid, m.message_id, m.in_reply_to, m.references_header,

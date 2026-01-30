@@ -321,7 +321,7 @@ pub struct ConversationResponse {
     pub is_outgoing: bool,
 }
 
-pub struct CachedMessageResponse {
+pub struct CachedChatMessageResponse {
     pub id: i64,
     pub uid: u32,
     pub from_address: String,

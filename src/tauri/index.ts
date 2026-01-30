@@ -15,14 +15,14 @@ export * from "./events";
 export type {
   // Core types
   Envelope,
-  Message,
+  ChatMessage,
   Attachment,
 
   // Account types
-  Account,
-  AccountDetails,
-  SaveAccountRequest,
-  SaveDiscoveredAccountRequest,
+  EmailAccount,
+  EmailAccountDetails,
+  SaveEmailAccountRequest,
+  SaveDiscoveredEmailAccountRequest,
 
   // Conversation types
   Conversation,
@@ -30,7 +30,7 @@ export type {
   // Sync types
   SyncStatus,
   CachedConversation,
-  CachedMessage,
+  CachedChatMessage,
   SyncActionType,
   SyncEventPayload,
 
@@ -45,7 +45,4 @@ export type {
 
   // Discovery types
   DiscoveryResult,
-
-  // OAuth types
-  OAuthStatus,
 } from "./types";

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::sync::db::{CachedConversation, CachedMessage, SyncDatabase};
+use crate::sync::db::{CachedConversation, CachedChatMessage, SyncDatabase};
 use crate::types::error::EddieError;
 
 /// Participant information
@@ -197,7 +197,7 @@ impl ConversationGrouper {
         &self,
         account_id: &str,
         user_email: &str,
-        message: &CachedMessage,
+        message: &CachedChatMessage,
     ) -> Result<i64, EddieError> {
         // Parse addresses
         let to_addresses: Vec<String> =
@@ -336,9 +336,9 @@ impl ConversationGrouper {
              ORDER BY date ASC"
         ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
-        let messages: Vec<CachedMessage> = stmt
+        let messages: Vec<CachedChatMessage> = stmt
             .query_map(rusqlite::params![account_id], |row| {
-                Ok(CachedMessage {
+                Ok(CachedChatMessage {
                     id: row.get(0)?,
                     account_id: row.get(1)?,
                     folder_name: row.get(2)?,
@@ -414,7 +414,7 @@ impl ConversationGrouper {
         tx: &rusqlite::Transaction,
         account_id: &str,
         user_email: &str,
-        message: &CachedMessage,
+        message: &CachedChatMessage,
     ) -> Result<i64, EddieError> {
         // Parse addresses
         let to_addresses: Vec<String> =
@@ -612,6 +612,7 @@ impl ConversationGrouper {
     }
 
     /// Update conversation when a message is deleted
+    #[allow(dead_code)]
     pub fn handle_message_deleted(
         &self,
         account_id: &str,
@@ -625,11 +626,12 @@ impl ConversationGrouper {
     }
 
     /// Update conversation when message flags change
+    #[allow(dead_code)]
     pub fn update_conversation_for_flag_change(
         &self,
         account_id: &str,
         user_email: &str,
-        message: &CachedMessage,
+        message: &CachedChatMessage,
         old_flags: &[String],
         new_flags: &[String],
     ) -> Result<(), EddieError> {

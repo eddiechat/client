@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use crate::config::{AccountConfig, ImapConfig, SmtpConfig};
+use crate::config::{EmailAccountConfig, ImapConfig, SmtpConfig};
 use crate::sync::db::{get_connection_config, init_config_db};
 use crate::sync::engine::{SyncConfig, SyncEngine};
 use crate::sync::idle::MonitorConfig;
@@ -118,7 +118,7 @@ impl SyncManager {
             .smtp_config
             .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
 
-        let account = AccountConfig {
+        let account = EmailAccountConfig {
             name: db_config.display_name.clone(),
             default: db_config.active,
             email: db_config.email.clone(),
@@ -175,6 +175,7 @@ impl SyncManager {
     }
 
     /// Get all engine account IDs
+    #[allow(dead_code)]
     pub async fn get_account_ids(&self) -> Vec<String> {
         let engines = self.engines.read().await;
         engines.keys().cloned().collect()

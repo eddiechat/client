@@ -8,7 +8,7 @@
 //! - `accounts`: Account listing and management
 //! - `config`: Application and account configuration
 //! - `conversations`: Conversation listing (deprecated - use sync)
-//! - `discovery`: Email autodiscovery and OAuth2
+//! - `discovery`: Email autodiscovery
 //! - `envelopes`: Email envelope listing (deprecated - use sync)
 //! - `flags`: Message flag operations
 //! - `folders`: Folder/mailbox operations

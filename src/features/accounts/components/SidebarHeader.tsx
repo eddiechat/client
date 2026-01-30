@@ -1,7 +1,7 @@
-import type { Account } from "../../../tauri";
+import type { EmailAccount } from "../../../tauri";
 
 interface SidebarHeaderProps {
-  accounts: Account[];
+  accounts: EmailAccount[];
   currentAccount: string | null;
   onEditAccount: () => void;
   onCompose: () => void;

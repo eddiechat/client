@@ -1,8 +1,8 @@
-import type { Message } from "../../../tauri";
+import type { ChatMessage } from "../../../tauri";
 import { getSenderName } from "../utils";
 
 interface ChatMessageAsEmailProps {
-  message: Message;
+  message: ChatMessage;
   onClose: () => void;
 }
 

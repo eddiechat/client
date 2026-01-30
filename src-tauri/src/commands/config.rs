@@ -7,14 +7,14 @@ use std::path::PathBuf;
 use tauri::State;
 use tracing::info;
 
-use crate::config::{self, AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
-use crate::services::{delete_account_data, resolve_account_id_string};
+use crate::config::{self, EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::services::delete_account_data;
 use crate::state::SyncManager;
 use crate::sync::db::{
     get_active_connection_config, get_all_connection_configs, get_connection_config, init_config_db,
-    save_connection_config, set_active_account, ConnectionConfig,
+    save_connection_config, set_active_account, EmailConnectionConfig,
 };
-use crate::types::responses::AccountInfo;
+use crate::types::responses::EmailAccountInfo;
 use crate::types::EddieError;
 
 /// Initialize configuration from default paths
@@ -59,7 +59,7 @@ pub async fn get_config_paths() -> Result<Vec<String>, EddieError> {
 
 /// Request structure for saving an account
 #[derive(Debug, Deserialize)]
-pub struct SaveAccountRequest {
+pub struct SaveEmailAccountRequest {
     pub name: String,
     pub email: String,
     pub display_name: Option<String>,
@@ -77,7 +77,7 @@ pub struct SaveAccountRequest {
 
 /// Save a new account configuration
 #[tauri::command]
-pub async fn save_account(request: SaveAccountRequest) -> Result<(), EddieError> {
+pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieError> {
     info!("Saving account: {}", request.name);
 
     let imap_auth = AuthConfig::Password {
@@ -90,7 +90,7 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), EddieError>
         password: PasswordSource::Raw(request.password),
     };
 
-    let account = AccountConfig {
+    let account = EmailAccountConfig {
         name: Some(request.name.clone()),
         default: true,
         email: request.email.clone(),
@@ -123,7 +123,7 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), EddieError>
         .map(|c| serde_json::to_string(c))
         .transpose()?;
 
-    let db_config = ConnectionConfig {
+    let db_config = EmailConnectionConfig {
         account_id: request.email.clone(),
         active: true,
         email: request.email,
@@ -153,20 +153,20 @@ pub async fn init_config_database() -> Result<(), EddieError> {
 
 /// Get all accounts from the database
 #[tauri::command]
-pub async fn get_accounts() -> Result<Vec<AccountInfo>, EddieError> {
+pub async fn get_accounts() -> Result<Vec<EmailAccountInfo>, EddieError> {
     info!("Getting all accounts");
     init_config_db()?;
     let configs = get_all_connection_configs()?;
-    Ok(configs.into_iter().map(AccountInfo::from).collect())
+    Ok(configs.into_iter().map(EmailAccountInfo::from).collect())
 }
 
 /// Get the currently active account
 #[tauri::command]
-pub async fn get_active_account() -> Result<Option<AccountInfo>, EddieError> {
+pub async fn get_active_account() -> Result<Option<EmailAccountInfo>, EddieError> {
     info!("Getting active account");
     init_config_db()?;
     let config = get_active_connection_config()?;
-    Ok(config.map(AccountInfo::from))
+    Ok(config.map(EmailAccountInfo::from))
 }
 
 /// Set the active account by account_id

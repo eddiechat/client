@@ -9,7 +9,7 @@ use tracing::{info, warn};
 
 use crate::backend;
 use crate::types::conversation::{extract_name, normalize_email, Conversation};
-use crate::types::{EddieError, Envelope, Message};
+use crate::types::{EddieError, Envelope, ChatMessage};
 
 /// Envelope with its source folder for proper message ID tracking
 struct EnvelopeWithFolder {
@@ -223,7 +223,7 @@ fn parse_qualified_id(qualified_id: &str) -> Option<(String, String)> {
 pub async fn get_conversation_messages(
     account: Option<String>,
     messageIds: Vec<String>,
-) -> Result<Vec<Message>, EddieError> {
+) -> Result<Vec<ChatMessage>, EddieError> {
     warn!("DEPRECATED: get_conversation_messages called - migrate to sync engine equivalent");
     info!("Getting {} conversation messages", messageIds.len());
 
