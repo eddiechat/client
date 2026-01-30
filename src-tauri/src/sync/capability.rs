@@ -5,6 +5,8 @@
 //! - CONDSTORE: Incremental flag changes, separate deletion detection
 //! - Bare IMAP: Full flag comparison against cache
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 
 /// Server capability level for sync strategy selection

@@ -6,7 +6,7 @@
 use std::process::Command;
 use std::sync::Arc;
 
-use email::account::config::{passwd::PasswordConfig, AccountConfig as EmailAccountConfig};
+use email::account::config::{passwd::PasswordConfig, AccountConfig as EmailLibAccountConfig};
 use email::backend::BackendBuilder;
 use email::envelope::list::{ListEnvelopes, ListEnvelopesOptions};
 use email::envelope::Id;
@@ -23,12 +23,13 @@ use email::smtp::config::{SmtpAuthConfig, SmtpConfig as EmailSmtpConfig};
 use email::tls::{Encryption, Tls};
 use secret::Secret;
 use std::path::PathBuf;
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::config::{AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::config::{EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::credentials::CredentialStore;
 use crate::sync::db::{get_active_connection_config, get_connection_config, init_config_db};
 use crate::types::error::EddieError;
-use crate::types::{Attachment, Envelope, Folder, Message};
+use crate::types::{Attachment, Envelope, Folder, ChatMessage};
 
 /// Result of sending a message - contains the message ID and sent folder name
 #[derive(Debug, Clone, serde::Serialize)]
@@ -40,9 +41,9 @@ pub struct SendMessageResult {
 /// Backend service for email operations
 pub struct EmailBackend {
     /// Account configuration from our config
-    account_config: AccountConfig,
+    account_config: EmailAccountConfig,
     /// email-lib account configuration
-    email_account_config: Arc<EmailAccountConfig>,
+    email_account_config: Arc<EmailLibAccountConfig>,
 }
 
 impl EmailBackend {
@@ -64,8 +65,8 @@ impl EmailBackend {
             .smtp_config
             .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
 
-        let account_config = AccountConfig {
-            name: db_config.name.clone(),
+        let account_config = EmailAccountConfig {
+            name: db_config.display_name.clone(),
             default: db_config.active,
             email: db_config.email.clone(),
             display_name: db_config.display_name.clone(),
@@ -74,8 +75,8 @@ impl EmailBackend {
         };
 
         // Build email-lib account config
-        let email_account_config = Arc::new(EmailAccountConfig {
-            name: db_config.name.unwrap_or_else(|| account_name.to_string()),
+        let email_account_config = Arc::new(EmailLibAccountConfig {
+            name: db_config.display_name.clone().unwrap_or_else(|| account_name.to_string()),
             email: account_config.email.clone(),
             display_name: account_config.display_name.clone(),
             ..Default::default()
@@ -135,17 +136,12 @@ impl EmailBackend {
             .as_ref()
             .ok_or_else(|| EddieError::Config("No IMAP configuration".to_string()))?;
 
-        let auth = match &imap.auth {
-            AuthConfig::Password { user: _, password } => {
-                let passwd = Self::resolve_password(password).await?;
-                ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
-            }
-            AuthConfig::OAuth2 { .. } => {
-                return Err(EddieError::Config(
-                    "OAuth2 not yet supported".to_string(),
-                ));
-            }
-        };
+        info!("Building IMAP config for {} ({}:{})", self.account_config.email, imap.host, imap.port);
+        let email = &self.account_config.email;
+        let (login, auth) = Self::build_auth_config(&imap.auth, email).await.map_err(|e| {
+            warn!("Failed to build auth config for {}: {}", email, e);
+            e
+        })?;
 
         let tls_config = Tls {
             cert: imap.tls_cert.as_ref().map(PathBuf::from),
@@ -162,13 +158,31 @@ impl EmailBackend {
             host: imap.host.clone(),
             port: imap.port,
             encryption,
-            login: match &imap.auth {
-                AuthConfig::Password { user, .. } => user.clone(),
-                AuthConfig::OAuth2 { .. } => self.account_config.email.clone(),
-            },
+            login,
             auth,
             ..Default::default()
         })
+    }
+
+    /// Build authentication configuration from AuthConfig
+    async fn build_auth_config(
+        auth_config: &AuthConfig,
+        email: &str,
+    ) -> Result<(String, ImapAuthConfig), EddieError> {
+        match auth_config {
+            AuthConfig::Password { user, password } => {
+                let passwd = Self::resolve_password(password).await?;
+                Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
+            }
+            AuthConfig::AppPassword { user } => {
+                // Get app password from credential store
+                let cred_store = CredentialStore::new();
+                let password = cred_store.get_app_password(email).map_err(|e| {
+                    EddieError::Config(format!("Failed to get app password: {}", e))
+                })?;
+                Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(password)))))
+            }
+        }
     }
 
     /// Build SMTP configuration for email-lib
@@ -179,17 +193,8 @@ impl EmailBackend {
             .as_ref()
             .ok_or_else(|| EddieError::Config("No SMTP configuration".to_string()))?;
 
-        let auth = match &smtp.auth {
-            AuthConfig::Password { user: _, password } => {
-                let passwd = Self::resolve_password(password).await?;
-                SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))
-            }
-            AuthConfig::OAuth2 { .. } => {
-                return Err(EddieError::Config(
-                    "OAuth2 not yet supported".to_string(),
-                ));
-            }
-        };
+        let email = &self.account_config.email;
+        let (login, auth) = Self::build_smtp_auth_config(&smtp.auth, email).await?;
 
         let tls_config = Tls {
             cert: smtp.tls_cert.as_ref().map(PathBuf::from),
@@ -206,13 +211,30 @@ impl EmailBackend {
             host: smtp.host.clone(),
             port: smtp.port,
             encryption,
-            login: match &smtp.auth {
-                AuthConfig::Password { user, .. } => user.clone(),
-                AuthConfig::OAuth2 { .. } => self.account_config.email.clone(),
-            },
+            login,
             auth,
             ..Default::default()
         })
+    }
+
+    /// Build SMTP authentication configuration from AuthConfig
+    async fn build_smtp_auth_config(
+        auth_config: &AuthConfig,
+        email: &str,
+    ) -> Result<(String, SmtpAuthConfig), EddieError> {
+        match auth_config {
+            AuthConfig::Password { user, password } => {
+                let passwd = Self::resolve_password(password).await?;
+                Ok((user.clone(), SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
+            }
+            AuthConfig::AppPassword { user } => {
+                let cred_store = CredentialStore::new();
+                let password = cred_store.get_app_password(email).map_err(|e| {
+                    EddieError::Config(format!("Failed to get app password: {}", e))
+                })?;
+                Ok((user.clone(), SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(password)))))
+            }
+        }
     }
 
     /// Find the Sent folder by checking common folder names
@@ -253,7 +275,16 @@ impl EmailBackend {
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| EddieError::Backend(e.to_string()))?;
+            .map_err(|e| {
+                let error_msg = format!("Failed to build IMAP backend: {}. Config: host={}, port={}, encryption={:?}",
+                    e,
+                    self.account_config.imap.as_ref().map(|i| i.host.as_str()).unwrap_or("unknown"),
+                    self.account_config.imap.as_ref().map(|i| i.port).unwrap_or(0),
+                    self.account_config.imap.as_ref().map(|i| i.tls).unwrap_or(false)
+                );
+                warn!("{}", error_msg);
+                EddieError::Backend(error_msg)
+            })?;
 
         let folders = backend
             .list_folders()
@@ -341,7 +372,7 @@ impl EmailBackend {
         folder: Option<&str>,
         id: &str,
         peek: bool,
-    ) -> Result<Message, EddieError> {
+    ) -> Result<ChatMessage, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_id = Id::single(id);
@@ -431,7 +462,7 @@ impl EmailBackend {
             date, from, to, subject
         );
 
-        Ok(Message {
+        Ok(ChatMessage {
             id: id.to_string(),
             envelope: Envelope {
                 id: id.to_string(),

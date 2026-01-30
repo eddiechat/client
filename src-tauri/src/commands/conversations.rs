@@ -1,10 +1,15 @@
+//! Conversation Tauri commands
+//!
+//! Commands for managing email conversations.
+//! These are deprecated in favor of the sync engine.
+
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use tracing::{info, warn};
 
 use crate::backend;
 use crate::types::conversation::{extract_name, normalize_email, Conversation};
-use crate::types::Envelope;
+use crate::types::{EddieError, Envelope, ChatMessage};
 
 /// Envelope with its source folder for proper message ID tracking
 struct EnvelopeWithFolder {
@@ -19,11 +24,11 @@ impl EnvelopeWithFolder {
     }
 }
 
+/// Build conversations from envelopes
 fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> Vec<Conversation> {
     let user_email_normalized = normalize_email(user_email);
     let mut conv_map: HashMap<String, Conversation> = HashMap::new();
 
-    // Extract user name from their email (will be refined when we see an outgoing message)
     let user_name_from_email = user_email.split('@').next().unwrap_or("me").to_string();
     let mut user_display_name = user_name_from_email.clone();
 
@@ -34,12 +39,10 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
         let from_email = normalize_email(&envelope.from);
         let from_name = extract_name(&envelope.from);
 
-        // If this is from the user, capture their display name
         if from_email == user_email_normalized && !from_name.contains('@') {
             user_display_name = from_name.clone();
         }
 
-        // Check if user is actually part of this conversation
         let user_is_sender = from_email == user_email_normalized;
         let user_is_recipient = envelope
             .to
@@ -47,17 +50,14 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
             .any(|to| normalize_email(to) == user_email_normalized);
         let user_in_conversation = user_is_sender || user_is_recipient;
 
-        // Collect all participants (from + to), excluding user's own email
         let mut other_participants: Vec<String> = vec![];
         let mut other_names: Vec<String> = vec![];
 
-        // Add sender if not user
         if from_email != user_email_normalized {
             other_participants.push(from_email.clone());
             other_names.push(from_name.clone());
         }
 
-        // Add recipients if not user
         for to in envelope.to.iter() {
             let to_email = normalize_email(to);
             let to_name = extract_name(to);
@@ -67,7 +67,6 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
             }
         }
 
-        // Build full participant list: only include user if they're actually part of the conversation
         let mut participants: Vec<String> = vec![];
         let mut participant_names: Vec<String> = vec![];
 
@@ -78,9 +77,7 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
         participants.extend(other_participants.clone());
         participant_names.extend(other_names.clone());
 
-        // Key is based on other participants only (for grouping conversations)
         let key = if other_participants.is_empty() {
-            // Self-email case
             Conversation::participants_key(&[user_email_normalized.clone()])
         } else {
             Conversation::participants_key(&other_participants)
@@ -89,12 +86,10 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
         let is_unread = !envelope.flags.iter().any(|f| f.to_lowercase() == "seen");
 
         if let Some(conv) = conv_map.get_mut(&key) {
-            // Update existing conversation with folder-qualified ID
             conv.message_ids.push(qualified_id);
             if is_unread {
                 conv.unread_count += 1;
             }
-            // Update last message if newer
             if envelope.date > conv.last_message_date {
                 conv.last_message_date = envelope.date.clone();
                 conv.last_message_preview = envelope.subject.clone();
@@ -106,7 +101,6 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
                 conv.is_outgoing = is_outgoing;
             }
         } else {
-            // Create new conversation with folder-qualified ID
             conv_map.insert(
                 key.clone(),
                 Conversation {
@@ -130,16 +124,13 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
         }
     }
 
-    // Update user_name in all conversations now that we have the final display name
     for conv in conv_map.values_mut() {
         conv.user_name = user_display_name.clone();
-        // Only update the first participant name if user is actually in the conversation
         if conv.user_in_conversation && !conv.participant_names.is_empty() {
             conv.participant_names[0] = user_display_name.clone();
         }
     }
 
-    // Sort by last message date descending
     let mut conversations: Vec<Conversation> = conv_map.into_values().collect();
     conversations.sort_by(|a, b| b.last_message_date.cmp(&a.last_message_date));
     conversations
@@ -150,21 +141,19 @@ fn build_conversations(envelopes: Vec<EnvelopeWithFolder>, user_email: &str) -> 
 /// **DEPRECATED**: This command fetches directly from IMAP.
 /// Use `get_cached_conversations` instead for better performance and offline support.
 #[tauri::command]
-pub async fn list_conversations(account: Option<String>) -> Result<Vec<Conversation>, String> {
+pub async fn list_conversations(account: Option<String>) -> Result<Vec<Conversation>, EddieError> {
     warn!("DEPRECATED: list_conversations called - migrate to get_cached_conversations");
-    info!("Tauri command: list_conversations - account: {:?}", account);
+    info!("Listing conversations");
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     let user_email = backend.get_email();
 
-    // Get list of folders to find the sent folder dynamically
     let folders = backend.list_folders().await.unwrap_or_default();
     let mut folders_to_fetch = vec!["INBOX".to_string()];
 
-    // Find sent folder by checking folder names (case-insensitive)
     for folder in &folders {
         let name_lower = folder.name.to_lowercase();
         if name_lower.contains("sent")
@@ -178,7 +167,6 @@ pub async fn list_conversations(account: Option<String>) -> Result<Vec<Conversat
 
     info!("Will fetch from folders: {:?}", folders_to_fetch);
 
-    // Fetch emails from last year from all folders
     let one_year_ago = Utc::now() - Duration::days(365);
     let mut all_envelopes: Vec<EnvelopeWithFolder> = Vec::new();
 
@@ -186,14 +174,13 @@ pub async fn list_conversations(account: Option<String>) -> Result<Vec<Conversat
         match backend.list_envelopes(Some(folder), 0, 1000).await {
             Ok(envelopes) => {
                 info!("Fetched {} envelopes from {}", envelopes.len(), folder);
-                // Filter by date and wrap with folder info
                 let recent: Vec<EnvelopeWithFolder> = envelopes
                     .into_iter()
                     .filter(|e| {
                         if let Ok(date) = chrono::DateTime::parse_from_rfc3339(&e.date) {
                             date > one_year_ago
                         } else {
-                            true // Include if date parsing fails
+                            true
                         }
                     })
                     .map(|envelope| EnvelopeWithFolder {
@@ -211,17 +198,12 @@ pub async fn list_conversations(account: Option<String>) -> Result<Vec<Conversat
 
     info!("Fetched {} envelopes total", all_envelopes.len());
 
-    // Build conversations with folder-qualified message IDs
     let conversations = build_conversations(all_envelopes, &user_email);
-
     Ok(conversations)
 }
 
 /// Parse a folder-qualified message ID in the format "folder:id"
-/// Returns (folder, id) tuple, or None if parsing fails
 fn parse_qualified_id(qualified_id: &str) -> Option<(String, String)> {
-    // Find the last colon to handle folder names that might contain colons
-    // But IMAP folder names typically don't contain colons, so we use the first colon
     if let Some(colon_pos) = qualified_id.find(':') {
         let folder = &qualified_id[..colon_pos];
         let id = &qualified_id[colon_pos + 1..];
@@ -241,27 +223,20 @@ fn parse_qualified_id(qualified_id: &str) -> Option<(String, String)> {
 pub async fn get_conversation_messages(
     account: Option<String>,
     messageIds: Vec<String>,
-) -> Result<Vec<crate::types::Message>, String> {
+) -> Result<Vec<ChatMessage>, EddieError> {
     warn!("DEPRECATED: get_conversation_messages called - migrate to sync engine equivalent");
-    info!(
-        "Tauri command: get_conversation_messages - {} messages",
-        messageIds.len()
-    );
+    info!("Getting {} conversation messages", messageIds.len());
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     let mut messages = Vec::new();
 
-    // Fetch each message using the folder-qualified ID
     for qualified_id in &messageIds {
         if let Some((folder, msg_id)) = parse_qualified_id(qualified_id) {
-            // Use the exact folder from the qualified ID
             match backend.get_message(Some(&folder), &msg_id, true).await {
-                Ok(msg) => {
-                    messages.push(msg);
-                }
+                Ok(msg) => messages.push(msg),
                 Err(e) => {
                     info!(
                         "Could not fetch message {} from folder {}: {}",
@@ -270,7 +245,7 @@ pub async fn get_conversation_messages(
                 }
             }
         } else {
-            // Fallback for legacy unqualified IDs: try common folders
+            // Fallback for legacy unqualified IDs
             info!(
                 "Warning: unqualified message ID '{}', trying fallback folders",
                 qualified_id

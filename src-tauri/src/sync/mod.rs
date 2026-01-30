@@ -9,6 +9,8 @@
 //! - UI updates only after the next sync confirms the server state changed
 //! - Server wins all conflicts
 
+#![allow(dead_code)]
+
 pub mod action_queue;
 pub mod capability;
 pub mod classifier;

@@ -1,16 +1,42 @@
+//! Eddie Chat - Email client application
+//!
+//! This module provides the main Tauri application setup and configuration.
+//!
+//! ## Module Organization
+//!
+//! - `commands/`: Tauri command handlers (thin wrappers)
+//! - `services/`: Business logic (Tauri-agnostic)
+//! - `state/`: Application state management
+//! - `types/`: Data structures and types
+//! - `backend/`: Email protocol implementation
+//! - `sync/`: Sync engine for offline support
+//! - `config/`: Configuration management
+//! - `credentials/`: Secure credential storage
+//! - `autodiscovery/`: Email provider auto-configuration
+
+mod autodiscovery;
 mod backend;
 mod commands;
 mod config;
+mod credentials;
+mod services;
+mod state;
 mod sync;
 mod types;
 
-use commands::SyncManager;
+use state::SyncManager;
 use tauri::Manager;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize rustls crypto provider before any TLS operations
+    // This is required for rustls 0.23+ which doesn't auto-select a provider
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Initialize tracing for logging
     // In debug builds, default to debug level for our crate
     // Can be overridden with RUST_LOG environment variable
@@ -31,6 +57,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(SyncManager::new())
         .setup(|app| {
             // Try to initialize config on startup
@@ -71,6 +98,16 @@ pub fn run() {
             commands::account_exists,
             commands::remove_account,
             commands::get_account_details,
+            // Autodiscovery commands
+            commands::discover_email_config,
+            commands::test_email_connection,
+            // Credential commands
+            commands::store_password,
+            commands::store_app_password,
+            commands::delete_credentials,
+            commands::has_credentials,
+            // Combined account setup
+            commands::save_discovered_account,
             // Folder commands
             commands::list_folders,
             commands::create_folder,

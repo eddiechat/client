@@ -1,44 +1,35 @@
-use base64::Engine;
+//! Message Tauri commands
+//!
+//! Commands for reading, sending, and managing email messages.
+
 use std::fs;
 use std::path::PathBuf;
 use tauri::State;
 use tracing::{info, warn};
 
 use crate::backend::{self, SendMessageResult};
-use crate::commands::sync::SyncManager;
-use crate::sync::db::{get_active_connection_config, init_config_db};
-use crate::types::{ComposeAttachment, Message, ReadMessageRequest};
-
-/// Helper to get account ID from optional parameter
-fn get_account_id(account: Option<&str>) -> Result<String, String> {
-    if let Some(id) = account {
-        Ok(id.to_string())
-    } else {
-        init_config_db().map_err(|e| e.to_string())?;
-        let active_config = get_active_connection_config().map_err(|e| e.to_string())?;
-        active_config
-            .map(|c| c.account_id)
-            .ok_or_else(|| "No active account configured".to_string())
-    }
-}
+use crate::services::{build_message, resolve_account_id, ComposeParams};
+use crate::state::SyncManager;
+use crate::types::responses::AttachmentInfo;
+use crate::types::{ComposeAttachment, EddieError, ChatMessage, ReadChatMessageRequest};
 
 /// Read a message by ID
 ///
 /// **DEPRECATED**: Fetches directly from IMAP.
 /// Use `fetch_message_body` from sync commands for cached access.
 #[tauri::command]
-pub async fn read_message(request: ReadMessageRequest) -> Result<Message, String> {
+pub async fn read_message(request: ReadChatMessageRequest) -> Result<ChatMessage, EddieError> {
     warn!("DEPRECATED: read_message called - migrate to fetch_message_body");
-    info!("Tauri command: read_message - {:?}", request);
+    info!("Reading message: {:?}", request);
 
     let backend = backend::get_backend(request.account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     backend
         .get_message(request.folder.as_deref(), &request.id, request.preview)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| EddieError::Backend(e.to_string()))
 }
 
 /// Delete messages
@@ -48,15 +39,12 @@ pub async fn delete_messages(
     folder: Option<String>,
     ids: Vec<String>,
     sync_manager: State<'_, SyncManager>,
-) -> Result<(), String> {
-    info!(
-        "Tauri command: delete_messages - account: {:?}, folder: {:?}, ids: {:?}",
-        account, folder, ids
-    );
+) -> Result<(), EddieError> {
+    info!("Deleting messages: {:?}", ids);
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
 
@@ -64,16 +52,29 @@ pub async fn delete_messages(
     backend
         .delete_messages(folder.as_deref(), &id_refs)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     // Update cache after successful server operation
-    let account_id = get_account_id(account.as_deref())?;
-    let folder_name = folder.as_deref().unwrap_or("INBOX");
+    update_cache_after_delete(&sync_manager, account.as_deref(), folder.as_deref(), &ids).await;
+
+    Ok(())
+}
+
+/// Update cache after deleting messages
+async fn update_cache_after_delete(
+    sync_manager: &SyncManager,
+    account: Option<&str>,
+    folder: Option<&str>,
+    ids: &[String],
+) {
+    let account_id = match resolve_account_id(account) {
+        Ok(id) => id,
+        Err(_) => return,
+    };
+    let folder_name = folder.unwrap_or("INBOX");
 
     if let Some(engine) = sync_manager.get(&account_id).await {
         let db = engine.read().await.database();
-
-        // Parse UIDs and delete from cache
         let uids: Vec<u32> = ids.iter().filter_map(|id| id.parse::<u32>().ok()).collect();
 
         if !uids.is_empty() {
@@ -82,37 +83,27 @@ pub async fn delete_messages(
             }
         }
     }
-
-    Ok(())
 }
 
 /// Copy messages to another folder
-///
-/// Note: Cache update is skipped - the next sync will pick up the copied messages.
 #[tauri::command]
 pub async fn copy_messages(
     account: Option<String>,
     source_folder: Option<String>,
     target_folder: String,
     ids: Vec<String>,
-) -> Result<(), String> {
-    info!(
-        "Tauri command: copy_messages - account: {:?}, source: {:?}, target: {}",
-        account, source_folder, target_folder
-    );
+) -> Result<(), EddieError> {
+    info!("Copying messages to {}: {:?}", target_folder, ids);
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
     backend
         .copy_messages(source_folder.as_deref(), &target_folder, &id_refs)
         .await
-        .map_err(|e| e.to_string())
-
-    // Note: We don't update the cache here because copy creates new messages
-    // with new UIDs in the target folder. The next sync will pick them up.
+        .map_err(|e| EddieError::Backend(e.to_string()))
 }
 
 /// Move messages to another folder
@@ -123,15 +114,12 @@ pub async fn move_messages(
     target_folder: String,
     ids: Vec<String>,
     sync_manager: State<'_, SyncManager>,
-) -> Result<(), String> {
-    info!(
-        "Tauri command: move_messages - account: {:?}, source: {:?}, target: {}",
-        account, source_folder, target_folder
-    );
+) -> Result<(), EddieError> {
+    info!("Moving messages to {}: {:?}", target_folder, ids);
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
 
@@ -139,51 +127,31 @@ pub async fn move_messages(
     backend
         .move_messages(source_folder.as_deref(), &target_folder, &id_refs)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-    // Update cache after successful server operation
-    // For move operations, we delete from source folder cache.
-    // The messages in target folder will have new UIDs, so the next sync will pick them up.
-    let account_id = get_account_id(account.as_deref())?;
-    let folder_name = source_folder.as_deref().unwrap_or("INBOX");
-
-    if let Some(engine) = sync_manager.get(&account_id).await {
-        let db = engine.read().await.database();
-
-        // Parse UIDs and delete from source folder cache
-        let uids: Vec<u32> = ids.iter().filter_map(|id| id.parse::<u32>().ok()).collect();
-
-        if !uids.is_empty() {
-            if let Err(e) = db.delete_messages_by_uids(&account_id, folder_name, &uids) {
-                warn!("Failed to delete moved messages from cache: {}", e);
-            }
-        }
-    }
+    // Update cache - delete from source folder
+    update_cache_after_delete(&sync_manager, account.as_deref(), source_folder.as_deref(), &ids)
+        .await;
 
     Ok(())
 }
 
 /// Send a message via SMTP and save to Sent folder
-/// Returns the message ID and sent folder name, or None if no Sent folder was found
 #[tauri::command]
 pub async fn send_message(
     account: Option<String>,
     message: String,
-) -> Result<Option<SendMessageResult>, String> {
-    info!(
-        "Tauri command: send_message - account: {:?}, len: {}",
-        account,
-        message.len()
-    );
+) -> Result<Option<SendMessageResult>, EddieError> {
+    info!("Sending message, length: {}", message.len());
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     backend
         .send_message(message.as_bytes())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| EddieError::Backend(e.to_string()))
 }
 
 /// Save a message to a folder (drafts)
@@ -192,24 +160,20 @@ pub async fn save_message(
     account: Option<String>,
     folder: Option<String>,
     message: String,
-) -> Result<String, String> {
-    info!(
-        "Tauri command: save_message - account: {:?}, folder: {:?}",
-        account, folder
-    );
+) -> Result<String, EddieError> {
+    info!("Saving message to folder: {:?}", folder);
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     backend
         .save_message(folder.as_deref(), message.as_bytes())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| EddieError::Backend(e.to_string()))
 }
 
 /// Send a message with attachments via SMTP and save to Sent folder
-/// Builds a proper MIME multipart message with attachments
 #[tauri::command]
 pub async fn send_message_with_attachments(
     account: Option<String>,
@@ -219,103 +183,27 @@ pub async fn send_message_with_attachments(
     subject: String,
     body: String,
     attachments: Vec<ComposeAttachment>,
-) -> Result<Option<SendMessageResult>, String> {
-    info!(
-        "Tauri command: send_message_with_attachments - account: {:?}, to: {:?}, attachments: {}",
-        account,
-        to,
-        attachments.len()
-    );
+) -> Result<Option<SendMessageResult>, EddieError> {
+    info!("Sending message with {} attachments", attachments.len());
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-    // Generate a unique boundary for the MIME message
-    let boundary = format!("----=_Part_{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
-
-    // Build headers
-    let mut headers = vec![
-        format!("From: {}", from),
-        format!("To: {}", to.join(", ")),
-        format!("Subject: {}", subject),
-        format!("Date: {}", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")),
-        "MIME-Version: 1.0".to_string(),
-    ];
-
-    // Add Cc if present
-    if let Some(cc_addrs) = &cc {
-        if !cc_addrs.is_empty() {
-            headers.push(format!("Cc: {}", cc_addrs.join(", ")));
-        }
-    }
-
-    // Set content type based on whether we have attachments
-    if attachments.is_empty() {
-        headers.push("Content-Type: text/plain; charset=utf-8".to_string());
-        headers.push("Content-Transfer-Encoding: 8bit".to_string());
-    } else {
-        headers.push(format!("Content-Type: multipart/mixed; boundary=\"{}\"", boundary));
-    }
-
-    let header_str = headers.join("\r\n");
-
-    // Build the message body
-    let raw_message = if attachments.is_empty() {
-        // Simple text message
-        format!("{}\r\n\r\n{}", header_str, body)
-    } else {
-        // Multipart message with attachments
-        let mut parts = Vec::new();
-
-        // Text body part
-        parts.push(format!(
-            "--{}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{}",
-            boundary, body
-        ));
-
-        // Attachment parts
-        for attachment in &attachments {
-            // Read file contents
-            let file_contents = fs::read(&attachment.path)
-                .map_err(|e| format!("Failed to read attachment '{}': {}", attachment.path, e))?;
-
-            // Base64 encode
-            let encoded = base64::engine::general_purpose::STANDARD.encode(&file_contents);
-
-            // Split into 76-character lines for email compatibility
-            let encoded_lines: Vec<&str> = encoded
-                .as_bytes()
-                .chunks(76)
-                .map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
-                .collect();
-            let encoded_formatted = encoded_lines.join("\r\n");
-
-            parts.push(format!(
-                "--{}\r\nContent-Type: {}; name=\"{}\"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"{}\"\r\n\r\n{}",
-                boundary, attachment.mime_type, attachment.name, attachment.name, encoded_formatted
-            ));
-        }
-
-        // Close the multipart
-        parts.push(format!("--{}--", boundary));
-
-        format!("{}\r\n\r\n{}", header_str, parts.join("\r\n"))
-    };
+    // Build the MIME message using the message service
+    let raw_message = build_message(ComposeParams {
+        from,
+        to,
+        cc,
+        subject,
+        body,
+        attachments,
+    })?;
 
     backend
-        .send_message(raw_message.as_bytes())
+        .send_message(&raw_message)
         .await
-        .map_err(|e| e.to_string())
-}
-
-/// Attachment info for frontend display
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct AttachmentInfo {
-    pub index: usize,
-    pub filename: String,
-    pub mime_type: String,
-    pub size: usize,
+        .map_err(|e| EddieError::Backend(e.to_string()))
 }
 
 /// Get attachment information for a message (without downloading content)
@@ -324,21 +212,17 @@ pub async fn get_message_attachments(
     account: Option<String>,
     folder: Option<String>,
     id: String,
-) -> Result<Vec<AttachmentInfo>, String> {
-    info!(
-        "Tauri command: get_message_attachments - account: {:?}, folder: {:?}, id: {}",
-        account, folder, id
-    );
+) -> Result<Vec<AttachmentInfo>, EddieError> {
+    info!("Getting attachments for message: {}", id);
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-    // Get attachment info from the backend
     let attachments = backend
         .get_attachment_info(folder.as_deref(), &id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     Ok(attachments
         .into_iter()
@@ -360,30 +244,22 @@ pub async fn download_attachment(
     id: String,
     attachment_index: usize,
     download_dir: Option<String>,
-) -> Result<String, String> {
+) -> Result<String, EddieError> {
     info!(
-        "Tauri command: download_attachment - account: {:?}, folder: {:?}, id: {}, index: {}, dir: {:?}",
-        account, folder, id, attachment_index, download_dir
+        "Downloading attachment {} from message {}",
+        attachment_index, id
     );
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-    // Determine download directory
-    let download_path: PathBuf = match download_dir {
-        Some(dir) => dir.into(),
-        None => dirs::download_dir().unwrap_or_else(|| PathBuf::from(".")),
-    };
+    let download_path = resolve_download_path(download_dir)?;
 
-    // Create directory if it doesn't exist
-    fs::create_dir_all(&download_path).map_err(|e| e.to_string())?;
-
-    // Download the attachment
     let file_path = backend
         .download_attachment(folder.as_deref(), &id, attachment_index, &download_path)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     Ok(file_path.to_string_lossy().to_string())
 }
@@ -395,33 +271,35 @@ pub async fn download_attachments(
     folder: Option<String>,
     id: String,
     download_dir: Option<String>,
-) -> Result<Vec<String>, String> {
-    info!(
-        "Tauri command: download_attachments - account: {:?}, folder: {:?}, id: {}, dir: {:?}",
-        account, folder, id, download_dir
-    );
+) -> Result<Vec<String>, EddieError> {
+    info!("Downloading all attachments from message {}", id);
 
     let backend = backend::get_backend(account.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-    // Determine download directory
+    let download_path = resolve_download_path(download_dir)?;
+
+    let files = backend
+        .download_all_attachments(folder.as_deref(), &id, &download_path)
+        .await
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+    Ok(files
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect())
+}
+
+/// Resolve download path from optional parameter
+fn resolve_download_path(download_dir: Option<String>) -> Result<PathBuf, EddieError> {
     let download_path: PathBuf = match download_dir {
         Some(dir) => dir.into(),
         None => dirs::download_dir().unwrap_or_else(|| PathBuf::from(".")),
     };
 
     // Create directory if it doesn't exist
-    fs::create_dir_all(&download_path).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&download_path)?;
 
-    // Download all attachments
-    let files = backend
-        .download_all_attachments(folder.as_deref(), &id, &download_path)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(files
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect())
+    Ok(download_path)
 }

@@ -22,6 +22,7 @@ pub type DbConnection = PooledConnection<SqliteConnectionManager>;
 
 /// Sync state for a folder
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct FolderSyncState {
     pub account_id: String,
     pub folder_name: String,
@@ -34,7 +35,7 @@ pub struct FolderSyncState {
 
 /// Cached message envelope
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedMessage {
+pub struct CachedChatMessage {
     pub id: i64,
     pub account_id: String,
     pub folder_name: String,
@@ -135,10 +136,9 @@ pub struct Entity {
 
 /// Connection configuration stored in database
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectionConfig {
-    pub account_id: String,
+pub struct EmailConnectionConfig {
+    pub account_id: String,  // Primary key - stores email address
     pub active: bool,
-    pub name: Option<String>,
     pub email: String,
     pub display_name: Option<String>,
     pub imap_config: Option<String>, // JSON serialized ImapConfig
@@ -154,13 +154,27 @@ static CONFIG_DB: OnceCell<RwLock<ConfigDatabase>> = OnceCell::new();
 
 /// Get the config database directory path
 fn get_config_db_dir() -> PathBuf {
-    if cfg!(debug_assertions) {
-        PathBuf::from("../.sqlite")
-    } else {
-        dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
+    // On mobile platforms (iOS/Android), always use data_dir() even in debug mode
+    // because the current directory is read-only
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        dirs::data_dir()
+            .expect("Failed to determine data directory for iOS/Android")
             .join("eddie.chat")
             .join("config")
+    }
+
+    // On desktop, use ../.sqlite in debug mode for easier debugging
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        if cfg!(debug_assertions) {
+            PathBuf::from("../.sqlite")
+        } else {
+            dirs::data_local_dir()
+                .expect("Failed to determine data directory for desktop")
+                .join("eddie.chat")
+                .join("config")
+        }
     }
 }
 
@@ -219,9 +233,8 @@ impl ConfigDatabase {
 
             -- Connection configuration (for account switching)
             CREATE TABLE IF NOT EXISTS connection_configs (
-                account_id TEXT PRIMARY KEY,
+                account_id TEXT PRIMARY KEY,  -- Stores email address
                 active INTEGER DEFAULT 0,
-                name TEXT,
                 email TEXT NOT NULL,
                 display_name TEXT,
                 imap_config TEXT,  -- JSON serialized ImapConfig
@@ -238,18 +251,74 @@ impl ConfigDatabase {
             EddieError::Backend(format!("Failed to initialize config schema: {}", e))
         })?;
 
+        // Migrate old schema if needed (remove 'name' column if it exists)
+        self.migrate_schema(&conn)?;
+
+        Ok(())
+    }
+
+    /// Migrate database schema from old versions
+    fn migrate_schema(&self, conn: &DbConnection) -> Result<(), EddieError> {
+        // Check if 'name' column exists (old schema)
+        let has_name_column: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('connection_configs') WHERE name = 'name'",
+                [],
+                |row| row.get::<_, i32>(0).map(|count| count > 0),
+            )
+            .unwrap_or(false);
+
+        if has_name_column {
+            info!("Migrating connection_configs table: removing 'name' column and updating account_id to use email");
+
+            // Migrate data: update account_id to use email instead of name
+            conn.execute_batch(
+                r#"
+                -- Create new table with correct schema
+                CREATE TABLE connection_configs_new (
+                    account_id TEXT PRIMARY KEY,  -- Now stores email address
+                    active INTEGER DEFAULT 0,
+                    email TEXT NOT NULL,
+                    display_name TEXT,
+                    imap_config TEXT,
+                    smtp_config TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                -- Copy data, using email as the new account_id
+                INSERT INTO connection_configs_new (account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at)
+                SELECT email, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                FROM connection_configs;
+
+                -- Drop old table
+                DROP TABLE connection_configs;
+
+                -- Rename new table
+                ALTER TABLE connection_configs_new RENAME TO connection_configs;
+
+                -- Recreate index
+                CREATE INDEX idx_connection_configs_active ON connection_configs(active);
+                "#,
+            )
+            .map_err(|e| {
+                EddieError::Backend(format!("Failed to migrate connection_configs table: {}", e))
+            })?;
+
+            info!("Migration complete");
+        }
+
         Ok(())
     }
 
     /// Save or update a connection configuration
-    pub fn upsert_connection_config(&self, config: &ConnectionConfig) -> Result<(), EddieError> {
+    pub fn upsert_connection_config(&self, config: &EmailConnectionConfig) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
-            "INSERT INTO connection_configs (account_id, active, name, email, display_name, imap_config, smtp_config, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+            "INSERT INTO connection_configs (account_id, active, email, display_name, imap_config, smtp_config, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
              ON CONFLICT(account_id) DO UPDATE SET
                 active = excluded.active,
-                name = excluded.name,
                 email = excluded.email,
                 display_name = excluded.display_name,
                 imap_config = excluded.imap_config,
@@ -258,7 +327,6 @@ impl ConfigDatabase {
             params![
                 config.account_id,
                 config.active as i32,
-                config.name,
                 config.email,
                 config.display_name,
                 config.imap_config,
@@ -274,11 +342,11 @@ impl ConfigDatabase {
     pub fn get_connection_config(
         &self,
         account_id: &str,
-    ) -> Result<Option<ConnectionConfig>, EddieError> {
+    ) -> Result<Option<EmailConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs WHERE account_id = ?1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -292,12 +360,12 @@ impl ConfigDatabase {
     }
 
     /// Get all connection configurations
-    pub fn get_all_connection_configs(&self) -> Result<Vec<ConnectionConfig>, EddieError> {
+    pub fn get_all_connection_configs(&self) -> Result<Vec<EmailConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
-                 FROM connection_configs ORDER BY name ASC",
+                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                 FROM connection_configs ORDER BY COALESCE(display_name, email) ASC",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
@@ -311,11 +379,11 @@ impl ConfigDatabase {
     }
 
     /// Get the currently active connection configuration
-    pub fn get_active_connection_config(&self) -> Result<Option<ConnectionConfig>, EddieError> {
+    pub fn get_active_connection_config(&self) -> Result<Option<EmailConnectionConfig>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, name, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs WHERE active = 1 LIMIT 1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -364,23 +432,22 @@ impl ConfigDatabase {
         Ok(())
     }
 
-    fn row_to_connection_config(row: &Row) -> Result<ConnectionConfig, rusqlite::Error> {
-        Ok(ConnectionConfig {
+    fn row_to_connection_config(row: &Row) -> Result<EmailConnectionConfig, rusqlite::Error> {
+        Ok(EmailConnectionConfig {
             account_id: row.get(0)?,
             active: row.get::<_, i32>(1)? != 0,
-            name: row.get(2)?,
-            email: row.get(3)?,
-            display_name: row.get(4)?,
-            imap_config: row.get(5)?,
-            smtp_config: row.get(6)?,
+            email: row.get(2)?,
+            display_name: row.get(3)?,
+            imap_config: row.get(4)?,
+            smtp_config: row.get(5)?,
             created_at: row
-                .get::<_, String>(7)
+                .get::<_, String>(6)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
             updated_at: row
-                .get::<_, String>(8)
+                .get::<_, String>(7)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
@@ -438,25 +505,25 @@ pub fn get_config_db() -> Result<std::sync::RwLockReadGuard<'static, ConfigDatab
 }
 
 /// Save a connection config to the global database
-pub fn save_connection_config(config: &ConnectionConfig) -> Result<(), EddieError> {
+pub fn save_connection_config(config: &EmailConnectionConfig) -> Result<(), EddieError> {
     let db = get_config_db()?;
     db.upsert_connection_config(config)
 }
 
 /// Get a connection config from the global database
-pub fn get_connection_config(account_id: &str) -> Result<Option<ConnectionConfig>, EddieError> {
+pub fn get_connection_config(account_id: &str) -> Result<Option<EmailConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_connection_config(account_id)
 }
 
 /// Get all connection configs from the global database
-pub fn get_all_connection_configs() -> Result<Vec<ConnectionConfig>, EddieError> {
+pub fn get_all_connection_configs() -> Result<Vec<EmailConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_all_connection_configs()
 }
 
 /// Get the active connection config from the global database
-pub fn get_active_connection_config() -> Result<Option<ConnectionConfig>, EddieError> {
+pub fn get_active_connection_config() -> Result<Option<EmailConnectionConfig>, EddieError> {
     let db = get_config_db()?;
     db.get_active_connection_config()
 }
@@ -817,7 +884,7 @@ impl SyncDatabase {
     // ========== Message Operations ==========
 
     /// Insert or update a message
-    pub fn upsert_message(&self, msg: &CachedMessage) -> Result<i64, EddieError> {
+    pub fn upsert_message(&self, msg: &CachedChatMessage) -> Result<i64, EddieError> {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO messages (account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -881,7 +948,7 @@ impl SyncDatabase {
         account_id: &str,
         folder_name: &str,
         uid: u32,
-    ) -> Result<Option<CachedMessage>, EddieError> {
+    ) -> Result<Option<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -902,7 +969,7 @@ impl SyncDatabase {
     }
 
     /// Get a message by its internal ID
-    pub fn get_message_by_id(&self, id: i64) -> Result<Option<CachedMessage>, EddieError> {
+    pub fn get_message_by_id(&self, id: i64) -> Result<Option<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -1100,7 +1167,7 @@ impl SyncDatabase {
         folder_name: &str,
         limit: Option<u32>,
         offset: Option<u32>,
-    ) -> Result<Vec<CachedMessage>, EddieError> {
+    ) -> Result<Vec<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let sql = format!(
             "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -1132,8 +1199,8 @@ impl SyncDatabase {
         Ok(messages)
     }
 
-    fn row_to_cached_message(row: &Row) -> Result<CachedMessage, rusqlite::Error> {
-        Ok(CachedMessage {
+    fn row_to_cached_message(row: &Row) -> Result<CachedChatMessage, rusqlite::Error> {
+        Ok(CachedChatMessage {
             id: row.get(0)?,
             account_id: row.get(1)?,
             folder_name: row.get(2)?,
@@ -1297,7 +1364,7 @@ impl SyncDatabase {
     pub fn get_conversation_messages(
         &self,
         conversation_id: i64,
-    ) -> Result<Vec<CachedMessage>, EddieError> {
+    ) -> Result<Vec<CachedChatMessage>, EddieError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT m.id, m.account_id, m.folder_name, m.uid, m.message_id, m.in_reply_to, m.references_header,
