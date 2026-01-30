@@ -1,6 +1,12 @@
 pub mod contact;
 pub mod conversation;
 pub mod error;
+pub mod responses;
+
+#[allow(unused_imports)]
+pub use error::{EddieError, Result};
+#[allow(unused_imports)]
+pub use responses::*;
 
 pub use contact::*;
 
@@ -29,7 +35,7 @@ pub struct Folder {
 
 /// Represents an email message with full content
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
+pub struct ChatMessage {
     pub id: String,
     pub envelope: Envelope,
     pub headers: Vec<(String, String)>,
@@ -46,9 +52,18 @@ pub struct Attachment {
     pub size: usize,
 }
 
+/// Represents an attachment to be sent with a composed message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComposeAttachment {
+    pub path: String,
+    pub name: String,
+    pub mime_type: String,
+    pub size: usize,
+}
+
 /// Represents an account configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Account {
+pub struct EmailAccount {
     pub name: String,
     pub is_default: bool,
     pub backend: String,
@@ -56,7 +71,7 @@ pub struct Account {
 
 /// Account details for editing
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountDetails {
+pub struct EmailAccountDetails {
     pub name: String,
     pub email: String,
     pub display_name: Option<String>,
@@ -92,7 +107,7 @@ pub struct ListEnvelopesResponse {
 
 /// Read message request
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReadMessageRequest {
+pub struct ReadChatMessageRequest {
     pub account: Option<String>,
     pub folder: Option<String>,
     pub id: String,
@@ -107,4 +122,3 @@ pub struct FlagRequest {
     pub ids: Vec<String>,
     pub flags: Vec<String>,
 }
-
