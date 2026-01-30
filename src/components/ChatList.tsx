@@ -92,31 +92,28 @@ export function ChatList({
         </div>
         <div className="flex gap-2 mt-3">
           <button
-            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === "chats"
-                ? "bg-white text-bg-primary"
-                : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            }`}
+            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${activeFilter === "chats"
+              ? "bg-white text-bg-primary"
+              : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+              }`}
             onClick={() => setActiveFilter("chats")}
           >
             Connections
           </button>
           <button
-            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === "requests"
-                ? "bg-white text-bg-primary"
-                : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            }`}
+            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${activeFilter === "requests"
+              ? "bg-white text-bg-primary"
+              : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+              }`}
             onClick={() => setActiveFilter("requests")}
           >
             Strangers
           </button>
           <button
-            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === "all"
-                ? "bg-white text-bg-primary"
-                : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            }`}
+            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${activeFilter === "all"
+              ? "bg-white text-bg-primary"
+              : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+              }`}
             onClick={() => setActiveFilter("all")}
           >
             All
@@ -125,7 +122,7 @@ export function ChatList({
       </div>
 
       {/* Chat list content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden safe-bottom">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-10 gap-3 text-text-muted text-sm">
             <div className="spinner" />
@@ -155,9 +152,8 @@ export function ChatList({
             return (
               <div
                 key={conversation.id}
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors safe-x ${
-                  isSelected ? "bg-bg-active" : "hover:bg-bg-hover"
-                }`}
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors safe-x ${isSelected ? "bg-bg-active" : "hover:bg-bg-hover"
+                  }`}
                 onClick={() => onSelect(conversation)}
               >
                 {/* Avatar group */}
@@ -170,13 +166,11 @@ export function ChatList({
                     return (
                       <div
                         key={index}
-                        className={`flex items-center justify-center rounded-full text-white font-semibold uppercase overflow-hidden relative ${
-                          avatarsToShow.length > 1
-                            ? `w-8 h-8 min-w-8 text-xs border-2 border-bg-secondary absolute ${
-                                index === 0 ? "left-0 z-20" : "left-4 z-10"
-                              }`
-                            : "w-12 h-12 min-w-12 text-lg"
-                        }`}
+                        className={`flex items-center justify-center rounded-full text-white font-semibold uppercase overflow-hidden relative ${avatarsToShow.length > 1
+                          ? `w-8 h-8 min-w-8 text-xs border-2 border-bg-secondary absolute ${index === 0 ? "left-0 z-20" : "left-4 z-10"
+                          }`
+                          : "w-12 h-12 min-w-12 text-lg"
+                          }`}
                         style={{ backgroundColor: avatarColor }}
                       >
                         {gravatarUrl && (
@@ -204,9 +198,8 @@ export function ChatList({
                 {/* Content */}
                 <div className="flex-1 min-w-0 flex flex-col gap-1">
                   <div className="flex justify-between items-center gap-2">
-                    <span className={`text-base text-text-primary truncate ${
-                      conversation.unread_count > 0 ? "font-semibold" : "font-medium"
-                    }`}>
+                    <span className={`text-base text-text-primary truncate ${conversation.unread_count > 0 ? "font-semibold" : "font-medium"
+                      }`}>
                       {nameParts.map((part, index) => (
                         <span key={index}>
                           {index > 0 && ", "}
@@ -222,11 +215,10 @@ export function ChatList({
                   </div>
 
                   <div className="flex justify-between items-center gap-2">
-                    <span className={`text-sm truncate ${
-                      conversation.unread_count > 0
-                        ? "text-text-primary font-medium"
-                        : "text-text-secondary"
-                    }`}>
+                    <span className={`text-sm truncate ${conversation.unread_count > 0
+                      ? "text-text-primary font-medium"
+                      : "text-text-secondary"
+                      }`}>
                       {conversation.last_message_preview}
                     </span>
                     {conversation.unread_count > 0 && (

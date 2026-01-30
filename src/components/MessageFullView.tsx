@@ -54,7 +54,7 @@ export function MessageFullView({ message, onClose }: MessageFullViewProps) {
           </svg>
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 safe-bottom">
         {hasHtml ? (
           <div
             className="prose prose-invert prose-sm max-w-none [&_a]:text-accent-blue [&_img]:max-w-full [&_img]:h-auto"

@@ -270,7 +270,7 @@ function App() {
   const sidebarHidden = selectedConversation || isComposing;
 
   return (
-    <main className="flex h-dvh overflow-hidden safe-top">
+    <main className="flex h-dvh max-h-dvh overflow-hidden">
       {/* Sidebar with chat list */}
       <aside
         className={`
@@ -278,10 +278,11 @@ function App() {
           flex flex-col overflow-hidden
           absolute md:relative inset-0 z-50 md:z-auto
           transition-transform duration-250 ease-out
+          h-full min-h-0
           ${sidebarHidden ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}
         `}
       >
-        <div className="flex items-center justify-between px-4 py-3 h-16 safe-x">
+        <div className="flex items-center justify-between px-4" style={{ minHeight: '4rem', paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
               <img src="/eddie-swirl-green.svg" alt="Eddie logo" className="w-6 h-6" />
@@ -320,7 +321,7 @@ function App() {
       </aside>
 
       {/* Main conversation view */}
-      <section className="flex-1 flex flex-col bg-bg-primary overflow-hidden">
+      <section className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full min-h-0">
         <ConversationView
           conversation={selectedConversation}
           messages={messages}

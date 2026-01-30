@@ -286,7 +286,7 @@ export function ConversationView({
     return (
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 h-16 safe-x">
+        <div className="flex items-center gap-3 px-4 h-16 safe-x" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
           {onBack && (
             <button className="flex md:hidden w-9 h-9 rounded-full items-center justify-center hover:bg-bg-hover transition-colors" onClick={onBack}>
               <svg className="w-5 h-5 text-text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -331,7 +331,7 @@ export function ConversationView({
 
         {/* Input */}
         {hasParticipants && (
-          <form className="flex flex-col gap-2 px-4 py-3 safe-x safe-bottom" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-2 px-4 safe-x" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))', paddingTop: '0.75rem' }} onSubmit={handleSubmit}>
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 p-3 bg-accent-green/10 border border-dashed border-accent-green/40 rounded-xl mb-2">
                 <span className="w-full text-[11px] font-medium text-accent-green uppercase tracking-wider mb-1">Ready to send</span>
@@ -388,7 +388,7 @@ export function ConversationView({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 h-16 safe-x">
+      <div className="flex items-center gap-3 px-4" style={{ minHeight: '4rem', paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
         {onBack && (
           <button className="flex md:hidden w-9 h-9 rounded-full items-center justify-center hover:bg-bg-hover transition-colors" onClick={onBack}>
             <svg className="w-5 h-5 text-text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
@@ -466,9 +466,8 @@ export function ConversationView({
                             const isExpandable = hasExpandableContent(message.text_body, message.html_body);
                             return (
                               <div
-                                className={`px-3.5 py-2.5 rounded-2xl max-w-full break-words relative ${
-                                  isOut ? "bg-bubble-sent text-white rounded-br-sm" : "bg-bubble-received text-white rounded-bl-sm"
-                                } ${isExpandable ? "border border-white/15 cursor-pointer hover:border-white/30" : ""}`}
+                                className={`px-3.5 py-2.5 rounded-2xl max-w-full break-words relative ${isOut ? "bg-bubble-sent text-white rounded-br-sm" : "bg-bubble-received text-white rounded-bl-sm"
+                                  } ${isExpandable ? "border border-white/15 cursor-pointer hover:border-white/30" : ""}`}
                                 onClick={isExpandable ? () => setFullViewMessage(message) : undefined}
                                 title={isExpandable ? "Click to view full message" : undefined}
                               >
@@ -492,7 +491,7 @@ export function ConversationView({
           </div>
 
           {/* Input */}
-          <form className="flex flex-col gap-2 px-4 py-3 safe-x safe-bottom" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-2 px-4 safe-x" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))', paddingTop: '0.75rem' }} onSubmit={handleSubmit}>
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 p-3 bg-accent-green/10 border border-dashed border-accent-green/40 rounded-xl mb-2">
                 <span className="w-full text-[11px] font-medium text-accent-green uppercase tracking-wider mb-1">Ready to send</span>
