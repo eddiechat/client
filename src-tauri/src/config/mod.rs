@@ -16,12 +16,12 @@ static CONFIG: OnceCell<RwLock<AppConfig>> = OnceCell::new();
 pub struct AppConfig {
     /// Map of account name to account configuration
     #[serde(default)]
-    pub accounts: HashMap<String, AccountConfig>,
+    pub accounts: HashMap<String, EmailAccountConfig>,
 }
 
 /// Account configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountConfig {
+pub struct EmailAccountConfig {
     /// Display name for the account
     pub name: Option<String>,
 

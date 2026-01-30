@@ -6,17 +6,17 @@ use chrono::Utc;
 use std::path::PathBuf;
 use tracing::info;
 
-use crate::config::{AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::config::{EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
 use crate::credentials::CredentialStore;
 use crate::services::helpers::sanitize_email_for_filename;
 use crate::sync::db::{
     delete_connection_config, get_connection_config, init_config_db, save_connection_config,
-    set_active_account, ConnectionConfig,
+    set_active_account, EmailConnectionConfig,
 };
 use crate::types::error::{EddieError, Result};
 
 /// Parameters for creating a new account
-pub struct CreateAccountParams {
+pub struct CreateEmailAccountParams {
     pub name: String,
     pub email: String,
     pub display_name: Option<String>,
@@ -43,13 +43,13 @@ pub enum AuthMethod {
 }
 
 /// Create and save a new account
-pub fn create_account(params: CreateAccountParams) -> Result<()> {
+pub fn create_account(params: CreateEmailAccountParams) -> Result<()> {
     info!("Creating account: {}", params.name);
 
     // Build auth config based on auth method
     let auth_config = build_auth_config(&params.email, &params.auth_method)?;
 
-    let account_config = AccountConfig {
+    let account_config = EmailAccountConfig {
         name: Some(params.name.clone()),
         default: true,
         email: params.email.clone(),
@@ -106,7 +106,7 @@ fn build_auth_config(email: &str, auth_method: &AuthMethod) -> Result<AuthConfig
 fn save_account_config(
     email: &str,
     display_name: &Option<String>,
-    account: &AccountConfig,
+    account: &EmailAccountConfig,
 ) -> Result<()> {
     let imap_json = account
         .imap
@@ -119,7 +119,7 @@ fn save_account_config(
         .map(|c| serde_json::to_string(c))
         .transpose()?;
 
-    let db_config = ConnectionConfig {
+    let db_config = EmailConnectionConfig {
         account_id: email.to_string(),
         active: true,
         email: email.to_string(),

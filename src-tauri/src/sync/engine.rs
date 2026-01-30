@@ -20,11 +20,11 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::backend::EmailBackend;
-use crate::config::AccountConfig;
+use crate::config::EmailAccountConfig;
 use crate::sync::action_queue::{ActionQueue, ActionType, ReplayResult};
 use crate::sync::classifier::MessageClassifier;
 use crate::sync::conversation::ConversationGrouper;
-use crate::sync::db::{CachedConversation, CachedMessage, SyncDatabase};
+use crate::sync::db::{CachedConversation, CachedChatMessage, SyncDatabase};
 use crate::sync::idle::{ChangeNotification, MailboxMonitor, MonitorConfig, MonitorMode};
 use crate::types::error::EddieError;
 use crate::types::Envelope;
@@ -130,7 +130,7 @@ pub enum SyncEvent {
 pub struct SyncEngine {
     account_id: String,
     user_email: String,
-    account_config: AccountConfig,
+    account_config: EmailAccountConfig,
     config: SyncConfig,
     db: Arc<SyncDatabase>,
     action_queue: Arc<ActionQueue>,
@@ -151,7 +151,7 @@ impl SyncEngine {
     pub fn new(
         account_id: String,
         user_email: String,
-        account_config: AccountConfig,
+        account_config: EmailAccountConfig,
         config: SyncConfig,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self, EddieError> {
@@ -527,12 +527,12 @@ impl SyncEngine {
         }
     }
 
-    /// Convert an Envelope to a CachedMessage
+    /// Convert an Envelope to a CachedChatMessage
     fn envelope_to_cached_message(
         &self,
         folder: &str,
         envelope: &Envelope,
-    ) -> Result<CachedMessage, EddieError> {
+    ) -> Result<CachedChatMessage, EddieError> {
         // Parse the UID from the envelope ID (assuming it's a string representation)
         let uid: u32 = envelope.id.parse().unwrap_or(0);
 
@@ -549,7 +549,7 @@ impl SyncEngine {
         let flags_json =
             serde_json::to_string(&envelope.flags).unwrap_or_else(|_| "[]".to_string());
 
-        Ok(CachedMessage {
+        Ok(CachedChatMessage {
             id: 0, // Will be set by database
             account_id: self.account_id.clone(),
             folder_name: folder.to_string(),
@@ -638,7 +638,7 @@ impl SyncEngine {
     pub fn get_conversation_messages(
         &self,
         conversation_id: i64,
-    ) -> Result<Vec<CachedMessage>, EddieError> {
+    ) -> Result<Vec<CachedChatMessage>, EddieError> {
         self.db.get_conversation_messages(conversation_id)
     }
 
@@ -670,7 +670,7 @@ impl SyncEngine {
     pub async fn fetch_message_body(
         &self,
         message_id: i64,
-    ) -> Result<CachedMessage, EddieError> {
+    ) -> Result<CachedChatMessage, EddieError> {
         let message = self
             .db
             .get_message_by_id(message_id)?
@@ -688,7 +688,7 @@ impl SyncEngine {
             .await?;
 
         // Update cache with body
-        let updated = CachedMessage {
+        let updated = CachedChatMessage {
             body_cached: true,
             text_body: full_message.text_body,
             html_body: full_message.html_body,

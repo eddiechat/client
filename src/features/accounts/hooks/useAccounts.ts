@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { listAccounts, getDefaultAccount } from "../../../tauri";
-import type { Account } from "../../../tauri";
+import type { EmailAccount } from "../../../tauri";
 
 interface UseAccountsResult {
-  accounts: Account[];
+  accounts: EmailAccount[];
   currentAccount: string | null;
   setCurrentAccount: (account: string | null) => void;
   loading: boolean;
@@ -21,7 +21,7 @@ interface UseAccountsResult {
  * - Refresh functionality
  */
 export function useAccounts(): UseAccountsResult {
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [currentAccount, setCurrentAccount] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

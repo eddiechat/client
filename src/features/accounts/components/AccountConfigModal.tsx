@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { SaveAccountRequest } from "../../../tauri";
+import type { SaveEmailAccountRequest } from "../../../tauri";
 
 export interface AccountEditData {
   name: string;
@@ -19,7 +19,7 @@ export interface AccountEditData {
 interface AccountConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: SaveAccountRequest) => Promise<void>;
+  onSave: (data: SaveEmailAccountRequest) => Promise<void>;
   onDelete?: (accountName: string) => Promise<void>;
   editData?: AccountEditData | null;
 }

@@ -20,7 +20,7 @@ import {
   sendMessageWithAttachments,
   syncFolder,
 } from "./tauri";
-import type { Conversation, SaveAccountRequest, ComposeAttachment } from "./tauri";
+import type { Conversation, SaveEmailAccountRequest, ComposeAttachment } from "./tauri";
 import { extractEmail } from "./shared";
 import "./App.css";
 
@@ -269,7 +269,7 @@ function App() {
     }
   }, [currentAccount, showSetupWizard, setupWizardOpen]);
 
-  const handleSaveAccount = async (data: SaveAccountRequest) => {
+  const handleSaveAccount = async (data: SaveEmailAccountRequest) => {
     await saveAccount(data);
     await refreshAccounts();
     refreshConversations();

@@ -12,7 +12,7 @@ use crate::services::resolve_account_id_string;
 use crate::state::SyncManager;
 use crate::sync::action_queue::ActionType;
 use crate::sync::engine::SyncEvent;
-use crate::types::responses::{CachedMessageResponse, ConversationResponse, SyncStatusResponse};
+use crate::types::responses::{CachedChatMessageResponse, ConversationResponse, SyncStatusResponse};
 use crate::types::EddieError;
 
 // ========== Tauri Commands ==========
@@ -159,7 +159,7 @@ pub async fn get_cached_conversation_messages(
     manager: State<'_, SyncManager>,
     account: Option<String>,
     conversation_id: i64,
-) -> Result<Vec<CachedMessageResponse>, EddieError> {
+) -> Result<Vec<CachedChatMessageResponse>, EddieError> {
     let account_id = resolve_account_id_string(account)?;
 
     let engine = manager.get_or_create(&account_id).await?;
@@ -178,7 +178,7 @@ pub async fn fetch_message_body(
     manager: State<'_, SyncManager>,
     account: Option<String>,
     message_id: i64,
-) -> Result<CachedMessageResponse, EddieError> {
+) -> Result<CachedChatMessageResponse, EddieError> {
     let account_id = resolve_account_id_string(account)?;
 
     let engine = manager.get_or_create(&account_id).await?;

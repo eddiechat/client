@@ -11,14 +11,14 @@ use crate::backend::{self, SendMessageResult};
 use crate::services::{build_message, resolve_account_id, ComposeParams};
 use crate::state::SyncManager;
 use crate::types::responses::AttachmentInfo;
-use crate::types::{ComposeAttachment, EddieError, Message, ReadMessageRequest};
+use crate::types::{ComposeAttachment, EddieError, ChatMessage, ReadChatMessageRequest};
 
 /// Read a message by ID
 ///
 /// **DEPRECATED**: Fetches directly from IMAP.
 /// Use `fetch_message_body` from sync commands for cached access.
 #[tauri::command]
-pub async fn read_message(request: ReadMessageRequest) -> Result<Message, EddieError> {
+pub async fn read_message(request: ReadChatMessageRequest) -> Result<ChatMessage, EddieError> {
     warn!("DEPRECATED: read_message called - migrate to fetch_message_body");
     info!("Reading message: {:?}", request);
 

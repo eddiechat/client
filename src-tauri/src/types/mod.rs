@@ -32,7 +32,7 @@ pub struct Folder {
 
 /// Represents an email message with full content
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
+pub struct ChatMessage {
     pub id: String,
     pub envelope: Envelope,
     pub headers: Vec<(String, String)>,
@@ -60,7 +60,7 @@ pub struct ComposeAttachment {
 
 /// Represents an account configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Account {
+pub struct EmailAccount {
     pub name: String,
     pub is_default: bool,
     pub backend: String,
@@ -68,7 +68,7 @@ pub struct Account {
 
 /// Account details for editing
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountDetails {
+pub struct EmailAccountDetails {
     pub name: String,
     pub email: String,
     pub display_name: Option<String>,
@@ -104,7 +104,7 @@ pub struct ListEnvelopesResponse {
 
 /// Read message request
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReadMessageRequest {
+pub struct ReadChatMessageRequest {
     pub account: Option<String>,
     pub folder: Option<String>,
     pub id: String,

@@ -442,7 +442,7 @@ The frontend follows a **feature-based architecture** with these principles:
 
    // Tauri layer
    import { saveAccount, onSyncEvent } from './tauri';
-   import type { Account, SyncStatus } from './tauri';
+   import type { EmailAccount, SyncStatus } from './tauri';
 
    // Shared utilities
    import { Avatar, getAvatarColor } from './shared';

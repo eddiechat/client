@@ -4,10 +4,10 @@ import {
   fetchMessageBody,
   getConversationMessages,
 } from "../../../tauri";
-import type { Conversation, Message, CachedMessage } from "../../../tauri";
+import type { Conversation, ChatMessage, CachedChatMessage } from "../../../tauri";
 
 interface UseConversationMessagesResult {
-  messages: Message[];
+  messages: ChatMessage[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -16,7 +16,7 @@ interface UseConversationMessagesResult {
 /**
  * Convert cached message to display format.
  */
-function formatMessage(cached: CachedMessage): Message {
+function formatMessage(cached: CachedChatMessage): ChatMessage {
   return {
     id: `${cached.folder}:${cached.uid}`,
     envelope: {
@@ -49,7 +49,7 @@ export function useConversationMessages(
   conversation: Conversation | null,
   account?: string
 ): UseConversationMessagesResult {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

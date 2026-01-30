@@ -6,7 +6,7 @@
 use std::process::Command;
 use std::sync::Arc;
 
-use email::account::config::{passwd::PasswordConfig, AccountConfig as EmailAccountConfig};
+use email::account::config::{passwd::PasswordConfig, AccountConfig as EmailLibAccountConfig};
 use email::backend::BackendBuilder;
 use email::envelope::list::{ListEnvelopes, ListEnvelopesOptions};
 use email::envelope::Id;
@@ -25,11 +25,11 @@ use secret::Secret;
 use std::path::PathBuf;
 use tracing::{info, warn};
 
-use crate::config::{AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::config::{EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
 use crate::credentials::CredentialStore;
 use crate::sync::db::{get_active_connection_config, get_connection_config, init_config_db};
 use crate::types::error::EddieError;
-use crate::types::{Attachment, Envelope, Folder, Message};
+use crate::types::{Attachment, Envelope, Folder, ChatMessage};
 
 /// Result of sending a message - contains the message ID and sent folder name
 #[derive(Debug, Clone, serde::Serialize)]
@@ -41,9 +41,9 @@ pub struct SendMessageResult {
 /// Backend service for email operations
 pub struct EmailBackend {
     /// Account configuration from our config
-    account_config: AccountConfig,
+    account_config: EmailAccountConfig,
     /// email-lib account configuration
-    email_account_config: Arc<EmailAccountConfig>,
+    email_account_config: Arc<EmailLibAccountConfig>,
 }
 
 impl EmailBackend {
@@ -65,7 +65,7 @@ impl EmailBackend {
             .smtp_config
             .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
 
-        let account_config = AccountConfig {
+        let account_config = EmailAccountConfig {
             name: db_config.display_name.clone(),
             default: db_config.active,
             email: db_config.email.clone(),
@@ -75,7 +75,7 @@ impl EmailBackend {
         };
 
         // Build email-lib account config
-        let email_account_config = Arc::new(EmailAccountConfig {
+        let email_account_config = Arc::new(EmailLibAccountConfig {
             name: db_config.display_name.clone().unwrap_or_else(|| account_name.to_string()),
             email: account_config.email.clone(),
             display_name: account_config.display_name.clone(),
@@ -372,7 +372,7 @@ impl EmailBackend {
         folder: Option<&str>,
         id: &str,
         peek: bool,
-    ) -> Result<Message, EddieError> {
+    ) -> Result<ChatMessage, EddieError> {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
         let msg_id = Id::single(id);
@@ -462,7 +462,7 @@ impl EmailBackend {
             date, from, to, subject
         );
 
-        Ok(Message {
+        Ok(ChatMessage {
             id: id.to_string(),
             envelope: Envelope {
                 id: id.to_string(),

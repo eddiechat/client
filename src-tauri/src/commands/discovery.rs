@@ -9,7 +9,7 @@ use crate::autodiscovery::{
     Security, UsernameHint,
 };
 use crate::credentials::CredentialStore;
-use crate::services::{create_account, AuthMethod as ServiceAuthMethod, CreateAccountParams};
+use crate::services::{create_account, AuthMethod as ServiceAuthMethod, CreateEmailAccountParams};
 use crate::types::responses::{DiscoveryResult, ProgressUpdate};
 use crate::types::EddieError;
 
@@ -192,7 +192,7 @@ pub async fn save_discovered_account(
         }
     };
 
-    create_account(CreateAccountParams {
+    create_account(CreateEmailAccountParams {
         name,
         email,
         display_name,

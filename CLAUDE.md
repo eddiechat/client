@@ -99,7 +99,7 @@ import { ConversationView, useConversations } from './features/conversations';
 
 // Tauri layer (commands, events, types)
 import { saveAccount, listAccounts, onSyncEvent } from './tauri';
-import type { Account, SyncStatus, Conversation } from './tauri';
+import type { EmailAccount, SyncStatus, Conversation } from './tauri';
 
 // Shared utilities and components
 import { Avatar, LoadingSpinner, EmptyState } from './shared/components';
@@ -126,8 +126,8 @@ import { extractEmail, getAvatarColor, formatMessageTime } from './shared/lib';
 
 ```typescript
 // src/tauri/commands.ts
-export async function listAccounts(): Promise<Account[]> {
-  return invoke<Account[]>('list_accounts');
+export async function listAccounts(): Promise<EmailAccount[]> {
+  return invoke<EmailAccount[]>('list_accounts');
 }
 ```
 
@@ -137,7 +137,7 @@ Hooks should return consistent shapes:
 
 ```typescript
 interface UseAccountsResult {
-  accounts: Account[];
+  accounts: EmailAccount[];
   currentAccount: string | null;
   loading: boolean;
   error: string | null;

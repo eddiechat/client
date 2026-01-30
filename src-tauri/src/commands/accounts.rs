@@ -9,11 +9,11 @@ use crate::sync::db::{
     delete_connection_config, get_active_connection_config, get_all_connection_configs,
     get_connection_config, init_config_db,
 };
-use crate::types::{Account, AccountDetails, EddieError};
+use crate::types::{EmailAccount, EmailAccountDetails, EddieError};
 
 /// List all configured accounts
 #[tauri::command]
-pub async fn list_accounts() -> Result<Vec<Account>, EddieError> {
+pub async fn list_accounts() -> Result<Vec<EmailAccount>, EddieError> {
     info!("Listing accounts");
 
     init_config_db()?;
@@ -23,7 +23,7 @@ pub async fn list_accounts() -> Result<Vec<Account>, EddieError> {
 
     Ok(configs
         .into_iter()
-        .map(|config| Account {
+        .map(|config| EmailAccount {
             name: config.account_id.clone(),
             is_default: Some(&config.account_id) == active_id.as_ref(),
             backend: if config.imap_config.is_some() {
@@ -67,7 +67,7 @@ pub async fn remove_account(name: String) -> Result<(), EddieError> {
 
 /// Get account details for editing
 #[tauri::command]
-pub async fn get_account_details(name: String) -> Result<AccountDetails, EddieError> {
+pub async fn get_account_details(name: String) -> Result<EmailAccountDetails, EddieError> {
     info!("Getting account details: {}", name);
 
     init_config_db()?;
@@ -93,7 +93,7 @@ pub async fn get_account_details(name: String) -> Result<AccountDetails, EddieEr
         AuthConfig::AppPassword { user } => user.clone(),
     };
 
-    Ok(AccountDetails {
+    Ok(EmailAccountDetails {
         name: name.clone(),
         email: db_config.email.clone(),
         display_name: db_config.display_name.clone(),
