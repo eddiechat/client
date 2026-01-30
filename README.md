@@ -93,12 +93,41 @@ User Interface ← React State Update ← Tauri Response ←───┘
 
 #### Frontend (`src/`)
 
+The frontend follows a **feature-based architecture** with clear separation of concerns:
+
 | Directory | Purpose |
 |-----------|---------|
-| `components/` | React UI components (ChatList, ConversationView, ComposeModal, etc.) |
-| `hooks/` | Custom React hooks for data fetching (`useEmail`, `useConversations`) |
-| `lib/` | API wrapper for Tauri IPC and utility functions |
-| `types/` | TypeScript interfaces for Email, Message, Account, etc. |
+| `features/` | Feature modules organized by domain (accounts, conversations) |
+| `shared/` | Reusable components, hooks, and utilities across features |
+| `tauri/` | Centralized Tauri communication layer (commands, events, types) |
+| `lib/` | Static data and external integrations (emoji data) |
+
+##### Feature Modules (`features/`)
+
+Each feature module is self-contained with its own components, hooks, and utilities:
+
+| Module | Contents |
+|--------|----------|
+| `accounts/` | Account management (SidebarHeader, AccountSetupWizard, AccountConfigModal, useAccounts hook, AccountContext) |
+| `conversations/` | Email conversations (ChatMessages, ConversationView, useConversations hook, useConversationMessages hook) |
+
+##### Tauri Layer (`tauri/`)
+
+All Tauri communication is centralized for type safety and maintainability:
+
+| File | Purpose |
+|------|---------|
+| `commands.ts` | Type-safe wrappers for all `invoke()` calls to Rust backend |
+| `events.ts` | Event listener subscriptions (sync events, status changes) |
+| `types.ts` | TypeScript types mirroring Rust backend types |
+| `index.ts` | Barrel exports for clean imports |
+
+##### Shared Utilities (`shared/`)
+
+| Directory | Purpose |
+|-----------|---------|
+| `components/` | Generic UI components (Avatar, LoadingSpinner, EmptyState) |
+| `lib/` | Utility functions (avatar colors, email parsing, date formatting) |
 
 #### Backend (`src-tauri/src/`)
 
@@ -115,53 +144,99 @@ User Interface ← React State Update ← Tauri Response ←───┘
 
 ```
 eddie.chat/
-├── src/                          # React/TypeScript frontend
-│   ├── App.tsx                   # Main application component
-│   ├── App.css                   # Global styles (dark theme)
-│   ├── main.tsx                  # React entry point
-│   ├── components/               # UI components
-│   │   ├── AccountConfigModal.tsx
-│   │   ├── Avatar.tsx
-│   │   ├── ChatList.tsx
-│   │   ├── ComposeModal.tsx
-│   │   └── ConversationView.tsx
-│   ├── hooks/                    # React hooks
-│   │   ├── useEmail.ts
-│   │   └── useConversations.ts
-│   ├── lib/                      # Utilities
-│   │   ├── api.ts               # Tauri IPC wrapper
-│   │   └── utils.ts             # Helper functions
-│   └── types/                    # TypeScript definitions
-│       └── index.ts
+├── src/                              # React/TypeScript frontend
+│   ├── App.tsx                       # Main application component
+│   ├── App.css                       # Global styles (dark theme)
+│   ├── main.tsx                      # React entry point
+│   │
+│   ├── features/                     # Feature modules (domain-based)
+│   │   ├── accounts/                 # Account management feature
+│   │   │   ├── components/           # Account-related UI
+│   │   │   │   ├── SidebarHeader.tsx
+│   │   │   │   ├── AccountSetupWizard.tsx
+│   │   │   │   ├── AccountConfigModal.tsx
+│   │   │   │   └── index.ts
+│   │   │   ├── hooks/
+│   │   │   │   ├── useAccounts.ts    # Account state management
+│   │   │   │   └── index.ts
+│   │   │   ├── context/
+│   │   │   │   ├── AccountContext.tsx # Global account state
+│   │   │   │   └── index.ts
+│   │   │   └── index.ts              # Barrel exports
+│   │   │
+│   │   ├── conversations/            # Conversations feature
+│   │   │   ├── components/           # Conversation UI
+│   │   │   │   ├── ChatMessages.tsx  # Conversation list
+│   │   │   │   ├── ChatMessage.tsx   # Single conversation item
+│   │   │   │   ├── ConversationView.tsx # Main chat view
+│   │   │   │   ├── AttachmentList.tsx
+│   │   │   │   ├── EmojiPicker.tsx
+│   │   │   │   ├── GravatarModal.tsx
+│   │   │   │   └── index.ts
+│   │   │   ├── hooks/
+│   │   │   │   ├── useConversations.ts      # Conversation list
+│   │   │   │   ├── useConversationMessages.ts # Messages in conversation
+│   │   │   │   └── index.ts
+│   │   │   ├── utils.ts              # Conversation helpers
+│   │   │   └── index.ts
+│   │   │
+│   │   └── index.ts                  # Feature barrel exports
+│   │
+│   ├── shared/                       # Shared utilities & components
+│   │   ├── components/               # Generic UI components
+│   │   │   ├── Avatar.tsx
+│   │   │   ├── LoadingSpinner.tsx
+│   │   │   ├── EmptyState.tsx
+│   │   │   └── index.ts
+│   │   ├── lib/                      # Utility functions
+│   │   │   ├── utils.ts              # Avatar, email, date utils
+│   │   │   └── index.ts
+│   │   └── index.ts
+│   │
+│   ├── tauri/                        # Tauri integration layer
+│   │   ├── commands.ts               # Type-safe invoke wrappers
+│   │   ├── events.ts                 # Event listener subscriptions
+│   │   ├── types.ts                  # Backend contract types
+│   │   └── index.ts                  # Barrel exports
+│   │
+│   └── lib/
+│       └── emojiData.ts              # Emoji database
 │
-├── src-tauri/                    # Rust backend
+├── src-tauri/                        # Rust backend
 │   ├── src/
-│   │   ├── main.rs              # Application entry point
-│   │   ├── lib.rs               # Tauri initialization
-│   │   ├── backend/             # Email operations
+│   │   ├── main.rs                   # Application entry point
+│   │   ├── lib.rs                    # Tauri initialization
+│   │   ├── backend/                  # Email operations
 │   │   │   └── mod.rs
-│   │   ├── commands/            # IPC command handlers
+│   │   ├── commands/                 # IPC command handlers
 │   │   │   ├── accounts.rs
 │   │   │   ├── conversations.rs
 │   │   │   ├── messages.rs
-│   │   │   ├── envelopes.rs
+│   │   │   ├── discovery.rs
 │   │   │   ├── flags.rs
 │   │   │   ├── folders.rs
-│   │   │   └── config.rs
-│   │   ├── config/              # Configuration management
+│   │   │   ├── sync.rs
 │   │   │   └── mod.rs
-│   │   └── types/               # Data structures
+│   │   ├── services/                 # Business logic services
+│   │   │   ├── account_service.rs
+│   │   │   ├── message_service.rs
+│   │   │   └── mod.rs
+│   │   ├── state/                    # Application state
+│   │   │   ├── sync_manager.rs
+│   │   │   ├── oauth_state.rs
+│   │   │   └── mod.rs
+│   │   └── types/                    # Data structures
 │   │       ├── mod.rs
-│   │       ├── conversation.rs
+│   │       ├── responses.rs
 │   │       └── error.rs
-│   ├── Cargo.toml               # Rust dependencies
-│   ├── tauri.conf.json          # Tauri configuration
-│   └── icons/                   # Application icons
+│   ├── Cargo.toml                    # Rust dependencies
+│   ├── tauri.conf.json               # Tauri configuration
+│   └── icons/                        # Application icons
 │
-├── package.json                  # Frontend dependencies
-├── vite.config.ts               # Vite configuration
-├── tsconfig.json                # TypeScript configuration
-└── index.html                   # HTML entry point
+├── package.json                      # Frontend dependencies
+├── vite.config.ts                    # Vite configuration
+├── tsconfig.json                     # TypeScript configuration
+└── index.html                        # HTML entry point
 ```
 
 ---
@@ -356,16 +431,45 @@ bun run preview
 
 ### Code Structure Guidelines
 
-**Frontend:**
-- Components in `src/components/`
-- Data fetching via custom hooks in `src/hooks/`
-- Tauri IPC calls wrapped in `src/lib/api.ts`
-- Shared types in `src/types/`
+**Frontend Architecture:**
+
+The frontend follows a **feature-based architecture** with these principles:
+
+1. **Feature Modules** (`src/features/`)
+   - Group code by domain (accounts, conversations) not by type
+   - Each feature has its own components, hooks, and utilities
+   - Features export via barrel `index.ts` files for clean imports
+
+2. **Tauri Layer** (`src/tauri/`)
+   - **Never call `invoke()` directly in components**
+   - All backend communication goes through `tauri/commands.ts`
+   - Event subscriptions go through `tauri/events.ts`
+   - Types matching Rust backend in `tauri/types.ts`
+
+3. **Shared Code** (`src/shared/`)
+   - Generic UI components (Avatar, LoadingSpinner, EmptyState)
+   - Utility functions used across multiple features
+   - Import via `from '@/shared'` or relative paths
+
+4. **Import Pattern:**
+   ```typescript
+   // Feature imports
+   import { useAccounts, AccountSetupWizard } from './features/accounts';
+   import { ConversationView, useConversations } from './features/conversations';
+
+   // Tauri layer
+   import { saveAccount, onSyncEvent } from './tauri';
+   import type { Account, SyncStatus } from './tauri';
+
+   // Shared utilities
+   import { Avatar, getAvatarColor } from './shared';
+   ```
 
 **Backend:**
 - New IPC commands go in `src-tauri/src/commands/`
 - Register commands in `src-tauri/src/lib.rs`
-- Email operations extend `src-tauri/src/backend/mod.rs`
+- Business logic in `src-tauri/src/services/`
+- State management in `src-tauri/src/state/`
 
 ### Debugging
 
