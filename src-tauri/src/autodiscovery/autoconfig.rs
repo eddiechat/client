@@ -40,6 +40,7 @@ struct EmailProvider {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct IncomingServer {
     #[serde(rename = "@type")]
     server_type: Option<String>,
@@ -53,6 +54,7 @@ struct IncomingServer {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct OutgoingServer {
     #[serde(rename = "@type")]
     server_type: Option<String>,
@@ -70,6 +72,7 @@ struct OutgoingServer {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct AutodiscoverResponse {
     protocol: Option<String>,
     url: Option<String>,

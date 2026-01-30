@@ -132,29 +132,7 @@ impl Default for AppConfig {
     }
 }
 
-impl AppConfig {
-    /// Get the default account name
-    pub fn default_account_name(&self) -> Option<&str> {
-        self.accounts
-            .iter()
-            .find(|(_, acc)| acc.default)
-            .map(|(name, _)| name.as_str())
-            .or_else(|| self.accounts.keys().next().map(|s| s.as_str()))
-    }
-
-    /// Get account by name, or default if name is None
-    pub fn get_account(&self, name: Option<&str>) -> Option<(&str, &AccountConfig)> {
-        match name {
-            Some(n) => self.accounts.get_key_value(n).map(|(k, v)| (k.as_str(), v)),
-            None => {
-                let default_name = self.default_account_name()?;
-                self.accounts
-                    .get_key_value(default_name)
-                    .map(|(k, v)| (k.as_str(), v))
-            }
-        }
-    }
-}
+impl AppConfig {}
 
 /// Get default config paths
 pub fn default_config_paths() -> Vec<PathBuf> {
@@ -224,82 +202,7 @@ fn set_config(config: AppConfig) -> Result<(), EddieError> {
     Ok(())
 }
 
-/// Get a clone of the current configuration
-pub fn get_config() -> Result<AppConfig, EddieError> {
-    CONFIG
-        .get()
-        .ok_or_else(|| EddieError::Config("Configuration not initialized".to_string()))?
-        .read()
-        .map(|guard| guard.clone())
-        .map_err(|e| EddieError::Config(format!("Failed to lock config: {}", e)))
-}
-
 /// Check if configuration is initialized
 pub fn is_initialized() -> bool {
     CONFIG.get().is_some()
-}
-
-/// Get the primary config file path (where we write new config)
-pub fn get_primary_config_path() -> Result<PathBuf, EddieError> {
-    dirs::config_dir()
-        .map(|p| p.join("eddie.chat").join("config.toml"))
-        .ok_or_else(|| EddieError::Config("Cannot determine config directory".to_string()))
-}
-
-/// Save the current configuration to file
-pub fn save_config_to_file(config: &AppConfig) -> Result<(), EddieError> {
-    let path = get_primary_config_path()?;
-
-    // Ensure directory exists
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            EddieError::Config(format!("Failed to create config directory: {}", e))
-        })?;
-    }
-
-    let content = toml::to_string_pretty(config)
-        .map_err(|e| EddieError::Config(format!("Failed to serialize config: {}", e)))?;
-
-    fs::write(&path, content)
-        .map_err(|e| EddieError::Config(format!("Failed to write config file: {}", e)))?;
-
-    info!("Configuration saved to {:?}", path);
-    Ok(())
-}
-
-/// Add or update an account in the configuration and save to file
-pub fn save_account(name: String, account: AccountConfig) -> Result<(), EddieError> {
-    let mut config = get_config()?;
-    config.accounts.insert(name, account);
-
-    // Update in-memory config
-    set_config(config.clone())?;
-
-    // Persist to file
-    save_config_to_file(&config)?;
-
-    Ok(())
-}
-
-/// Remove an account from the configuration and save to file
-pub fn remove_account(name: &str) -> Result<(), EddieError> {
-    let mut config = get_config()?;
-
-    if !config.accounts.contains_key(name) {
-        return Err(EddieError::Config(format!(
-            "Account '{}' not found",
-            name
-        )));
-    }
-
-    config.accounts.remove(name);
-
-    // Update in-memory config
-    set_config(config.clone())?;
-
-    // Persist to file
-    save_config_to_file(&config)?;
-
-    info!("Account '{}' removed", name);
-    Ok(())
 }

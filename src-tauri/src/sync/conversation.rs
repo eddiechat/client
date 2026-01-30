@@ -612,6 +612,7 @@ impl ConversationGrouper {
     }
 
     /// Update conversation when a message is deleted
+    #[allow(dead_code)]
     pub fn handle_message_deleted(
         &self,
         account_id: &str,
@@ -625,6 +626,7 @@ impl ConversationGrouper {
     }
 
     /// Update conversation when message flags change
+    #[allow(dead_code)]
     pub fn update_conversation_for_flag_change(
         &self,
         account_id: &str,

@@ -6,7 +6,7 @@
 
 use std::net::ToSocketAddrs;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tracing::{debug, info, warn};

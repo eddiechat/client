@@ -6,7 +6,7 @@
 
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioAsyncResolver;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::{
     providers, AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, Security,

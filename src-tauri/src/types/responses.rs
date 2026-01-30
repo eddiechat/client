@@ -228,6 +228,7 @@ pub struct DiscoveryResult {
 
 /// Progress update for frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ProgressUpdate {
     pub stage: String,
     pub progress: u8,

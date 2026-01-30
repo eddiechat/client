@@ -9,7 +9,7 @@ use super::{
 };
 
 /// Check if the email domain matches a known provider
-pub fn check_known_provider(email: &str, domain: &str) -> Option<EmailDiscoveryConfig> {
+pub fn check_known_provider(_email: &str, domain: &str) -> Option<EmailDiscoveryConfig> {
     let domain_lower = domain.to_lowercase();
 
     // Gmail / Google
@@ -108,7 +108,7 @@ pub fn check_known_provider(email: &str, domain: &str) -> Option<EmailDiscoveryC
 
 /// Google / Gmail configuration
 /// Note: Gmail requires app-specific password for third-party IMAP access
-pub fn google_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn google_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Gmail".to_string()),
         provider_id: Some("gmail.com".to_string()),
@@ -130,7 +130,7 @@ pub fn google_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Microsoft 365 / Office 365 configuration (for custom domains)
-pub fn microsoft_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn microsoft_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Microsoft 365".to_string()),
         provider_id: Some("outlook.com".to_string()),
@@ -152,7 +152,7 @@ pub fn microsoft_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Microsoft consumer (Outlook.com, Hotmail, Live) configuration
-fn microsoft_consumer_config(domain: &str) -> EmailDiscoveryConfig {
+fn microsoft_consumer_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Outlook.com".to_string()),
         provider_id: Some("outlook.com".to_string()),
@@ -175,7 +175,7 @@ fn microsoft_consumer_config(domain: &str) -> EmailDiscoveryConfig {
 
 /// Yahoo Mail configuration
 /// Note: Yahoo requires app-specific password for third-party IMAP access
-pub fn yahoo_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn yahoo_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Yahoo Mail".to_string()),
         provider_id: Some("yahoo.com".to_string()),
@@ -197,7 +197,7 @@ pub fn yahoo_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// AOL configuration
-fn aol_config(domain: &str) -> EmailDiscoveryConfig {
+fn aol_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("AOL Mail".to_string()),
         provider_id: Some("aol.com".to_string()),
@@ -219,7 +219,7 @@ fn aol_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// iCloud configuration
-pub fn icloud_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn icloud_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("iCloud".to_string()),
         provider_id: Some("icloud.com".to_string()),
@@ -241,7 +241,7 @@ pub fn icloud_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Fastmail configuration
-pub fn fastmail_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn fastmail_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Fastmail".to_string()),
         provider_id: Some("fastmail.com".to_string()),
@@ -265,7 +265,7 @@ pub fn fastmail_config(domain: &str) -> EmailDiscoveryConfig {
 /// ProtonMail configuration
 ///
 /// Note: ProtonMail requires Bridge for IMAP access (paid feature)
-pub fn protonmail_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn protonmail_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("ProtonMail".to_string()),
         provider_id: Some("protonmail.com".to_string()),
@@ -289,7 +289,7 @@ pub fn protonmail_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// GMX configuration
-fn gmx_config(domain: &str) -> EmailDiscoveryConfig {
+fn gmx_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("GMX".to_string()),
         provider_id: Some("gmx.com".to_string()),
@@ -311,7 +311,7 @@ fn gmx_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// mail.com configuration
-fn mail_com_config(domain: &str) -> EmailDiscoveryConfig {
+fn mail_com_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("mail.com".to_string()),
         provider_id: Some("mail.com".to_string()),
@@ -333,7 +333,7 @@ fn mail_com_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Zoho configuration
-fn zoho_config(domain: &str) -> EmailDiscoveryConfig {
+fn zoho_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Zoho Mail".to_string()),
         provider_id: Some("zoho.com".to_string()),

@@ -15,9 +15,6 @@ use crate::sync::engine::SyncEvent;
 use crate::types::responses::{CachedMessageResponse, ConversationResponse, SyncStatusResponse};
 use crate::types::EddieError;
 
-// Re-export SyncManager for backward compatibility
-pub use crate::state::SyncManager as SyncManagerType;
-
 // ========== Tauri Commands ==========
 
 /// Initialize sync engine for an account and start syncing

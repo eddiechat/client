@@ -8,7 +8,7 @@ use tauri::State;
 use tracing::info;
 
 use crate::config::{self, AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
-use crate::services::{delete_account_data, resolve_account_id_string};
+use crate::services::delete_account_data;
 use crate::state::SyncManager;
 use crate::sync::db::{
     get_active_connection_config, get_all_connection_configs, get_connection_config, init_config_db,

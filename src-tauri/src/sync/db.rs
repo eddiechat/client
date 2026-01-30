@@ -22,6 +22,7 @@ pub type DbConnection = PooledConnection<SqliteConnectionManager>;
 
 /// Sync state for a folder
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct FolderSyncState {
     pub account_id: String,
     pub folder_name: String,

@@ -14,6 +14,7 @@ const SERVICE_NAME: &str = "eddie.chat";
 
 /// Errors that can occur during credential operations
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum CredentialError {
     #[error("Keyring error: {0}")]
     Keyring(String),
@@ -48,6 +49,7 @@ impl CredentialStore {
     }
 
     /// Create a credential store with a custom service name
+    #[allow(dead_code)]
     pub fn with_service(service: &str) -> Self {
         Self {
             service: service.to_string(),

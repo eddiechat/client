@@ -175,6 +175,7 @@ impl SyncManager {
     }
 
     /// Get all engine account IDs
+    #[allow(dead_code)]
     pub async fn get_account_ids(&self) -> Vec<String> {
         let engines = self.engines.read().await;
         engines.keys().cloned().collect()
