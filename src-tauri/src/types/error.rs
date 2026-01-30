@@ -51,9 +51,6 @@ pub enum EddieError {
     #[error("Credential error: {0}")]
     Credential(String),
 
-    #[error("OAuth error: {0}")]
-    OAuth(String),
-
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 

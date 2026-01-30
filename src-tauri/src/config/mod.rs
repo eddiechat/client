@@ -84,16 +84,6 @@ pub struct SmtpConfig {
     pub auth: AuthConfig,
 }
 
-/// OAuth2 provider type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum OAuth2Provider {
-    Google,
-    Microsoft,
-    Yahoo,
-    Fastmail,
-}
-
 /// Authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -104,15 +94,6 @@ pub enum AuthConfig {
         user: String,
         /// Password (can use command for keychain integration)
         password: PasswordSource,
-    },
-    /// OAuth2 authentication
-    OAuth2 {
-        /// OAuth2 provider (google, microsoft, yahoo, fastmail)
-        provider: OAuth2Provider,
-        /// Access token (stored in keychain, this is just a reference)
-        /// The actual token is fetched from the credential store
-        #[serde(skip_serializing_if = "Option::is_none")]
-        access_token: Option<String>,
     },
     /// App-specific password (for iCloud, etc.)
     AppPassword {

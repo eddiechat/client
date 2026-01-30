@@ -14,7 +14,6 @@ import type {
   CachedConversation,
   CachedMessage,
   DiscoveryResult,
-  OAuthStatus,
   AttachmentInfo,
   ComposeAttachment,
   SyncActionType,
@@ -56,7 +55,6 @@ export async function saveDiscoveredAccount(
     smtpPort: request.smtpPort,
     smtpTls: request.smtpTls,
     authMethod: request.authMethod,
-    oauthProvider: request.oauthProvider,
     password: request.password,
   });
 }
@@ -197,8 +195,7 @@ export async function testEmailConnection(
   smtpPort: number,
   smtpTls: boolean,
   authMethod: string,
-  password?: string,
-  oauthProvider?: string
+  password?: string
 ): Promise<boolean> {
   return invoke("test_email_connection", {
     email,
@@ -210,37 +207,7 @@ export async function testEmailConnection(
     smtpTls,
     authMethod,
     password,
-    oauthProvider,
   });
-}
-
-// ========== OAuth Commands ==========
-
-export async function startOAuthFlow(
-  provider: string,
-  email: string,
-  redirectUri: string
-): Promise<string> {
-  return invoke("start_oauth_flow", { provider, email, redirectUri });
-}
-
-export async function completeOAuthFlow(
-  code: string,
-  callbackState: string,
-  redirectUri: string
-): Promise<string> {
-  return invoke("complete_oauth_flow", { code, callbackState, redirectUri });
-}
-
-export async function refreshOAuthTokens(
-  email: string,
-  provider: string
-): Promise<boolean> {
-  return invoke("refresh_oauth_tokens", { email, provider });
-}
-
-export async function checkOAuthStatus(email: string): Promise<OAuthStatus> {
-  return invoke("check_oauth_status", { email });
 }
 
 // ========== Credential Commands ==========
@@ -259,7 +226,7 @@ export async function deleteCredentials(email: string): Promise<void> {
 
 export async function hasCredentials(
   email: string,
-  credentialType: "password" | "oauth" | "app_password"
+  credentialType: "password" | "app_password"
 ): Promise<boolean> {
   return invoke("has_credentials", { email, credentialType });
 }

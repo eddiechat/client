@@ -25,9 +25,8 @@ use secret::Secret;
 use std::path::PathBuf;
 use tracing::{info, warn};
 
-use crate::config::{AccountConfig, AuthConfig, ImapConfig, OAuth2Provider, PasswordSource, SmtpConfig};
+use crate::config::{AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
 use crate::credentials::CredentialStore;
-use crate::oauth::OAuthManager;
 use crate::sync::db::{get_active_connection_config, get_connection_config, init_config_db};
 use crate::types::error::EddieError;
 use crate::types::{Attachment, Envelope, Folder, Message};
@@ -175,37 +174,6 @@ impl EmailBackend {
                 let passwd = Self::resolve_password(password).await?;
                 Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
             }
-            AuthConfig::OAuth2 { provider, access_token } => {
-                // Get OAuth tokens from credential store or use provided token
-                let token = if let Some(token) = access_token {
-                    token.clone()
-                } else {
-                    // Try to get from credential store
-                    let cred_store = CredentialStore::new();
-                    let tokens = cred_store.get_oauth_tokens(email).map_err(|e| {
-                        EddieError::Config(format!("Failed to get OAuth tokens: {}", e))
-                    })?;
-
-                    // Check if token needs refresh
-                    if crate::oauth::OAuthManager::should_refresh(&tokens) {
-                        warn!("OAuth token for {} should be refreshed", email);
-                        // Token refresh should be handled by the caller before this point
-                        // For now, we'll use the existing token
-                    }
-
-                    tokens.access_token
-                };
-
-                // Build XOAUTH2 SASL string
-                let xoauth2_string = OAuthManager::build_xoauth2_string(email, &token);
-
-                // For email-lib, we use OAuth2 auth config
-                // The library expects the XOAUTH2 token directly
-                Ok((
-                    email.to_string(),
-                    ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(xoauth2_string))),
-                ))
-            }
             AuthConfig::AppPassword { user } => {
                 // Get app password from credential store
                 let cred_store = CredentialStore::new();
@@ -258,26 +226,6 @@ impl EmailBackend {
             AuthConfig::Password { user, password } => {
                 let passwd = Self::resolve_password(password).await?;
                 Ok((user.clone(), SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
-            }
-            AuthConfig::OAuth2 { provider: _, access_token } => {
-                // Get OAuth tokens from credential store or use provided token
-                let token = if let Some(token) = access_token {
-                    token.clone()
-                } else {
-                    let cred_store = CredentialStore::new();
-                    let tokens = cred_store.get_oauth_tokens(email).map_err(|e| {
-                        EddieError::Config(format!("Failed to get OAuth tokens: {}", e))
-                    })?;
-                    tokens.access_token
-                };
-
-                // Build XOAUTH2 SASL string
-                let xoauth2_string = OAuthManager::build_xoauth2_string(email, &token);
-
-                Ok((
-                    email.to_string(),
-                    SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(xoauth2_string))),
-                ))
             }
             AuthConfig::AppPassword { user } => {
                 let cred_store = CredentialStore::new();

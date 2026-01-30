@@ -44,7 +44,4 @@ export type {
 
   // Discovery types
   DiscoveryResult,
-
-  // OAuth types
-  OAuthStatus,
 } from "./types";

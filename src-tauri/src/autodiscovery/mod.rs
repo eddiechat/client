@@ -71,8 +71,6 @@ impl Default for Security {
 pub enum AuthMethod {
     /// Password authentication
     Password,
-    /// OAuth2 authentication
-    OAuth2,
     /// App-specific password (iCloud, Yahoo)
     AppPassword,
 }
@@ -81,16 +79,6 @@ impl Default for AuthMethod {
     fn default() -> Self {
         Self::Password
     }
-}
-
-/// OAuth2 provider for known services
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum OAuthProvider {
-    Google,
-    Microsoft,
-    Yahoo,
-    Fastmail,
 }
 
 /// Server configuration
@@ -117,8 +105,6 @@ pub struct EmailDiscoveryConfig {
     pub smtp: ServerConfig,
     /// Recommended authentication method
     pub auth_method: AuthMethod,
-    /// OAuth provider if OAuth2 is recommended
-    pub oauth_provider: Option<OAuthProvider>,
     /// Username format hint
     pub username_hint: UsernameHint,
     /// Whether app-specific password is required (for iCloud)
