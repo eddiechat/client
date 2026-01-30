@@ -12,7 +12,7 @@ use crate::services::resolve_account_id_string;
 use crate::state::SyncManager;
 use crate::sync::action_queue::ActionType;
 use crate::sync::engine::SyncEvent;
-use crate::types::responses::{CachedChatMessageResponse, ConversationResponse, SyncStatusResponse};
+use crate::types::responses::{CachedChatMessageResponse, ConversationResponse, EntityResponse, SyncStatusResponse};
 use crate::types::EddieError;
 
 // ========== Tauri Commands ==========
@@ -427,4 +427,30 @@ pub async fn mark_conversation_read(
     );
 
     Ok(())
+}
+
+/// Search entities for autocomplete suggestions
+/// Returns up to 5 entities matching the query, prioritizing connections and recent contacts
+#[tauri::command]
+pub async fn search_entities(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+    query: String,
+    limit: Option<u32>,
+) -> Result<Vec<EntityResponse>, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
+    let limit = limit.unwrap_or(5).min(10); // Default to 5, max 10
+
+    if query.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let engine = manager.get_or_create(&account_id).await?;
+
+    let entities = engine
+        .read()
+        .await
+        .search_entities(&query, limit)?;
+
+    Ok(entities.into_iter().map(|e| e.into()).collect())
 }

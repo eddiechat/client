@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::sync::db::{CachedConversation, CachedChatMessage};
+use crate::sync::db::{CachedConversation, CachedChatMessage, Entity};
 use crate::sync::engine::{SyncState, SyncStatus};
 
 // ============================================================================
@@ -119,6 +119,34 @@ impl From<CachedConversation> for ConversationResponse {
             message_count: c.message_count,
             unread_count: c.unread_count,
             is_outgoing: c.is_outgoing,
+        }
+    }
+}
+
+// ============================================================================
+// Entity Response Types (for autocomplete)
+// ============================================================================
+
+/// Entity response for autocomplete suggestions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityResponse {
+    pub id: i64,
+    pub email: String,
+    pub name: Option<String>,
+    pub is_connection: bool,
+    pub latest_contact: String,
+    pub contact_count: u32,
+}
+
+impl From<Entity> for EntityResponse {
+    fn from(e: Entity) -> Self {
+        Self {
+            id: e.id,
+            email: e.email,
+            name: e.name,
+            is_connection: e.is_connection,
+            latest_contact: e.latest_contact.to_rfc3339(),
+            contact_count: e.contact_count,
         }
     }
 }
