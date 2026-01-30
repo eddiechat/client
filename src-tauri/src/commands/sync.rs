@@ -1,305 +1,22 @@
 //! Sync engine Tauri commands
 //!
-//! Provides commands for the frontend to interact with the sync engine.
-//! The sync engine is started automatically when accounts are accessed.
+//! Thin command wrappers that delegate to the sync engine.
+//! Business logic is handled by the SyncEngine itself.
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
-use crate::config::{AccountConfig, ImapConfig, SmtpConfig};
+use crate::services::resolve_account_id_string;
+use crate::state::SyncManager;
 use crate::sync::action_queue::ActionType;
-use crate::sync::db::{
-    get_active_connection_config, get_connection_config, init_config_db, CachedConversation,
-    CachedMessage,
-};
-use crate::sync::engine::{SyncConfig, SyncEngine, SyncState, SyncStatus};
-use crate::sync::idle::MonitorConfig;
-use crate::types::error::EddieError;
+use crate::sync::engine::SyncEvent;
+use crate::types::responses::{CachedMessageResponse, ConversationResponse, SyncStatusResponse};
+use crate::types::EddieError;
 
-/// Sync engine manager state - manages engines for multiple accounts
-pub struct SyncManager {
-    engines: RwLock<HashMap<String, Arc<RwLock<SyncEngine>>>>,
-    default_db_dir: PathBuf,
-    app_handle: RwLock<Option<tauri::AppHandle>>,
-}
-
-impl SyncManager {
-    pub fn new() -> Self {
-        // On mobile platforms (iOS/Android), always use data_dir() even in debug mode
-        // because the current directory is read-only
-        #[cfg(any(target_os = "ios", target_os = "android"))]
-        let db_dir = {
-            dirs::data_dir()
-                .expect("Failed to determine data directory for iOS/Android")
-                .join("eddie.chat")
-                .join("sync")
-        };
-
-        // On desktop, use ../.sqlite in debug mode for easier debugging
-        #[cfg(not(any(target_os = "ios", target_os = "android")))]
-        let db_dir = {
-            if cfg!(debug_assertions) {
-                PathBuf::from("../.sqlite")
-            } else {
-                dirs::data_local_dir()
-                    .expect("Failed to determine data directory for desktop")
-                    .join("eddie.chat")
-                    .join("sync")
-            }
-        };
-
-        // Ensure directory exists
-        let _ = std::fs::create_dir_all(&db_dir);
-
-        info!("Sync database directory: {:?}", db_dir);
-
-        Self {
-            engines: RwLock::new(HashMap::new()),
-            default_db_dir: db_dir,
-            app_handle: RwLock::new(None),
-        }
-    }
-
-    /// Set the Tauri app handle for event emission
-    pub async fn set_app_handle(&self, handle: tauri::AppHandle) {
-        let mut app_handle = self.app_handle.write().await;
-        *app_handle = Some(handle);
-    }
-
-    /// Get or create sync engine for an account
-    pub async fn get_or_create(&self, account_id: &str) -> Result<Arc<RwLock<SyncEngine>>, EddieError> {
-        // Check if engine exists
-        {
-            let engines = self.engines.read().await;
-            if let Some(engine) = engines.get(account_id) {
-                return Ok(engine.clone());
-            }
-        }
-
-        // Create new engine
-        info!("Creating sync engine for account: {}", account_id);
-
-        init_config_db()?;
-        let db_config = get_connection_config(account_id)?
-            .ok_or_else(|| EddieError::AccountNotFound(account_id.to_string()))?;
-
-        // Deserialize IMAP and SMTP configs from JSON
-        let imap_config = db_config
-            .imap_config
-            .and_then(|json| serde_json::from_str::<ImapConfig>(&json).ok());
-
-        let smtp_config = db_config
-            .smtp_config
-            .and_then(|json| serde_json::from_str::<SmtpConfig>(&json).ok());
-
-        let account = AccountConfig {
-            name: db_config.display_name.clone(),
-            default: db_config.active,
-            email: db_config.email.clone(),
-            display_name: db_config.display_name.clone(),
-            imap: imap_config,
-            smtp: smtp_config,
-        };
-
-        // Sanitize email for use as filename (replace @ and . with _)
-        let safe_name = db_config.account_id.replace('@', "_").replace('.', "_");
-        let db_path = self.default_db_dir.join(format!("{}.db", safe_name));
-        info!("Database path: {:?}", db_path);
-
-        let sync_config = SyncConfig {
-            db_path,
-            initial_sync_days: 365,
-            max_cache_age_days: 365,
-            auto_classify: true,
-            sync_folders: vec![],
-            fetch_page_size: 1000,
-            enable_monitoring: true,
-            monitor_config: MonitorConfig {
-                prefer_idle: true,
-                idle_timeout_minutes: 20,
-                poll_interval_seconds: 60, // Poll every minute
-                use_quick_check: true,
-            },
-        };
-
-        // Get app handle for event emission
-        let app_handle = self.app_handle.read().await.clone();
-
-        let engine = SyncEngine::new(
-            db_config.account_id.clone(),  // account_id is now the email
-            account.email.clone(),
-            account.clone(),
-            sync_config,
-            app_handle,
-        )?;
-
-        let engine = Arc::new(RwLock::new(engine));
-
-        // Store engine
-        {
-            let mut engines = self.engines.write().await;
-            engines.insert(account_id.to_string(), engine.clone());
-        }
-
-        Ok(engine)
-    }
-
-    /// Get sync engine for account (if exists)
-    pub async fn get(&self, account_id: &str) -> Option<Arc<RwLock<SyncEngine>>> {
-        let engines = self.engines.read().await;
-        engines.get(account_id).cloned()
-    }
-
-    /// Remove sync engine for account
-    pub async fn remove(&self, account_id: &str) {
-        let mut engines = self.engines.write().await;
-        if let Some(engine) = engines.remove(account_id) {
-            engine.read().await.shutdown();
-        }
-    }
-
-    /// Get all engine account IDs
-    pub async fn get_account_ids(&self) -> Vec<String> {
-        let engines = self.engines.read().await;
-        engines.keys().cloned().collect()
-    }
-}
-
-impl Default for SyncManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Response for sync status
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncStatusResponse {
-    pub state: String,
-    pub account_id: String,
-    pub current_folder: Option<String>,
-    pub progress_current: Option<u32>,
-    pub progress_total: Option<u32>,
-    pub progress_message: Option<String>,
-    pub last_sync: Option<String>,
-    pub error: Option<String>,
-    pub is_online: bool,
-    pub pending_actions: u32,
-    pub monitor_mode: Option<String>,
-}
-
-impl From<SyncStatus> for SyncStatusResponse {
-    fn from(s: SyncStatus) -> Self {
-        Self {
-            state: match s.state {
-                SyncState::Idle => "idle".to_string(),
-                SyncState::Connecting => "connecting".to_string(),
-                SyncState::Syncing => "syncing".to_string(),
-                SyncState::InitialSync => "initial_sync".to_string(),
-                SyncState::Error => "error".to_string(),
-            },
-            account_id: s.account_id,
-            current_folder: s.current_folder,
-            progress_current: s.progress.as_ref().map(|p| p.current),
-            progress_total: s.progress.as_ref().and_then(|p| p.total),
-            progress_message: s.progress.map(|p| p.message),
-            last_sync: s.last_sync.map(|d| d.to_rfc3339()),
-            error: s.error,
-            is_online: s.is_online,
-            pending_actions: s.pending_actions,
-            monitor_mode: s.monitor_mode,
-        }
-    }
-}
-
-/// Cached conversation for frontend
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConversationResponse {
-    pub id: i64,
-    pub participant_key: String,
-    pub participants: Vec<ParticipantInfo>,
-    pub last_message_date: Option<String>,
-    pub last_message_preview: Option<String>,
-    pub last_message_from: Option<String>,
-    pub message_count: u32,
-    pub unread_count: u32,
-    pub is_outgoing: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParticipantInfo {
-    pub email: String,
-    pub name: Option<String>,
-}
-
-impl From<CachedConversation> for ConversationResponse {
-    fn from(c: CachedConversation) -> Self {
-        let participants: Vec<ParticipantInfo> =
-            serde_json::from_str(&c.participants).unwrap_or_default();
-
-        Self {
-            id: c.id,
-            participant_key: c.participant_key,
-            participants,
-            last_message_date: c.last_message_date.map(|d| d.to_rfc3339()),
-            last_message_preview: c.last_message_preview,
-            last_message_from: c.last_message_from,
-            message_count: c.message_count,
-            unread_count: c.unread_count,
-            is_outgoing: c.is_outgoing,
-        }
-    }
-}
-
-/// Cached message for frontend
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedMessageResponse {
-    pub id: i64,
-    pub folder: String,
-    pub uid: u32,
-    pub message_id: Option<String>,
-    pub from_address: String,
-    pub from_name: Option<String>,
-    pub to_addresses: Vec<String>,
-    pub cc_addresses: Vec<String>,
-    pub subject: Option<String>,
-    pub date: Option<String>,
-    pub flags: Vec<String>,
-    pub has_attachment: bool,
-    pub text_body: Option<String>,
-    pub html_body: Option<String>,
-    pub body_cached: bool,
-}
-
-impl From<CachedMessage> for CachedMessageResponse {
-    fn from(m: CachedMessage) -> Self {
-        Self {
-            id: m.id,
-            folder: m.folder_name,
-            uid: m.uid,
-            message_id: m.message_id,
-            from_address: m.from_address,
-            from_name: m.from_name,
-            to_addresses: serde_json::from_str(&m.to_addresses).unwrap_or_default(),
-            cc_addresses: m
-                .cc_addresses
-                .as_ref()
-                .and_then(|s| serde_json::from_str(s).ok())
-                .unwrap_or_default(),
-            subject: m.subject,
-            date: m.date.map(|d| d.to_rfc3339()),
-            flags: serde_json::from_str(&m.flags).unwrap_or_default(),
-            has_attachment: m.has_attachment,
-            text_body: m.text_body,
-            html_body: m.html_body,
-            body_cached: m.body_cached,
-        }
-    }
-}
+// Re-export SyncManager for backward compatibility
+pub use crate::state::SyncManager as SyncManagerType;
 
 // ========== Tauri Commands ==========
 
@@ -308,16 +25,13 @@ impl From<CachedMessage> for CachedMessageResponse {
 pub async fn init_sync_engine(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-) -> Result<SyncStatusResponse, String> {
-    let account_id = get_account_id(account)?;
+) -> Result<SyncStatusResponse, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
     info!("Initializing sync engine for: {}", account_id);
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
+    let engine = manager.get_or_create(&account_id).await?;
 
-    // Start full sync and then start monitoring
+    // Start full sync and monitoring in background
     let engine_clone = engine.clone();
     tokio::spawn(async move {
         // Perform initial sync
@@ -339,25 +53,30 @@ pub async fn init_sync_engine(
         }
 
         // Run the notification processing loop
-        info!("Starting notification processing loop...");
-        loop {
-            let engine_guard = engine_clone.read().await;
-            if !engine_guard.is_monitoring() {
-                debug!("Monitoring stopped, exiting notification loop");
-                break;
-            }
-
-            // Process any pending notifications
-            if !engine_guard.process_monitor_notification().await {
-                // No notification, sleep briefly
-                drop(engine_guard);
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            }
-        }
+        run_monitor_loop(engine_clone).await;
     });
 
     let status = engine.read().await.status().await;
     Ok(status.into())
+}
+
+/// Run the monitoring notification loop
+async fn run_monitor_loop(engine: std::sync::Arc<RwLock<crate::sync::engine::SyncEngine>>) {
+    info!("Starting notification processing loop...");
+    loop {
+        let engine_guard = engine.read().await;
+        if !engine_guard.is_monitoring() {
+            debug!("Monitoring stopped, exiting notification loop");
+            break;
+        }
+
+        // Process any pending notifications
+        if !engine_guard.process_monitor_notification().await {
+            // No notification, sleep briefly
+            drop(engine_guard);
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    }
 }
 
 /// Get sync status
@@ -365,27 +84,14 @@ pub async fn init_sync_engine(
 pub async fn get_sync_status(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-) -> Result<SyncStatusResponse, String> {
-    let account_id = get_account_id(account)?;
+) -> Result<SyncStatusResponse, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
 
     if let Some(engine) = manager.get(&account_id).await {
         let status = engine.read().await.status().await;
         Ok(status.into())
     } else {
-        // Return idle status if not initialized
-        Ok(SyncStatusResponse {
-            state: "idle".to_string(),
-            account_id,
-            current_folder: None,
-            progress_current: None,
-            progress_total: None,
-            progress_message: None,
-            last_sync: None,
-            error: None,
-            is_online: false,
-            pending_actions: 0,
-            monitor_mode: None,
-        })
+        Ok(SyncStatusResponse::idle(account_id))
     }
 }
 
@@ -395,21 +101,17 @@ pub async fn sync_folder(
     manager: State<'_, SyncManager>,
     account: Option<String>,
     folder: Option<String>,
-) -> Result<(), String> {
-    let account_id = get_account_id(account)?;
+) -> Result<(), EddieError> {
+    let account_id = resolve_account_id_string(account)?;
     let folder = folder.unwrap_or_else(|| "INBOX".to_string());
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    let engine = manager.get_or_create(&account_id).await?;
     engine
         .read()
         .await
         .sync_folder(&folder)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     Ok(())
 }
@@ -419,16 +121,17 @@ pub async fn sync_folder(
 pub async fn initial_sync(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-) -> Result<(), String> {
-    let account_id = get_account_id(account)?;
+) -> Result<(), EddieError> {
+    let account_id = resolve_account_id_string(account)?;
     info!("Starting initial sync for: {}", account_id);
 
-    let engine = manager
-        .get_or_create(&account_id)
+    let engine = manager.get_or_create(&account_id).await?;
+    engine
+        .read()
         .await
-        .map_err(|e| e.to_string())?;
-
-    engine.read().await.full_sync().await.map_err(|e| e.to_string())?;
+        .full_sync()
+        .await
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     Ok(())
 }
@@ -439,20 +142,16 @@ pub async fn get_cached_conversations(
     manager: State<'_, SyncManager>,
     account: Option<String>,
     include_hidden: Option<bool>,
-) -> Result<Vec<ConversationResponse>, String> {
-    let account_id = get_account_id(account)?;
+) -> Result<Vec<ConversationResponse>, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
     let include_hidden = include_hidden.unwrap_or(false);
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    let engine = manager.get_or_create(&account_id).await?;
     let conversations = engine
         .read()
         .await
         .get_conversations(include_hidden)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Database(e.to_string()))?;
 
     Ok(conversations.into_iter().map(|c| c.into()).collect())
 }
@@ -463,19 +162,15 @@ pub async fn get_cached_conversation_messages(
     manager: State<'_, SyncManager>,
     account: Option<String>,
     conversation_id: i64,
-) -> Result<Vec<CachedMessageResponse>, String> {
-    let account_id = get_account_id(account)?;
+) -> Result<Vec<CachedMessageResponse>, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    let engine = manager.get_or_create(&account_id).await?;
     let messages = engine
         .read()
         .await
         .get_conversation_messages(conversation_id)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Database(e.to_string()))?;
 
     Ok(messages.into_iter().map(|m| m.into()).collect())
 }
@@ -486,20 +181,16 @@ pub async fn fetch_message_body(
     manager: State<'_, SyncManager>,
     account: Option<String>,
     message_id: i64,
-) -> Result<CachedMessageResponse, String> {
-    let account_id = get_account_id(account)?;
+) -> Result<CachedMessageResponse, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    let engine = manager.get_or_create(&account_id).await?;
     let message = engine
         .read()
         .await
         .fetch_message_body(message_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     Ok(message.into())
 }
@@ -514,41 +205,56 @@ pub async fn queue_sync_action(
     uids: Vec<u32>,
     flags: Option<Vec<String>>,
     target_folder: Option<String>,
-) -> Result<i64, String> {
-    let account_id = get_account_id(account)?;
+) -> Result<i64, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
 
-    let engine = manager
-        .get_or_create(&account_id)
+    let engine = manager.get_or_create(&account_id).await?;
+    let action = parse_action_type(&action_type, folder, uids, flags, target_folder)?;
+
+    engine
+        .read()
         .await
-        .map_err(|e| e.to_string())?;
+        .queue_action(action)
+        .map_err(|e| EddieError::Database(e.to_string()))
+}
 
-    let action = match action_type.as_str() {
-        "add_flags" => ActionType::AddFlags {
+/// Parse action type from string
+fn parse_action_type(
+    action_type: &str,
+    folder: String,
+    uids: Vec<u32>,
+    flags: Option<Vec<String>>,
+    target_folder: Option<String>,
+) -> Result<ActionType, EddieError> {
+    match action_type {
+        "add_flags" => Ok(ActionType::AddFlags {
             folder,
             uids,
             flags: flags.unwrap_or_default(),
-        },
-        "remove_flags" => ActionType::RemoveFlags {
+        }),
+        "remove_flags" => Ok(ActionType::RemoveFlags {
             folder,
             uids,
             flags: flags.unwrap_or_default(),
-        },
-        "delete" => ActionType::Delete { folder, uids },
-        "move" => ActionType::Move {
+        }),
+        "delete" => Ok(ActionType::Delete { folder, uids }),
+        "move" => Ok(ActionType::Move {
             source_folder: folder,
-            target_folder: target_folder.ok_or("target_folder required for move")?,
+            target_folder: target_folder
+                .ok_or_else(|| EddieError::InvalidInput("target_folder required for move".into()))?,
             uids,
-        },
-        "copy" => ActionType::Copy {
+        }),
+        "copy" => Ok(ActionType::Copy {
             source_folder: folder,
-            target_folder: target_folder.ok_or("target_folder required for copy")?,
+            target_folder: target_folder
+                .ok_or_else(|| EddieError::InvalidInput("target_folder required for copy".into()))?,
             uids,
-        },
-        _ => return Err(format!("Unknown action type: {}", action_type)),
-    };
-
-    let result = engine.read().await.queue_action(action).map_err(|e| e.to_string());
-    result
+        }),
+        _ => Err(EddieError::InvalidInput(format!(
+            "Unknown action type: {}",
+            action_type
+        ))),
+    }
 }
 
 /// Set online status
@@ -557,8 +263,8 @@ pub async fn set_sync_online(
     manager: State<'_, SyncManager>,
     account: Option<String>,
     online: bool,
-) -> Result<(), String> {
-    let account_id = get_account_id(account)?;
+) -> Result<(), EddieError> {
+    let account_id = resolve_account_id_string(account)?;
 
     if let Some(engine) = manager.get(&account_id).await {
         engine.read().await.set_online(online);
@@ -571,21 +277,16 @@ pub async fn set_sync_online(
 pub async fn has_pending_sync_actions(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-) -> Result<bool, String> {
-    let account_id = get_account_id(account)?;
+) -> Result<bool, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let result = engine
+    let engine = manager.get_or_create(&account_id).await?;
+    engine
         .read()
         .await
         .action_queue()
         .has_pending(&account_id)
-        .map_err(|e| e.to_string());
-    result
+        .map_err(|e| EddieError::Database(e.to_string()))
 }
 
 /// Start monitoring for mailbox changes
@@ -593,14 +294,11 @@ pub async fn has_pending_sync_actions(
 pub async fn start_monitoring(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-) -> Result<(), String> {
-    let account_id = get_account_id(account)?;
+) -> Result<(), EddieError> {
+    let account_id = resolve_account_id_string(account)?;
     info!("Starting monitoring for: {}", account_id);
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
+    let engine = manager.get_or_create(&account_id).await?;
 
     // Start monitoring
     {
@@ -608,27 +306,13 @@ pub async fn start_monitoring(
         engine_guard
             .start_monitoring()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
     }
 
     // Spawn the notification processing loop
     let engine_clone = engine.clone();
     tokio::spawn(async move {
-        info!("Starting notification processing loop for monitoring...");
-        loop {
-            let engine_guard = engine_clone.read().await;
-            if !engine_guard.is_monitoring() {
-                debug!("Monitoring stopped, exiting notification loop");
-                break;
-            }
-
-            // Process any pending notifications
-            if !engine_guard.process_monitor_notification().await {
-                // No notification, sleep briefly
-                drop(engine_guard);
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            }
-        }
+        run_monitor_loop(engine_clone).await;
     });
 
     Ok(())
@@ -639,8 +323,8 @@ pub async fn start_monitoring(
 pub async fn stop_monitoring(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-) -> Result<(), String> {
-    let account_id = get_account_id(account)?;
+) -> Result<(), EddieError> {
+    let account_id = resolve_account_id_string(account)?;
     info!("Stopping monitoring for: {}", account_id);
 
     if let Some(engine) = manager.get(&account_id).await {
@@ -655,8 +339,8 @@ pub async fn stop_monitoring(
 pub async fn shutdown_sync_engine(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-) -> Result<(), String> {
-    let account_id = get_account_id(account)?;
+) -> Result<(), EddieError> {
+    let account_id = resolve_account_id_string(account)?;
     info!("Shutting down sync engine for: {}", account_id);
     manager.remove(&account_id).await;
     Ok(())
@@ -669,32 +353,26 @@ pub async fn mark_conversation_read(
     app_handle: tauri::AppHandle,
     account: Option<String>,
     conversation_id: i64,
-) -> Result<(), String> {
-    use crate::sync::engine::SyncEvent;
+) -> Result<(), EddieError> {
     use tauri::Emitter;
 
-    let account_id = get_account_id(account)?;
+    let account_id = resolve_account_id_string(account)?;
     debug!(
         "Marking conversation {} as read for account: {}",
         conversation_id, account_id
     );
 
-    let engine = manager
-        .get_or_create(&account_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    let engine = manager.get_or_create(&account_id).await?;
     let engine_guard = engine.read().await;
     let db = engine_guard.database();
 
     // Get all messages in the conversation
     let messages = db
         .get_conversation_messages(conversation_id)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Database(e.to_string()))?;
 
     // Find unread messages (those without \Seen flag)
-    let mut unread_by_folder: std::collections::HashMap<String, Vec<u32>> =
-        std::collections::HashMap::new();
+    let mut unread_by_folder: HashMap<String, Vec<u32>> = HashMap::new();
     let mut total_unread = 0i32;
 
     for msg in &messages {
@@ -723,7 +401,7 @@ pub async fn mark_conversation_read(
         // Update local database flags
         for uid in uids {
             db.add_message_flags(&account_id, folder, *uid, &["\\Seen".to_string()])
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| EddieError::Database(e.to_string()))?;
         }
 
         // Queue the action for IMAP server sync
@@ -734,12 +412,12 @@ pub async fn mark_conversation_read(
         };
         engine_guard
             .queue_action(action)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| EddieError::Database(e.to_string()))?;
     }
 
-    // Update conversation unread count (decrease by total unread)
+    // Update conversation unread count
     db.adjust_conversation_unread_count(conversation_id, -total_unread)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| EddieError::Database(e.to_string()))?;
 
     // Emit sync event so UI refreshes
     let _ = app_handle.emit(
@@ -750,17 +428,4 @@ pub async fn mark_conversation_read(
     );
 
     Ok(())
-}
-
-// Helper function to get account ID
-fn get_account_id(account: Option<String>) -> Result<String, String> {
-    if let Some(id) = account {
-        Ok(id)
-    } else {
-        init_config_db().map_err(|e| e.to_string())?;
-        let active_config = get_active_connection_config().map_err(|e| e.to_string())?;
-        active_config
-            .map(|c| c.account_id)
-            .ok_or_else(|| "No active account configured".to_string())
-    }
 }
