@@ -211,11 +211,12 @@ pub async fn queue_sync_action(
     let engine = manager.get_or_create(&account_id).await?;
     let action = parse_action_type(&action_type, folder, uids, flags, target_folder)?;
 
-    engine
+    let result = engine
         .read()
         .await
         .queue_action(action)
-        .map_err(|e| EddieError::Database(e.to_string()))
+        .map_err(|e| EddieError::Database(e.to_string()))?;
+    Ok(result)
 }
 
 /// Parse action type from string
@@ -281,12 +282,13 @@ pub async fn has_pending_sync_actions(
     let account_id = resolve_account_id_string(account)?;
 
     let engine = manager.get_or_create(&account_id).await?;
-    engine
+    let result = engine
         .read()
         .await
         .action_queue()
         .has_pending(&account_id)
-        .map_err(|e| EddieError::Database(e.to_string()))
+        .map_err(|e| EddieError::Database(e.to_string()))?;
+    Ok(result)
 }
 
 /// Start monitoring for mailbox changes
