@@ -6,7 +6,7 @@ use chrono::Utc;
 use std::path::PathBuf;
 use tracing::info;
 
-use crate::config::{AccountConfig, AuthConfig, ImapConfig, OAuth2Provider, PasswordSource, SmtpConfig};
+use crate::config::{AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
 use crate::credentials::CredentialStore;
 use crate::services::helpers::sanitize_email_for_filename;
 use crate::sync::db::{
@@ -36,9 +36,6 @@ pub enum AuthMethod {
     Password {
         username: String,
         password: String,
-    },
-    OAuth2 {
-        provider: String,
     },
     AppPassword {
         password: String,
@@ -91,13 +88,6 @@ fn build_auth_config(email: &str, auth_method: &AuthMethod) -> Result<AuthConfig
                 password: PasswordSource::Raw(password.clone()),
             })
         }
-        AuthMethod::OAuth2 { provider } => {
-            let oauth2_provider = parse_oauth_provider(provider)?;
-            Ok(AuthConfig::OAuth2 {
-                provider: oauth2_provider,
-                access_token: None, // Will be fetched from credential store
-            })
-        }
         AuthMethod::AppPassword { password } => {
             // Store app password in credential store
             let cred_store = CredentialStore::new();
@@ -109,20 +99,6 @@ fn build_auth_config(email: &str, auth_method: &AuthMethod) -> Result<AuthConfig
                 user: email.to_string(),
             })
         }
-    }
-}
-
-/// Parse OAuth provider string to enum
-pub fn parse_oauth_provider(provider: &str) -> Result<OAuth2Provider> {
-    match provider.to_lowercase().as_str() {
-        "google" => Ok(OAuth2Provider::Google),
-        "microsoft" => Ok(OAuth2Provider::Microsoft),
-        "yahoo" => Ok(OAuth2Provider::Yahoo),
-        "fastmail" => Ok(OAuth2Provider::Fastmail),
-        _ => Err(EddieError::InvalidInput(format!(
-            "Unknown OAuth provider: {}",
-            provider
-        ))),
     }
 }
 

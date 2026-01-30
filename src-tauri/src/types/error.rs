@@ -51,9 +51,6 @@ pub enum EddieError {
     #[error("Credential error: {0}")]
     Credential(String),
 
-    #[error("OAuth error: {0}")]
-    OAuth(String),
-
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
@@ -62,28 +59,6 @@ pub enum EddieError {
 
     #[error("{0}")]
     Other(String),
-}
-
-impl EddieError {
-    /// Create an error from any error type
-    pub fn from_error<E: std::error::Error>(err: E) -> Self {
-        EddieError::Other(err.to_string())
-    }
-
-    /// Create a backend error
-    pub fn backend(msg: impl Into<String>) -> Self {
-        EddieError::Backend(msg.into())
-    }
-
-    /// Create a config error
-    pub fn config(msg: impl Into<String>) -> Self {
-        EddieError::Config(msg.into())
-    }
-
-    /// Create an invalid input error
-    pub fn invalid_input(msg: impl Into<String>) -> Self {
-        EddieError::InvalidInput(msg.into())
-    }
 }
 
 // Implement From for common error types

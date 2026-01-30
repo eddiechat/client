@@ -3,6 +3,8 @@
 //! Classifies messages as chat-worthy or non-chat (newsletters, automated, transactional).
 //! Non-chat messages can be hidden from the chat UI but remain in cache.
 
+#![allow(dead_code)]
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

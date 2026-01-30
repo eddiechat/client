@@ -8,7 +8,7 @@ use serde::Deserialize;
 use tracing::{debug, info, warn};
 
 use super::{
-    AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, OAuthProvider, Security, ServerConfig,
+    AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, Security, ServerConfig,
     UsernameHint,
 };
 
@@ -40,6 +40,7 @@ struct EmailProvider {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct IncomingServer {
     #[serde(rename = "@type")]
     server_type: Option<String>,
@@ -53,6 +54,7 @@ struct IncomingServer {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct OutgoingServer {
     #[serde(rename = "@type")]
     server_type: Option<String>,
@@ -70,6 +72,7 @@ struct OutgoingServer {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct AutodiscoverResponse {
     protocol: Option<String>,
     url: Option<String>,
@@ -180,22 +183,6 @@ fn parse_autoconfig_xml(
     let imap_security = parse_socket_type(imap_server.socket_type.as_deref());
     let smtp_security = parse_socket_type(smtp_server.socket_type.as_deref());
 
-    // Parse authentication method
-    let imap_auth = imap_server.authentication.as_deref();
-    let smtp_auth = smtp_server.authentication.as_deref();
-    let auth_method = if imap_auth == Some("OAuth2") || smtp_auth == Some("OAuth2") {
-        AuthMethod::OAuth2
-    } else {
-        AuthMethod::Password
-    };
-
-    // Detect OAuth provider from domain
-    let oauth_provider = if auth_method == AuthMethod::OAuth2 {
-        detect_oauth_provider(domain, &provider)
-    } else {
-        None
-    };
-
     // Parse username hint
     let username_hint = parse_username_hint(imap_server.username.as_deref(), email);
 
@@ -224,8 +211,7 @@ fn parse_autoconfig_xml(
             port: smtp_server.port.unwrap_or(587),
             security: smtp_security,
         },
-        auth_method,
-        oauth_provider,
+        auth_method: AuthMethod::Password,
         username_hint,
         requires_app_password: false,
         source: "autoconfig".to_string(),
@@ -272,8 +258,7 @@ pub async fn try_microsoft_autodiscover(
                     port: 587,
                     security: Security::Starttls,
                 },
-                auth_method: AuthMethod::OAuth2,
-                oauth_provider: Some(OAuthProvider::Microsoft),
+                auth_method: AuthMethod::Password,
                 username_hint: UsernameHint::FullEmail,
                 requires_app_password: false,
                 source: "autodiscover".to_string(),
@@ -310,7 +295,6 @@ pub async fn try_microsoft_autodiscover(
                                 security: Security::Starttls,
                             },
                             auth_method: AuthMethod::Password,
-                            oauth_provider: None,
                             username_hint: UsernameHint::FullEmail,
                             requires_app_password: false,
                             source: "autodiscover".to_string(),
@@ -371,36 +355,4 @@ fn apply_placeholders(template: &str, email: &str, domain: &str) -> String {
         .replace("%EMAIL%", email)
         .replace("%EMAILLOCALPART%", local_part)
         .replace("%EMAILDOMAIN%", email_domain)
-}
-
-/// Detect OAuth provider from domain or provider info
-fn detect_oauth_provider(domain: &str, provider: &EmailProvider) -> Option<OAuthProvider> {
-    let domain_lower = domain.to_lowercase();
-    let provider_id = provider.id.as_deref().map(|s| s.to_lowercase());
-
-    // Check domain patterns
-    if domain_lower.contains("google") || domain_lower == "gmail.com" || domain_lower == "googlemail.com" {
-        return Some(OAuthProvider::Google);
-    }
-    if domain_lower.contains("microsoft") || domain_lower.contains("outlook") || domain_lower.contains("hotmail") || domain_lower.contains("live.") {
-        return Some(OAuthProvider::Microsoft);
-    }
-    if domain_lower.contains("yahoo") || domain_lower == "aol.com" {
-        return Some(OAuthProvider::Yahoo);
-    }
-    if domain_lower.contains("fastmail") {
-        return Some(OAuthProvider::Fastmail);
-    }
-
-    // Check provider ID
-    if let Some(id) = provider_id {
-        if id.contains("google") || id.contains("gmail") {
-            return Some(OAuthProvider::Google);
-        }
-        if id.contains("microsoft") || id.contains("outlook") {
-            return Some(OAuthProvider::Microsoft);
-        }
-    }
-
-    None
 }

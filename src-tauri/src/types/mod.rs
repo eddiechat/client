@@ -2,7 +2,9 @@ pub mod conversation;
 pub mod error;
 pub mod responses;
 
+#[allow(unused_imports)]
 pub use error::{EddieError, Result};
+#[allow(unused_imports)]
 pub use responses::*;
 
 use serde::{Deserialize, Serialize};

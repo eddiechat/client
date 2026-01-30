@@ -5,11 +5,11 @@
 //! a known provider, avoiding the need for autodiscovery.
 
 use super::{
-    AuthMethod, EmailDiscoveryConfig, OAuthProvider, Security, ServerConfig, UsernameHint,
+    AuthMethod, EmailDiscoveryConfig, Security, ServerConfig, UsernameHint,
 };
 
 /// Check if the email domain matches a known provider
-pub fn check_known_provider(email: &str, domain: &str) -> Option<EmailDiscoveryConfig> {
+pub fn check_known_provider(_email: &str, domain: &str) -> Option<EmailDiscoveryConfig> {
     let domain_lower = domain.to_lowercase();
 
     // Gmail / Google
@@ -107,7 +107,8 @@ pub fn check_known_provider(email: &str, domain: &str) -> Option<EmailDiscoveryC
 // ============================================================================
 
 /// Google / Gmail configuration
-pub fn google_config(domain: &str) -> EmailDiscoveryConfig {
+/// Note: Gmail requires app-specific password for third-party IMAP access
+pub fn google_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Gmail".to_string()),
         provider_id: Some("gmail.com".to_string()),
@@ -121,16 +122,15 @@ pub fn google_config(domain: &str) -> EmailDiscoveryConfig {
             port: 587,
             security: Security::Starttls,
         },
-        auth_method: AuthMethod::OAuth2,
-        oauth_provider: Some(OAuthProvider::Google),
+        auth_method: AuthMethod::AppPassword,
         username_hint: UsernameHint::FullEmail,
-        requires_app_password: false,
+        requires_app_password: true,
         source: "known_provider".to_string(),
     }
 }
 
 /// Microsoft 365 / Office 365 configuration (for custom domains)
-pub fn microsoft_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn microsoft_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Microsoft 365".to_string()),
         provider_id: Some("outlook.com".to_string()),
@@ -144,8 +144,7 @@ pub fn microsoft_config(domain: &str) -> EmailDiscoveryConfig {
             port: 587,
             security: Security::Starttls,
         },
-        auth_method: AuthMethod::OAuth2,
-        oauth_provider: Some(OAuthProvider::Microsoft),
+        auth_method: AuthMethod::Password,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "known_provider".to_string(),
@@ -153,7 +152,7 @@ pub fn microsoft_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Microsoft consumer (Outlook.com, Hotmail, Live) configuration
-fn microsoft_consumer_config(domain: &str) -> EmailDiscoveryConfig {
+fn microsoft_consumer_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Outlook.com".to_string()),
         provider_id: Some("outlook.com".to_string()),
@@ -167,8 +166,7 @@ fn microsoft_consumer_config(domain: &str) -> EmailDiscoveryConfig {
             port: 587,
             security: Security::Starttls,
         },
-        auth_method: AuthMethod::OAuth2,
-        oauth_provider: Some(OAuthProvider::Microsoft),
+        auth_method: AuthMethod::Password,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "known_provider".to_string(),
@@ -176,7 +174,8 @@ fn microsoft_consumer_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Yahoo Mail configuration
-pub fn yahoo_config(domain: &str) -> EmailDiscoveryConfig {
+/// Note: Yahoo requires app-specific password for third-party IMAP access
+pub fn yahoo_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Yahoo Mail".to_string()),
         provider_id: Some("yahoo.com".to_string()),
@@ -190,17 +189,15 @@ pub fn yahoo_config(domain: &str) -> EmailDiscoveryConfig {
             port: 465,
             security: Security::Tls,
         },
-        // Yahoo supports OAuth2 but also allows app passwords
-        auth_method: AuthMethod::OAuth2,
-        oauth_provider: Some(OAuthProvider::Yahoo),
+        auth_method: AuthMethod::AppPassword,
         username_hint: UsernameHint::FullEmail,
-        requires_app_password: false,
+        requires_app_password: true,
         source: "known_provider".to_string(),
     }
 }
 
 /// AOL configuration
-fn aol_config(domain: &str) -> EmailDiscoveryConfig {
+fn aol_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("AOL Mail".to_string()),
         provider_id: Some("aol.com".to_string()),
@@ -214,9 +211,7 @@ fn aol_config(domain: &str) -> EmailDiscoveryConfig {
             port: 465,
             security: Security::Tls,
         },
-        // AOL (owned by Yahoo) supports app passwords
         auth_method: AuthMethod::AppPassword,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: true,
         source: "known_provider".to_string(),
@@ -224,7 +219,7 @@ fn aol_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// iCloud configuration
-pub fn icloud_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn icloud_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("iCloud".to_string()),
         provider_id: Some("icloud.com".to_string()),
@@ -238,10 +233,7 @@ pub fn icloud_config(domain: &str) -> EmailDiscoveryConfig {
             port: 587,
             security: Security::Starttls,
         },
-        // iCloud does NOT support OAuth2 for third-party apps
-        // Requires app-specific password
         auth_method: AuthMethod::AppPassword,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: true,
         source: "known_provider".to_string(),
@@ -249,7 +241,7 @@ pub fn icloud_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Fastmail configuration
-pub fn fastmail_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn fastmail_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Fastmail".to_string()),
         provider_id: Some("fastmail.com".to_string()),
@@ -263,10 +255,9 @@ pub fn fastmail_config(domain: &str) -> EmailDiscoveryConfig {
             port: 465,
             security: Security::Tls,
         },
-        auth_method: AuthMethod::OAuth2,
-        oauth_provider: Some(OAuthProvider::Fastmail),
+        auth_method: AuthMethod::AppPassword,
         username_hint: UsernameHint::FullEmail,
-        requires_app_password: false,
+        requires_app_password: true,
         source: "known_provider".to_string(),
     }
 }
@@ -274,7 +265,7 @@ pub fn fastmail_config(domain: &str) -> EmailDiscoveryConfig {
 /// ProtonMail configuration
 ///
 /// Note: ProtonMail requires Bridge for IMAP access (paid feature)
-pub fn protonmail_config(domain: &str) -> EmailDiscoveryConfig {
+pub fn protonmail_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("ProtonMail".to_string()),
         provider_id: Some("protonmail.com".to_string()),
@@ -291,7 +282,6 @@ pub fn protonmail_config(domain: &str) -> EmailDiscoveryConfig {
         },
         // Bridge provides its own password
         auth_method: AuthMethod::Password,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "known_provider".to_string(),
@@ -299,7 +289,7 @@ pub fn protonmail_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// GMX configuration
-fn gmx_config(domain: &str) -> EmailDiscoveryConfig {
+fn gmx_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("GMX".to_string()),
         provider_id: Some("gmx.com".to_string()),
@@ -314,7 +304,6 @@ fn gmx_config(domain: &str) -> EmailDiscoveryConfig {
             security: Security::Starttls,
         },
         auth_method: AuthMethod::Password,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "known_provider".to_string(),
@@ -322,7 +311,7 @@ fn gmx_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// mail.com configuration
-fn mail_com_config(domain: &str) -> EmailDiscoveryConfig {
+fn mail_com_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("mail.com".to_string()),
         provider_id: Some("mail.com".to_string()),
@@ -337,7 +326,6 @@ fn mail_com_config(domain: &str) -> EmailDiscoveryConfig {
             security: Security::Starttls,
         },
         auth_method: AuthMethod::Password,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "known_provider".to_string(),
@@ -345,7 +333,7 @@ fn mail_com_config(domain: &str) -> EmailDiscoveryConfig {
 }
 
 /// Zoho configuration
-fn zoho_config(domain: &str) -> EmailDiscoveryConfig {
+fn zoho_config(_domain: &str) -> EmailDiscoveryConfig {
     EmailDiscoveryConfig {
         provider: Some("Zoho Mail".to_string()),
         provider_id: Some("zoho.com".to_string()),
@@ -360,7 +348,6 @@ fn zoho_config(domain: &str) -> EmailDiscoveryConfig {
             security: Security::Tls,
         },
         auth_method: AuthMethod::Password,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "known_provider".to_string(),

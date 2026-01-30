@@ -12,9 +12,13 @@ mod dns;
 mod providers;
 mod probe;
 
+#[allow(unused_imports)]
 pub use autoconfig::*;
+#[allow(unused_imports)]
 pub use dns::*;
+#[allow(unused_imports)]
 pub use providers::*;
+#[allow(unused_imports)]
 pub use probe::*;
 
 use serde::{Deserialize, Serialize};
@@ -71,8 +75,6 @@ impl Default for Security {
 pub enum AuthMethod {
     /// Password authentication
     Password,
-    /// OAuth2 authentication
-    OAuth2,
     /// App-specific password (iCloud, Yahoo)
     AppPassword,
 }
@@ -81,16 +83,6 @@ impl Default for AuthMethod {
     fn default() -> Self {
         Self::Password
     }
-}
-
-/// OAuth2 provider for known services
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum OAuthProvider {
-    Google,
-    Microsoft,
-    Yahoo,
-    Fastmail,
 }
 
 /// Server configuration
@@ -117,8 +109,6 @@ pub struct EmailDiscoveryConfig {
     pub smtp: ServerConfig,
     /// Recommended authentication method
     pub auth_method: AuthMethod,
-    /// OAuth provider if OAuth2 is recommended
-    pub oauth_provider: Option<OAuthProvider>,
     /// Username format hint
     pub username_hint: UsernameHint,
     /// Whether app-specific password is required (for iCloud)
@@ -147,6 +137,7 @@ impl Default for UsernameHint {
 
 /// Progress updates during autodiscovery
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct DiscoveryProgress {
     /// Current stage
     pub stage: DiscoveryStage,
@@ -159,6 +150,7 @@ pub struct DiscoveryProgress {
 /// Stages of the autodiscovery process
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
 pub enum DiscoveryStage {
     /// Checking known providers
     KnownProvider,
@@ -249,128 +241,6 @@ impl DiscoveryPipeline {
         // Step 5: Heuristic probing as last resort
         if let Ok(config) = probe::probe_common_servers(domain).await {
             info!("Found configuration via server probing");
-            return Ok(config);
-        }
-
-        Err(AutodiscoveryError::NotFound(domain.to_string()))
-    }
-
-    /// Discover with progress updates via a callback
-    pub async fn discover_with_progress<F>(
-        &self,
-        email: &str,
-        mut on_progress: F,
-    ) -> Result<EmailDiscoveryConfig, AutodiscoveryError>
-    where
-        F: FnMut(DiscoveryProgress),
-    {
-        // Validate and parse email
-        let email = email.trim().to_lowercase();
-        let parts: Vec<&str> = email.split('@').collect();
-        if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
-            return Err(AutodiscoveryError::InvalidEmail(email));
-        }
-        let domain = parts[1];
-
-        // Step 1: Known providers
-        on_progress(DiscoveryProgress {
-            stage: DiscoveryStage::KnownProvider,
-            progress: 10,
-            message: "Checking known email providers...".to_string(),
-        });
-
-        if let Some(config) = providers::check_known_provider(&email, domain) {
-            on_progress(DiscoveryProgress {
-                stage: DiscoveryStage::Complete,
-                progress: 100,
-                message: format!("Found configuration for {}", config.provider.as_deref().unwrap_or(domain)),
-            });
-            return Ok(config);
-        }
-
-        // Step 2: Mozilla Autoconfig
-        on_progress(DiscoveryProgress {
-            stage: DiscoveryStage::Autoconfig,
-            progress: 25,
-            message: "Trying Mozilla Autoconfig...".to_string(),
-        });
-
-        if let Ok(Ok(config)) = tokio::time::timeout(
-            Duration::from_secs(8),
-            autoconfig::try_mozilla_autoconfig(&self.http_client, &email, domain),
-        ).await {
-            on_progress(DiscoveryProgress {
-                stage: DiscoveryStage::Complete,
-                progress: 100,
-                message: "Found configuration via Autoconfig".to_string(),
-            });
-            return Ok(config);
-        }
-
-        // Step 3: Microsoft Autodiscover
-        on_progress(DiscoveryProgress {
-            stage: DiscoveryStage::Autodiscover,
-            progress: 40,
-            message: "Trying Microsoft Autodiscover...".to_string(),
-        });
-
-        if let Ok(Ok(config)) = tokio::time::timeout(
-            Duration::from_secs(8),
-            autoconfig::try_microsoft_autodiscover(&self.http_client, &email, domain),
-        ).await {
-            on_progress(DiscoveryProgress {
-                stage: DiscoveryStage::Complete,
-                progress: 100,
-                message: "Found configuration via Autodiscover".to_string(),
-            });
-            return Ok(config);
-        }
-
-        // Step 4: DNS SRV
-        on_progress(DiscoveryProgress {
-            stage: DiscoveryStage::Srv,
-            progress: 55,
-            message: "Querying DNS SRV records...".to_string(),
-        });
-
-        if let Ok(config) = dns::try_srv_records(domain).await {
-            on_progress(DiscoveryProgress {
-                stage: DiscoveryStage::Complete,
-                progress: 100,
-                message: "Found configuration via DNS SRV".to_string(),
-            });
-            return Ok(config);
-        }
-
-        // Step 5: MX analysis
-        on_progress(DiscoveryProgress {
-            stage: DiscoveryStage::Mx,
-            progress: 70,
-            message: "Analyzing MX records...".to_string(),
-        });
-
-        if let Ok(config) = dns::try_mx_analysis(domain).await {
-            on_progress(DiscoveryProgress {
-                stage: DiscoveryStage::Complete,
-                progress: 100,
-                message: format!("Detected provider from MX records: {}", config.provider.as_deref().unwrap_or("Unknown")),
-            });
-            return Ok(config);
-        }
-
-        // Step 6: Heuristic probing
-        on_progress(DiscoveryProgress {
-            stage: DiscoveryStage::Probing,
-            progress: 85,
-            message: "Probing common server configurations...".to_string(),
-        });
-
-        if let Ok(config) = probe::probe_common_servers(domain).await {
-            on_progress(DiscoveryProgress {
-                stage: DiscoveryStage::Complete,
-                progress: 100,
-                message: "Found configuration via server probing".to_string(),
-            });
             return Ok(config);
         }
 

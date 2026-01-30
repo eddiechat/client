@@ -6,7 +6,7 @@
 
 use std::net::ToSocketAddrs;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tracing::{debug, info, warn};
@@ -117,7 +117,6 @@ pub async fn probe_common_servers(domain: &str) -> Result<EmailDiscoveryConfig, 
         imap,
         smtp,
         auth_method: AuthMethod::Password,
-        oauth_provider: None,
         username_hint: UsernameHint::FullEmail,
         requires_app_password: false,
         source: "probe".to_string(),

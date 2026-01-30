@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   discoverEmailConfig,
-  startOAuthFlow,
   saveDiscoveredAccount,
-  checkOAuthStatus,
 } from "../../../tauri";
 import type { DiscoveryResult } from "../../../tauri";
 
@@ -14,8 +12,6 @@ interface AccountSetupWizardProps {
   onClose: () => void;
   onSuccess: () => void;
 }
-
-const OAUTH_REDIRECT_URI = "http://localhost:8765/oauth/callback";
 
 export function AccountSetupWizard({
   isOpen,
@@ -34,8 +30,6 @@ export function AccountSetupWizard({
   const [smtpPort, setSmtpPort] = useState(587);
   const [smtpTls, setSmtpTls] = useState(true);
   const [password, setPassword] = useState("");
-  const [oauthPending, setOauthPending] = useState(false);
-  const [oauthComplete, setOauthComplete] = useState(false);
   const [processing, setProcessing] = useState(false);
 
   // Reset form when modal closes
@@ -53,8 +47,6 @@ export function AccountSetupWizard({
       setSmtpPort(587);
       setSmtpTls(true);
       setPassword("");
-      setOauthPending(false);
-      setOauthComplete(false);
       setProcessing(false);
     }
   }, [isOpen]);
@@ -89,50 +81,6 @@ export function AccountSetupWizard({
     }
   };
 
-  const handleStartOAuth = async () => {
-    if (!discovery?.oauth_provider) {
-      setError("OAuth provider not configured");
-      return;
-    }
-    setError(null);
-    setProcessing(true);
-    setOauthPending(true);
-    try {
-      const authUrl = await startOAuthFlow(
-        discovery.oauth_provider,
-        email,
-        OAUTH_REDIRECT_URI
-      );
-      window.open(authUrl, "_blank");
-      setError(
-        "Please complete the sign-in in your browser. Once complete, click 'Check Status' to continue."
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setOauthPending(false);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleCheckOAuthStatus = async () => {
-    setProcessing(true);
-    try {
-      const status = await checkOAuthStatus(email);
-      if (status.has_tokens) {
-        setOauthComplete(true);
-        setOauthPending(false);
-        setError(null);
-      } else {
-        setError("OAuth not complete. Please try signing in again.");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const handleSave = async () => {
     setError(null);
     setStep("saving");
@@ -147,7 +95,6 @@ export function AccountSetupWizard({
         smtp_port: smtpPort,
         smtp_tls: smtpTls,
         auth_method: "password",
-        oauth_provider: undefined,
       };
       await saveDiscoveredAccount({
         name: accountName,
@@ -160,7 +107,6 @@ export function AccountSetupWizard({
         smtpPort: config.smtp_port,
         smtpTls: config.smtp_tls,
         authMethod: config.auth_method,
-        oauthProvider: config.oauth_provider,
         password: password || undefined,
       });
       onSuccess();
@@ -178,8 +124,6 @@ export function AccountSetupWizard({
       case "email":
         return email.trim().length > 0;
       case "auth":
-        if (!discovery) return false;
-        if (discovery.auth_method === "oauth2") return oauthComplete;
         return password.length > 0;
       case "manual":
         return imapHost && smtpHost && password;
@@ -298,43 +242,12 @@ export function AccountSetupWizard({
                 )}
               </div>
 
-              {discovery.auth_method === "oauth2" && !oauthComplete ? (
-                <div className="flex flex-col gap-3">
-                  <p className="text-sm text-text-muted">
-                    {discovery.provider} requires secure sign-in through your
-                    browser.
-                  </p>
-                  <button
-                    className={btnPrimary}
-                    onClick={handleStartOAuth}
-                    disabled={processing || oauthPending}
-                  >
-                    {processing
-                      ? "Opening browser..."
-                      : oauthPending
-                        ? "Waiting for sign-in..."
-                        : `Sign in with ${discovery.provider}`}
-                  </button>
-                  {oauthPending && (
-                    <button
-                      className={btnSecondary}
-                      onClick={handleCheckOAuthStatus}
-                      disabled={processing}
-                    >
-                      Check Status
-                    </button>
-                  )}
-                </div>
-              ) : discovery.auth_method === "oauth2" && oauthComplete ? (
-                <div className="px-4 py-3 bg-accent-green/15 border border-accent-green/30 rounded-lg text-sm text-accent-green">
-                  Successfully signed in with {discovery.provider}!
-                </div>
-              ) : discovery.auth_method === "app_password" ||
-                discovery.requires_app_password ? (
+              {discovery.auth_method === "app_password" ||
+              discovery.requires_app_password ? (
                 <div className="flex flex-col gap-3">
                   <p className="text-sm text-text-muted">
                     {discovery.provider || "This provider"} requires an
-                    app-specific password.
+                    app-specific password for third-party app access.
                   </p>
                   {discovery.provider === "iCloud" && (
                     <a
@@ -344,6 +257,26 @@ export function AccountSetupWizard({
                       className="text-sm text-accent-blue hover:underline"
                     >
                       Generate an app-specific password at appleid.apple.com
+                    </a>
+                  )}
+                  {discovery.provider === "Gmail" && (
+                    <a
+                      href="https://myaccount.google.com/apppasswords"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-accent-blue hover:underline"
+                    >
+                      Generate an app password at myaccount.google.com
+                    </a>
+                  )}
+                  {discovery.provider === "Yahoo Mail" && (
+                    <a
+                      href="https://login.yahoo.com/account/security"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-accent-blue hover:underline"
+                    >
+                      Generate an app password at login.yahoo.com
                     </a>
                   )}
                   <div className="flex flex-col gap-1.5">

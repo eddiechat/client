@@ -82,7 +82,6 @@ export interface SaveDiscoveredAccountRequest {
   smtpPort: number;
   smtpTls: boolean;
   authMethod: string;
-  oauthProvider?: string;
   password?: string;
 }
 
@@ -194,18 +193,9 @@ export interface DiscoveryResult {
   smtp_port: number;
   smtp_tls: boolean;
   auth_method: string;
-  oauth_provider?: string;
   requires_app_password: boolean;
   username_hint: string;
   source: string;
-}
-
-// ========== OAuth Types ==========
-
-export interface OAuthStatus {
-  has_tokens: boolean;
-  needs_refresh: boolean;
-  is_expired: boolean;
 }
 
 // ========== Sync Event Types ==========

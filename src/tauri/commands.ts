@@ -14,7 +14,6 @@ import type {
   CachedConversation,
   CachedMessage,
   DiscoveryResult,
-  OAuthStatus,
   AttachmentInfo,
   ComposeAttachment,
   SyncActionType,
@@ -56,7 +55,6 @@ export async function saveDiscoveredAccount(
     smtpPort: request.smtpPort,
     smtpTls: request.smtpTls,
     authMethod: request.authMethod,
-    oauthProvider: request.oauthProvider,
     password: request.password,
   });
 }
@@ -88,14 +86,6 @@ export async function sendMessageWithAttachments(
     body,
     attachments,
   });
-}
-
-export async function saveMessage(
-  message: string,
-  folder?: string,
-  account?: string
-): Promise<string> {
-  return invoke("save_message", { account, folder, message });
 }
 
 export async function getConversationMessages(
@@ -188,82 +178,6 @@ export async function discoverEmailConfig(email: string): Promise<DiscoveryResul
   return invoke("discover_email_config", { email });
 }
 
-export async function testEmailConnection(
-  email: string,
-  imapHost: string,
-  imapPort: number,
-  imapTls: boolean,
-  smtpHost: string,
-  smtpPort: number,
-  smtpTls: boolean,
-  authMethod: string,
-  password?: string,
-  oauthProvider?: string
-): Promise<boolean> {
-  return invoke("test_email_connection", {
-    email,
-    imapHost,
-    imapPort,
-    imapTls,
-    smtpHost,
-    smtpPort,
-    smtpTls,
-    authMethod,
-    password,
-    oauthProvider,
-  });
-}
-
-// ========== OAuth Commands ==========
-
-export async function startOAuthFlow(
-  provider: string,
-  email: string,
-  redirectUri: string
-): Promise<string> {
-  return invoke("start_oauth_flow", { provider, email, redirectUri });
-}
-
-export async function completeOAuthFlow(
-  code: string,
-  callbackState: string,
-  redirectUri: string
-): Promise<string> {
-  return invoke("complete_oauth_flow", { code, callbackState, redirectUri });
-}
-
-export async function refreshOAuthTokens(
-  email: string,
-  provider: string
-): Promise<boolean> {
-  return invoke("refresh_oauth_tokens", { email, provider });
-}
-
-export async function checkOAuthStatus(email: string): Promise<OAuthStatus> {
-  return invoke("check_oauth_status", { email });
-}
-
-// ========== Credential Commands ==========
-
-export async function storePassword(email: string, password: string): Promise<void> {
-  return invoke("store_password", { email, password });
-}
-
-export async function storeAppPassword(email: string, password: string): Promise<void> {
-  return invoke("store_app_password", { email, password });
-}
-
-export async function deleteCredentials(email: string): Promise<void> {
-  return invoke("delete_credentials", { email });
-}
-
-export async function hasCredentials(
-  email: string,
-  credentialType: "password" | "oauth" | "app_password"
-): Promise<boolean> {
-  return invoke("has_credentials", { email, credentialType });
-}
-
 // ========== Attachment Commands ==========
 
 export async function getMessageAttachments(
@@ -288,13 +202,4 @@ export async function downloadAttachment(
     attachmentIndex,
     downloadDir,
   });
-}
-
-export async function downloadAttachments(
-  folder: string,
-  id: string,
-  downloadDir?: string,
-  account?: string
-): Promise<string[]> {
-  return invoke("download_attachments", { account, folder, id, downloadDir });
 }

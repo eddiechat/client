@@ -216,11 +216,9 @@ pub struct DiscoveryResult {
     pub smtp_host: String,
     pub smtp_port: u16,
     pub smtp_tls: bool,
-    /// Authentication method: "password", "oauth2", "app_password"
+    /// Authentication method: "password", "app_password"
     pub auth_method: String,
-    /// OAuth provider if OAuth2: "google", "microsoft", "yahoo", "fastmail"
-    pub oauth_provider: Option<String>,
-    /// Whether app-specific password is required (iCloud)
+    /// Whether app-specific password is required (iCloud, Gmail, Yahoo)
     pub requires_app_password: bool,
     /// Username format hint: "full_email", "local_part", or custom
     pub username_hint: String,
@@ -230,18 +228,11 @@ pub struct DiscoveryResult {
 
 /// Progress update for frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ProgressUpdate {
     pub stage: String,
     pub progress: u8,
     pub message: String,
-}
-
-/// OAuth status response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OAuthStatus {
-    pub has_tokens: bool,
-    pub needs_refresh: bool,
-    pub is_expired: bool,
 }
 
 // ============================================================================
