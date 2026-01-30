@@ -37,20 +37,20 @@ impl CardDAVBackend {
 
     /// Create from account config
     async fn from_account_config(account_config: AccountConfig) -> Result<Self, HimalayaError> {
-        let carddav = account_config
+        let mut carddav = account_config
             .carddav
             .as_ref()
             .ok_or_else(|| HimalayaError::Config("No CardDAV configuration".to_string()))?
             .clone();
 
-        // Build HTTP client
-        let mut client_builder = Client::builder();
-
-        if !carddav.tls {
-            client_builder = client_builder.danger_accept_invalid_certs(true);
+        // Normalize URL to include protocol if missing
+        if !carddav.url.starts_with("http://") && !carddav.url.starts_with("https://") {
+            let protocol = if carddav.tls { "https" } else { "http" };
+            carddav.url = format!("{}://{}", protocol, carddav.url);
         }
 
-        let client = client_builder
+        // Build HTTP client
+        let client = Client::builder()
             .build()
             .map_err(|e| HimalayaError::Network(e.to_string()))?;
 
@@ -130,7 +130,63 @@ impl CardDAVBackend {
 
     /// Discover the principal URL for the user
     async fn discover_principal(&self) -> Result<String, HimalayaError> {
-        info!("Discovering CardDAV principal URL");
+        info!("Discovering CardDAV principal URL from {}", self.config.url);
+
+        // Try .well-known/carddav first (standard discovery)
+        let well_known_url = format!(
+            "{}/.well-known/carddav",
+            self.config.url.trim_end_matches('/')
+        );
+        info!("Trying well-known URL: {}", well_known_url);
+
+        let discovery_url = match self
+            .client
+            .request(
+                reqwest::Method::from_bytes(b"PROPFIND").unwrap(),
+                &well_known_url,
+            )
+            .headers(self.default_headers())
+            .header("Depth", "0")
+            .body("")
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let status = response.status();
+                info!("Well-known response status: {}", status);
+                if status.is_redirection() {
+                    // Follow redirect to get actual CardDAV URL
+                    if let Some(location) = response.headers().get("location") {
+                        let loc = location.to_str().unwrap_or("");
+                        info!("Redirected to: {}", loc);
+                        if loc.starts_with('/') {
+                            let base = reqwest::Url::parse(&self.config.url).ok();
+                            base.map(|u| format!("{}://{}{}", u.scheme(), u.host_str().unwrap_or(""), loc))
+                                .unwrap_or_else(|| self.config.url.clone())
+                        } else if loc.starts_with("http") {
+                            loc.to_string()
+                        } else {
+                            self.config.url.clone()
+                        }
+                    } else {
+                        self.config.url.clone()
+                    }
+                } else {
+                    // Use well-known URL if it worked
+                    if status.is_success() || status.as_u16() == 207 {
+                        well_known_url
+                    } else {
+                        self.config.url.clone()
+                    }
+                }
+            }
+            Err(e) => {
+                info!("Well-known discovery failed: {}, using base URL", e);
+                self.config.url.clone()
+            }
+        };
+
+        info!("Using discovery URL: {}", discovery_url);
 
         let body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:">
@@ -141,7 +197,7 @@ impl CardDAVBackend {
 
         let response = self
             .client
-            .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &self.config.url)
+            .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &discovery_url)
             .headers(self.default_headers())
             .header("Depth", "0")
             .body(body)
@@ -155,6 +211,8 @@ impl CardDAVBackend {
             .await
             .map_err(|e| HimalayaError::Network(e.to_string()))?;
 
+        info!("Principal discovery response: {} - {}", status, text);
+
         if !status.is_success() && status.as_u16() != 207 {
             return Err(HimalayaError::Backend(format!(
                 "Failed to discover principal: {} - {}",
@@ -163,13 +221,13 @@ impl CardDAVBackend {
         }
 
         // Parse the XML response to find current-user-principal
-        Self::parse_principal_response(&text, &self.config.url)
+        Self::parse_principal_response(&text, &discovery_url)
     }
 
     /// Parse principal response XML
     fn parse_principal_response(xml: &str, base_url: &str) -> Result<String, HimalayaError> {
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        reader.trim_text(true);
 
         let mut in_principal = false;
         let mut href = None;
@@ -214,7 +272,7 @@ impl CardDAVBackend {
             Some(h) => {
                 // Handle relative URLs
                 if h.starts_with('/') {
-                    let url = url::Url::parse(base_url)
+                    let url = reqwest::Url::parse(base_url)
                         .map_err(|e| HimalayaError::Parse(e.to_string()))?;
                     Ok(format!("{}://{}{}", url.scheme(), url.host_str().unwrap_or(""), h))
                 } else if h.starts_with("http") {
@@ -232,7 +290,7 @@ impl CardDAVBackend {
 
     /// Discover the address book home set
     async fn discover_addressbook_home(&self, principal_url: &str) -> Result<String, HimalayaError> {
-        info!("Discovering CardDAV address book home");
+        info!("Discovering CardDAV address book home from principal: {}", principal_url);
 
         let body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
@@ -257,6 +315,8 @@ impl CardDAVBackend {
             .await
             .map_err(|e| HimalayaError::Network(e.to_string()))?;
 
+        info!("Addressbook home response: {} - {}", status, text);
+
         if !status.is_success() && status.as_u16() != 207 {
             return Err(HimalayaError::Backend(format!(
                 "Failed to discover addressbook home: {} - {}",
@@ -264,13 +324,15 @@ impl CardDAVBackend {
             )));
         }
 
-        Self::parse_addressbook_home_response(&text, principal_url)
+        let result = Self::parse_addressbook_home_response(&text, principal_url)?;
+        info!("Parsed addressbook home: {}", result);
+        Ok(result)
     }
 
     /// Parse addressbook home response
     fn parse_addressbook_home_response(xml: &str, base_url: &str) -> Result<String, HimalayaError> {
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        reader.trim_text(true);
 
         let mut in_home = false;
         let mut href = None;
@@ -313,7 +375,7 @@ impl CardDAVBackend {
         match href {
             Some(h) => {
                 if h.starts_with('/') {
-                    let url = url::Url::parse(base_url)
+                    let url = reqwest::Url::parse(base_url)
                         .map_err(|e| HimalayaError::Parse(e.to_string()))?;
                     Ok(format!("{}://{}{}", url.scheme(), url.host_str().unwrap_or(""), h))
                 } else if h.starts_with("http") {
@@ -335,6 +397,7 @@ impl CardDAVBackend {
 
         // If address book is configured, just return that one
         if let Some(ref address_book) = self.config.address_book {
+            info!("Using configured address book: {}", address_book);
             return Ok(vec![AddressBook {
                 name: "Contacts".to_string(),
                 href: address_book.clone(),
@@ -345,7 +408,9 @@ impl CardDAVBackend {
 
         // Discover principal and address book home
         let principal = self.discover_principal().await?;
+        info!("Discovered principal: {}", principal);
         let home = self.discover_addressbook_home(&principal).await?;
+        info!("Discovered home: {}", home);
 
         // List collections in the address book home
         let body = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -373,6 +438,8 @@ impl CardDAVBackend {
             .await
             .map_err(|e| HimalayaError::Network(e.to_string()))?;
 
+        info!("Address books listing response: {} - {}", status, text);
+
         if !status.is_success() && status.as_u16() != 207 {
             return Err(HimalayaError::Backend(format!(
                 "Failed to list address books: {} - {}",
@@ -380,13 +447,15 @@ impl CardDAVBackend {
             )));
         }
 
-        Self::parse_address_books_response(&text, &home)
+        let books = Self::parse_address_books_response(&text, &home)?;
+        info!("Found {} address books: {:?}", books.len(), books.iter().map(|b| &b.name).collect::<Vec<_>>());
+        Ok(books)
     }
 
     /// Parse address books response
     fn parse_address_books_response(xml: &str, base_url: &str) -> Result<Vec<AddressBook>, HimalayaError> {
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        reader.trim_text(true);
 
         let mut address_books = Vec::new();
         let mut current_href: Option<String> = None;
@@ -434,8 +503,8 @@ impl CardDAVBackend {
                         if is_addressbook {
                             if let Some(href) = current_href.take() {
                                 let full_href = if href.starts_with('/') {
-                                    let url = url::Url::parse(base_url).ok();
-                                    url.map(|u| format!("{}://{}{}", u.scheme(), u.host_str().unwrap_or(""), href))
+                                    let url = reqwest::Url::parse(base_url).ok();
+                                    url.map(|u: reqwest::Url| format!("{}://{}{}", u.scheme(), u.host_str().unwrap_or(""), href))
                                         .unwrap_or(href)
                                 } else if href.starts_with("http") {
                                     href
@@ -528,7 +597,7 @@ impl CardDAVBackend {
     /// Parse contacts response from REPORT
     fn parse_contacts_response(xml: &str, base_url: &str) -> Result<Vec<Contact>, HimalayaError> {
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        reader.trim_text(true);
 
         let mut contacts = Vec::new();
         let mut current_href: Option<String> = None;
@@ -570,8 +639,8 @@ impl CardDAVBackend {
                                     contact.etag = current_etag.take();
                                     if let Some(href) = current_href.take() {
                                         let full_href = if href.starts_with('/') {
-                                            let url = url::Url::parse(base_url).ok();
-                                            url.map(|u| format!("{}://{}{}", u.scheme(), u.host_str().unwrap_or(""), href))
+                                            let url = reqwest::Url::parse(base_url).ok();
+                                            url.map(|u: reqwest::Url| format!("{}://{}{}", u.scheme(), u.host_str().unwrap_or(""), href))
                                                 .unwrap_or(href)
                                         } else {
                                             href
