@@ -1,13 +1,28 @@
+//! Unified error types for the application
+//!
+//! This module defines error types that:
+//! - Are serializable for frontend consumption
+//! - Provide actionable error messages
+//! - Map internal errors to user-friendly variants
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Application error type for commands and services
+///
+/// All errors are serializable so they can be sent to the frontend.
+/// Error messages should be user-friendly and actionable.
 #[derive(Debug, Clone, Error, Serialize, Deserialize)]
+#[serde(tag = "type", content = "message")]
 pub enum EddieError {
     #[error("Configuration error: {0}")]
     Config(String),
 
     #[error("Account not found: {0}")]
     AccountNotFound(String),
+
+    #[error("No active account configured")]
+    NoActiveAccount,
 
     #[error("Folder not found: {0}")]
     FolderNotFound(String),
@@ -30,9 +45,48 @@ pub enum EddieError {
     #[error("IO error: {0}")]
     Io(String),
 
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Credential error: {0}")]
+    Credential(String),
+
+    #[error("OAuth error: {0}")]
+    OAuth(String),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
+    #[error("Operation not supported: {0}")]
+    NotSupported(String),
+
     #[error("{0}")]
     Other(String),
 }
+
+impl EddieError {
+    /// Create an error from any error type
+    pub fn from_error<E: std::error::Error>(err: E) -> Self {
+        EddieError::Other(err.to_string())
+    }
+
+    /// Create a backend error
+    pub fn backend(msg: impl Into<String>) -> Self {
+        EddieError::Backend(msg.into())
+    }
+
+    /// Create a config error
+    pub fn config(msg: impl Into<String>) -> Self {
+        EddieError::Config(msg.into())
+    }
+
+    /// Create an invalid input error
+    pub fn invalid_input(msg: impl Into<String>) -> Self {
+        EddieError::InvalidInput(msg.into())
+    }
+}
+
+// Implement From for common error types
 
 impl From<std::io::Error> for EddieError {
     fn from(err: std::io::Error) -> Self {
@@ -45,3 +99,24 @@ impl From<toml::de::Error> for EddieError {
         EddieError::Config(err.to_string())
     }
 }
+
+impl From<serde_json::Error> for EddieError {
+    fn from(err: serde_json::Error) -> Self {
+        EddieError::Parse(err.to_string())
+    }
+}
+
+impl From<String> for EddieError {
+    fn from(err: String) -> Self {
+        EddieError::Other(err)
+    }
+}
+
+impl From<&str> for EddieError {
+    fn from(err: &str) -> Self {
+        EddieError::Other(err.to_string())
+    }
+}
+
+/// Result type alias using EddieError
+pub type Result<T> = std::result::Result<T, EddieError>;

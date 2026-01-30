@@ -1,5 +1,9 @@
 pub mod conversation;
 pub mod error;
+pub mod responses;
+
+pub use error::{EddieError, Result};
+pub use responses::*;
 
 use serde::{Deserialize, Serialize};
 

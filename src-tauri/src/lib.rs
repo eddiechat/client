@@ -1,13 +1,32 @@
+//! Eddie Chat - Email client application
+//!
+//! This module provides the main Tauri application setup and configuration.
+//!
+//! ## Module Organization
+//!
+//! - `commands/`: Tauri command handlers (thin wrappers)
+//! - `services/`: Business logic (Tauri-agnostic)
+//! - `state/`: Application state management
+//! - `types/`: Data structures and types
+//! - `backend/`: Email protocol implementation
+//! - `sync/`: Sync engine for offline support
+//! - `config/`: Configuration management
+//! - `credentials/`: Secure credential storage
+//! - `oauth/`: OAuth2 implementation
+//! - `autodiscovery/`: Email provider auto-configuration
+
 mod autodiscovery;
 mod backend;
 mod commands;
 mod config;
 mod credentials;
 mod oauth;
+mod services;
+mod state;
 mod sync;
 mod types;
 
-use commands::{OAuthState, SyncManager};
+use state::{OAuthState, SyncManager};
 use tauri::Manager;
 use tracing::info;
 use tracing_subscriber::EnvFilter;

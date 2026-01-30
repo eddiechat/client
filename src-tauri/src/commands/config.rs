@@ -1,35 +1,45 @@
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
+//! Configuration Tauri commands
+//!
+//! Commands for managing application and account configuration.
+
+use serde::Deserialize;
 use std::path::PathBuf;
+use tauri::State;
 use tracing::info;
 
 use crate::config::{self, AccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::services::{delete_account_data, resolve_account_id_string};
+use crate::state::SyncManager;
 use crate::sync::db::{
-    self as config_db, get_active_connection_config, get_all_connection_configs,
-    get_connection_config, init_config_db, save_connection_config, set_active_account,
-    ConnectionConfig,
+    get_active_connection_config, get_all_connection_configs, get_connection_config, init_config_db,
+    save_connection_config, set_active_account, ConnectionConfig,
 };
+use crate::types::responses::AccountInfo;
+use crate::types::EddieError;
 
 /// Initialize configuration from default paths
 #[tauri::command]
-pub async fn init_config() -> Result<(), String> {
-    info!("Tauri command: init_config");
-    config::init_config().map_err(|e| e.to_string())
+pub async fn init_config() -> Result<(), EddieError> {
+    info!("Initializing config from default paths");
+    config::init_config().map_err(|e| EddieError::Config(e.to_string()))
 }
 
 /// Initialize configuration from specific paths
 #[tauri::command]
-pub async fn init_config_from_paths(paths: Vec<String>) -> Result<(), String> {
-    info!("Tauri command: init_config_from_paths - {:?}", paths);
+pub async fn init_config_from_paths(paths: Vec<String>) -> Result<(), EddieError> {
+    info!("Initializing config from paths: {:?}", paths);
 
     for path_str in paths {
         let path = PathBuf::from(&path_str);
         if path.exists() {
-            return config::init_config_from_path(&path).map_err(|e| e.to_string());
+            return config::init_config_from_path(&path)
+                .map_err(|e| EddieError::Config(e.to_string()));
         }
     }
 
-    Err("No valid config file found in provided paths".to_string())
+    Err(EddieError::Config(
+        "No valid config file found in provided paths".into(),
+    ))
 }
 
 /// Check if configuration is initialized
@@ -40,7 +50,7 @@ pub async fn is_config_initialized() -> bool {
 
 /// Get configuration file paths (for UI display)
 #[tauri::command]
-pub async fn get_config_paths() -> Result<Vec<String>, String> {
+pub async fn get_config_paths() -> Result<Vec<String>, EddieError> {
     Ok(config::default_config_paths()
         .into_iter()
         .map(|p| p.to_string_lossy().to_string())
@@ -67,8 +77,8 @@ pub struct SaveAccountRequest {
 
 /// Save a new account configuration
 #[tauri::command]
-pub async fn save_account(request: SaveAccountRequest) -> Result<(), String> {
-    info!("Tauri command: save_account - name: {}", request.name);
+pub async fn save_account(request: SaveAccountRequest) -> Result<(), EddieError> {
+    info!("Saving account: {}", request.name);
 
     let imap_auth = AuthConfig::Password {
         user: request.username.clone(),
@@ -105,91 +115,73 @@ pub async fn save_account(request: SaveAccountRequest) -> Result<(), String> {
     let imap_json = account
         .imap
         .as_ref()
-        .map(|c| serde_json::to_string(c).unwrap_or_default());
+        .map(|c| serde_json::to_string(c))
+        .transpose()?;
     let smtp_json = account
         .smtp
         .as_ref()
-        .map(|c| serde_json::to_string(c).unwrap_or_default());
+        .map(|c| serde_json::to_string(c))
+        .transpose()?;
 
     let db_config = ConnectionConfig {
-        account_id: request.email.clone(),  // Use email as account_id
-        active: true, // New accounts are active by default
+        account_id: request.email.clone(),
+        active: true,
         email: request.email,
         display_name: request.display_name,
         imap_config: imap_json,
         smtp_config: smtp_json,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
     };
 
-    // Initialize config db if needed and save
-    init_config_db().map_err(|e| e.to_string())?;
-    save_connection_config(&db_config).map_err(|e| e.to_string())?;
-    set_active_account(&db_config.account_id).map_err(|e| e.to_string())?;
+    init_config_db()?;
+    save_connection_config(&db_config)?;
+    set_active_account(&db_config.account_id)?;
 
     Ok(())
 }
 
 // ========== Database-backed Account Commands ==========
 
-/// Response structure for account info
-#[derive(Debug, Serialize)]
-pub struct AccountInfo {
-    pub account_id: String,
-    pub active: bool,
-    pub email: String,
-    pub display_name: Option<String>,
-}
-
-impl From<ConnectionConfig> for AccountInfo {
-    fn from(config: ConnectionConfig) -> Self {
-        Self {
-            account_id: config.account_id,
-            active: config.active,
-            email: config.email,
-            display_name: config.display_name,
-        }
-    }
-}
-
 /// Initialize the config database
 #[tauri::command]
-pub async fn init_config_database() -> Result<(), String> {
-    info!("Tauri command: init_config_database");
-    init_config_db().map_err(|e| e.to_string())
+pub async fn init_config_database() -> Result<(), EddieError> {
+    info!("Initializing config database");
+    init_config_db()?;
+    Ok(())
 }
 
 /// Get all accounts from the database
 #[tauri::command]
-pub async fn get_accounts() -> Result<Vec<AccountInfo>, String> {
-    info!("Tauri command: get_accounts");
-    init_config_db().map_err(|e| e.to_string())?;
-    let configs = get_all_connection_configs().map_err(|e| e.to_string())?;
+pub async fn get_accounts() -> Result<Vec<AccountInfo>, EddieError> {
+    info!("Getting all accounts");
+    init_config_db()?;
+    let configs = get_all_connection_configs()?;
     Ok(configs.into_iter().map(AccountInfo::from).collect())
 }
 
 /// Get the currently active account
 #[tauri::command]
-pub async fn get_active_account() -> Result<Option<AccountInfo>, String> {
-    info!("Tauri command: get_active_account");
-    init_config_db().map_err(|e| e.to_string())?;
-    let config = get_active_connection_config().map_err(|e| e.to_string())?;
+pub async fn get_active_account() -> Result<Option<AccountInfo>, EddieError> {
+    info!("Getting active account");
+    init_config_db()?;
+    let config = get_active_connection_config()?;
     Ok(config.map(AccountInfo::from))
 }
 
 /// Set the active account by account_id
 #[tauri::command]
-pub async fn switch_account(account_id: String) -> Result<(), String> {
-    info!("Tauri command: switch_account - {}", account_id);
-    init_config_db().map_err(|e| e.to_string())?;
+pub async fn switch_account(account_id: String) -> Result<(), EddieError> {
+    info!("Switching to account: {}", account_id);
+    init_config_db()?;
 
     // Verify the account exists
-    let config = get_connection_config(&account_id).map_err(|e| e.to_string())?;
+    let config = get_connection_config(&account_id)?;
     if config.is_none() {
-        return Err(format!("Account '{}' not found", account_id));
+        return Err(EddieError::AccountNotFound(account_id));
     }
 
-    set_active_account(&account_id).map_err(|e| e.to_string())?;
+    set_active_account(&account_id)?;
     Ok(())
 }
 
@@ -197,48 +189,13 @@ pub async fn switch_account(account_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn delete_account(
     account_id: String,
-    sync_manager: tauri::State<'_, crate::commands::sync::SyncManager>,
-) -> Result<(), String> {
-    info!("Tauri command: delete_account - {}", account_id);
-
-    init_config_db().map_err(|e| e.to_string())?;
-
-    // Get the connection config to retrieve the account name (needed for DB file path)
-    let db_config = config_db::get_connection_config(&account_id).map_err(|e| e.to_string())?;
+    sync_manager: State<'_, SyncManager>,
+) -> Result<(), EddieError> {
+    info!("Deleting account: {}", account_id);
 
     // Shutdown the sync engine if it's running
-    info!("Shutting down sync engine for account: {}", account_id);
     sync_manager.remove(&account_id).await;
 
-    // Delete the sync database file
-    if let Some(config) = db_config {
-        // Sanitize email for use as filename (replace @ and . with _)
-        let safe_name = config.account_id.replace('@', "_").replace('.', "_");
-
-        // Construct database path using the same logic as SyncManager
-        let db_dir = if cfg!(debug_assertions) {
-            std::path::PathBuf::from("../.sqlite")
-        } else {
-            dirs::data_local_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .join("eddie.chat")
-                .join("sync")
-        };
-
-        let db_path = db_dir.join(format!("{}.db", safe_name));
-
-        if db_path.exists() {
-            info!("Deleting sync database file: {:?}", db_path);
-            std::fs::remove_file(&db_path).map_err(|e| {
-                format!("Failed to delete sync database file: {}", e)
-            })?;
-        } else {
-            info!("Sync database file not found: {:?}", db_path);
-        }
-    }
-
-    // Remove connection config from database
-    config_db::delete_connection_config(&account_id).map_err(|e| e.to_string())?;
-
-    Ok(())
+    // Delete account data (database file and config)
+    delete_account_data(&account_id, sync_manager.db_directory())
 }
