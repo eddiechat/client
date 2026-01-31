@@ -356,7 +356,7 @@ impl EmailBackend {
                     in_reply_to: e.in_reply_to.clone(),
                     from: e.from.to_string(),
                     to: vec![e.to.to_string()],
-                    cc: vec![], // TODO: email-lib doesn't expose CC in envelope list
+                    cc: e.cc.iter().map(|addr| addr.to_string()).collect(),
                     subject: e.subject.clone(),
                     date: e.date.to_rfc3339(),
                     flags: e.flags.iter().map(|f| f.to_string()).collect(),

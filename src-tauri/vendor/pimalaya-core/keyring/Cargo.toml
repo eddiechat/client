@@ -1,0 +1,61 @@
+[package]
+name = "keyring-lib"
+description = "High-level, asynchronous API for keyring-rs, a cross-platform Rust library to manage credentials"
+version = "1.0.2"
+authors = ["soywod <clement.douin@posteo.net>"]
+edition = "2021"
+license = "MIT"
+categories = ["asynchronous"]
+keywords = ["password", "credential", "keychain", "keyring", "secret"]
+homepage = "https://pimalaya.org/"
+documentation = "https://docs.rs/keyring-lib/latest/keyring/"
+repository = "https://github.com/pimalaya/core/tree/master/keyring/"
+
+[package.metadata.docs.rs]
+features = ["derive"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "keyring"
+
+[features]
+default = [
+  "tokio",
+  #"async-std",
+  "rustls",
+  #"openssl",
+  #"derive",
+  #"vendored",
+]
+
+# Async runtime
+#
+tokio = ["dep:tokio", "keyring-native/tokio"]
+async-std = ["dep:async-std", "keyring-native/async-io"]
+
+# Rust crypto
+#
+rustls = ["keyring-native/crypto-rust"]
+openssl = ["keyring-native/crypto-openssl"]
+
+# Serde (de)serialization
+#
+derive = ["dep:serde"]
+
+# Vendored (mostly for OpenSSL)
+#
+vendored = ["keyring-native/vendored"]
+
+[dev-dependencies]
+async-std = { version = "1.13", features = ["attributes"] }
+test-log = { version = "0.2", default-features = false, features = ["color", "trace"] }
+tokio = { version = "1.23", features = ["full"] }
+
+[dependencies]
+async-std = { version = "1.13", optional = true }
+keyring-native = { version = "3", package = "keyring", default-features = false, features = ["linux-native-async-persistent", "apple-native", "windows-native"] }
+once_cell = "1"
+serde = { version = "1", optional = true, features = ["derive"] }
+thiserror = "2"
+tokio = { version = "1.23", optional = true, default-features = false }
+tracing = "0.1"
