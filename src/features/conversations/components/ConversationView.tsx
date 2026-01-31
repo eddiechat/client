@@ -19,7 +19,6 @@ import { AttachmentList } from "./AttachmentList";
 import { ChatMessageAsEmail } from "./ChatMessageAsEmail";
 import { EmojiPicker, EmojiSuggestions } from "./EmojiPicker";
 import {
-  getConversationName,
   getHeaderAvatarTooltip,
   getSenderName,
   getAvatarTooltip,
@@ -379,13 +378,18 @@ export function ConversationView({
     );
   }
 
-  const conversationName = getConversationName(conversation);
   const headerTooltip = getHeaderAvatarTooltip(conversation);
   const participantData = conversation.participants.map((p, idx) => ({
     email: extractEmail(p),
     name: conversation.participant_names[idx] || extractEmail(p),
   }));
-  const headerAvatarsToShow = participantData.slice(0, 2);
+  // Show all participants in header (including user)
+  const headerAvatarsToShow = participantData;
+
+  // Header should show all participant names (including user), not filtered
+  const conversationName = conversation.participant_names
+    .map((name) => name.split(" ")[0]) // Get first names
+    .join(", ");
 
   return (
     <div className="flex flex-col h-full">
@@ -552,19 +556,29 @@ function ComposeHeader({
         <>
           <div className="w-10 h-10 relative flex items-center">
             {composeParticipants.slice(0, 2).map((participant, index) => (
-              <Avatar
+              <div
                 key={index}
-                email={extractEmail(participant)}
-                name={participant}
-                size={40}
-                className={`${
+                className={composeParticipants.length > 1 ? "absolute" : ""}
+                style={
                   composeParticipants.length > 1
-                    ? `w-7 h-7 min-w-7 text-xs border-2 border-bg-secondary absolute ${
-                        index === 0 ? "left-0 z-20" : "left-3 z-10"
-                      }`
-                    : ""
-                }`}
-              />
+                    ? {
+                        left: `${index * 19}px`,
+                        zIndex: 20 - index,
+                      }
+                    : undefined
+                }
+              >
+                <Avatar
+                  email={extractEmail(participant)}
+                  name={participant}
+                  size={composeParticipants.length > 1 ? 28 : 40}
+                  className={
+                    composeParticipants.length > 1
+                      ? "border-2 border-bg-secondary"
+                      : ""
+                  }
+                />
+              </div>
             ))}
           </div>
           <div className="flex-1 min-w-0">
@@ -594,6 +608,13 @@ function ConversationHeader({
   headerAvatarsToShow,
   participantCount,
 }: ConversationHeaderProps) {
+  // Calculate width needed for avatar container based on number of avatars
+  // With 33% overlap: first avatar = 28px, each additional = 19px (28 * 0.67)
+  const containerWidth =
+    headerAvatarsToShow.length > 1
+      ? 28 + (headerAvatarsToShow.length - 1) * 19
+      : 40;
+
   return (
     <div
       className="flex items-center gap-3 px-4"
@@ -620,23 +641,34 @@ function ConversationHeader({
         </button>
       )}
       <div
-        className="w-10 h-10 relative flex items-center"
+        className="h-10 relative flex items-center"
+        style={{ width: `${containerWidth}px` }}
         title={headerTooltip}
       >
         {headerAvatarsToShow.map((pd, index) => (
-          <Avatar
+          <div
             key={index}
-            email={pd.email}
-            name={pd.name}
-            size={40}
-            className={`${
+            className={headerAvatarsToShow.length > 1 ? "absolute" : ""}
+            style={
               headerAvatarsToShow.length > 1
-                ? `w-7 h-7 min-w-7 text-xs border-2 border-bg-secondary absolute ${
-                    index === 0 ? "left-0 z-20" : "left-3 z-10"
-                  }`
-                : ""
-            }`}
-          />
+                ? {
+                    left: `${index * 19}px`,
+                    zIndex: 20 - index,
+                  }
+                : undefined
+            }
+          >
+            <Avatar
+              email={pd.email}
+              name={pd.name}
+              size={headerAvatarsToShow.length > 1 ? 28 : 40}
+              className={
+                headerAvatarsToShow.length > 1
+                  ? "border-2 border-bg-secondary"
+                  : ""
+              }
+            />
+          </div>
         ))}
       </div>
       <div className="flex-1 min-w-0">

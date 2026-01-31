@@ -11,6 +11,7 @@ interface ChatMessagesProps {
   loading?: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  currentAccountEmail?: string;
 }
 
 export function ChatMessages({
@@ -20,6 +21,7 @@ export function ChatMessages({
   loading,
   searchQuery,
   onSearchChange,
+  currentAccountEmail,
 }: ChatMessagesProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("chats");
 
@@ -107,6 +109,7 @@ export function ChatMessages({
               conversation={conversation}
               isSelected={selectedId === conversation.id}
               onSelect={onSelect}
+              currentAccountEmail={currentAccountEmail}
             />
           ))
         )}

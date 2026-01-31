@@ -11,6 +11,7 @@ interface ChatMessageProps {
   conversation: Conversation;
   isSelected: boolean;
   onSelect: (conversation: Conversation) => void;
+  currentAccountEmail?: string;
 }
 
 function formatTime(dateStr: string): string {
@@ -46,6 +47,7 @@ export function ChatMessage({
   conversation,
   isSelected,
   onSelect,
+  currentAccountEmail,
 }: ChatMessageProps) {
   const nameParts = getConversationNameParts(conversation);
   const avatarTooltip = getAvatarTooltip(conversation);
@@ -56,7 +58,25 @@ export function ChatMessage({
     name: conversation.participant_names[idx] || extractEmail(p),
   }));
 
-  const avatarsToShow = participantData.slice(0, 2);
+  // Filter out the current user from sidebar avatars
+  // Check both email and name to ensure we correctly identify the user
+  const externalParticipants = currentAccountEmail
+    ? participantData.filter((pd) => {
+        const emailMatch =
+          pd.email.toLowerCase() === currentAccountEmail.toLowerCase();
+        // Also check if this is the user based on the conversation metadata
+        const isUser =
+          conversation.user_in_conversation &&
+          pd.name === conversation.user_name;
+        return !emailMatch && !isUser;
+      })
+    : participantData;
+
+  const avatarsToShow = externalParticipants.slice(0, 2);
+
+  // Calculate width for avatar container (w-8 = 32px, overlap at 21px)
+  // Single avatar: 48px, Two avatars: 32 + 21 + (32-21) = 43px
+  const avatarContainerWidth = avatarsToShow.length > 1 ? 43 : 48;
 
   return (
     <div
@@ -67,7 +87,8 @@ export function ChatMessage({
     >
       {/* Avatar group */}
       <div
-        className="w-12 h-12 min-w-12 relative flex items-center"
+        className="h-12 min-w-12 relative flex items-center"
+        style={{ width: `${avatarContainerWidth}px` }}
         title={avatarTooltip}
       >
         {avatarsToShow.map((pd, index) => {
@@ -81,7 +102,7 @@ export function ChatMessage({
               className={`flex items-center justify-center rounded-full text-white font-semibold uppercase overflow-hidden relative ${
                 avatarsToShow.length > 1
                   ? `w-8 h-8 min-w-8 text-xs border-2 border-bg-secondary absolute ${
-                      index === 0 ? "left-0 z-20" : "left-4 z-10"
+                      index === 0 ? "left-0 z-20" : "left-[21px] z-10"
                     }`
                   : "w-12 h-12 min-w-12 text-lg"
               }`}
