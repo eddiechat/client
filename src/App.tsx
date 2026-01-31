@@ -12,6 +12,7 @@ import {
   useConversations,
   useConversationMessages,
 } from "./features/conversations";
+import { ContactsList, useContacts } from "./features/contacts";
 import {
   saveAccount,
   removeAccount,
@@ -20,15 +21,23 @@ import {
   sendMessageWithAttachments,
   syncFolder,
 } from "./tauri";
-import type { Conversation, SaveEmailAccountRequest, ComposeAttachment } from "./tauri";
+import type { Conversation, SaveEmailAccountRequest, ComposeAttachment, Contact } from "./tauri";
 import { extractEmail } from "./shared";
 import "./App.css";
 
+type SidebarTab = "messages" | "contacts";
+
 function App() {
+  // Sidebar tab state
+  const [activeTab, setActiveTab] = useState<SidebarTab>("messages");
+
   // Conversation selection state
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Contact selection state (for future contact detail view)
+  const [, setSelectedContact] = useState<Contact | null>(null);
 
   // Compose mode state (messenger-style compose in chat view)
   const [isComposing, setIsComposing] = useState(false);
@@ -64,6 +73,15 @@ function App() {
     refresh: refreshConversations,
   } = useConversations(currentAccount || undefined);
 
+  // Contacts hook
+  const {
+    contacts,
+    loading: contactsLoading,
+    error: contactsError,
+    hasCardDAV,
+    refresh: refreshContacts,
+  } = useContacts(currentAccount || undefined);
+
   // Messages for selected conversation
   const {
     messages,
@@ -92,10 +110,11 @@ function App() {
     [currentAccount]
   );
 
-  const handleCompose = useCallback(() => {
+  const handleCompose = useCallback((initialRecipients?: string[]) => {
     setSelectedConversation(null);
     setIsComposing(true);
-    setComposeParticipants([]);
+    setComposeParticipants(initialRecipients || []);
+    setActiveTab("messages"); // Switch to messages tab when composing
   }, []);
 
   // Handle when participants are confirmed in compose mode
@@ -302,12 +321,21 @@ function App() {
     setComposeParticipants([]);
   }, []);
 
+  // Contact handlers
+  const handleContactSelect = useCallback((contact: Contact) => {
+    setSelectedContact(contact);
+  }, []);
+
+  const handleStartEmailToContact = useCallback((email: string) => {
+    handleCompose([email]);
+  }, [handleCompose]);
+
   // Determine if sidebar should be hidden on mobile (when conversation is selected)
   const sidebarHidden = selectedConversation || isComposing;
 
   return (
     <main className="flex h-dvh max-h-dvh overflow-hidden">
-      {/* Sidebar with chat list */}
+      {/* Sidebar with chat list or contacts */}
       <aside
         className={`
           w-full md:w-80 md:min-w-80 bg-bg-secondary border-r border-divider
@@ -322,18 +350,64 @@ function App() {
           accounts={accounts}
           currentAccount={currentAccount}
           onEditAccount={handleEditAccount}
-          onCompose={handleCompose}
+          onCompose={() => handleCompose()}
         />
 
-        <ChatMessages
-          conversations={conversations}
-          selectedId={selectedConversation?.id || null}
-          onSelect={handleConversationSelect}
-          loading={conversationsLoading}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          currentAccountEmail={currentAccountEmail}
-        />
+        {/* Tab buttons */}
+        <div className="flex border-b border-divider">
+          <button
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 text-sm font-medium transition-colors ${
+              activeTab === "messages"
+                ? "text-accent border-b-2 border-accent"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+            onClick={() => setActiveTab("messages")}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Messages
+          </button>
+          <button
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 text-sm font-medium transition-colors ${
+              activeTab === "contacts"
+                ? "text-accent border-b-2 border-accent"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+            onClick={() => setActiveTab("contacts")}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Contacts
+          </button>
+        </div>
+
+        {/* Conditionally render based on active tab */}
+        {activeTab === "messages" ? (
+          <ChatMessages
+            conversations={conversations}
+            selectedId={selectedConversation?.id || null}
+            onSelect={handleConversationSelect}
+            loading={conversationsLoading}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            currentAccountEmail={currentAccountEmail}
+          />
+        ) : (
+          <ContactsList
+            contacts={contacts}
+            loading={contactsLoading}
+            error={contactsError}
+            hasCardDAV={hasCardDAV}
+            onSelectContact={handleContactSelect}
+            onStartEmail={handleStartEmailToContact}
+            onRefresh={refreshContacts}
+          />
+        )}
       </aside>
 
       {/* Main conversation view */}

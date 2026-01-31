@@ -44,4 +44,12 @@ export type {
 
   // Discovery types
   DiscoveryResult,
+
+  // Contact types (CardDAV)
+  Contact,
+  ContactEmail,
+  ContactPhone,
+  ContactAddress,
+  AddressBook,
+  SaveContactRequest,
 } from "./types";

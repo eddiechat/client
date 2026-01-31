@@ -17,6 +17,9 @@ import type {
   AttachmentInfo,
   ComposeAttachment,
   SyncActionType,
+  Contact,
+  AddressBook,
+  SaveContactRequest,
 } from "./types";
 
 // ========== Account Commands ==========
@@ -202,4 +205,38 @@ export async function downloadAttachment(
     attachmentIndex,
     downloadDir,
   });
+}
+
+// ========== Contact Commands (CardDAV) ==========
+
+export async function listContacts(account?: string): Promise<Contact[]> {
+  return invoke("list_contacts", { account });
+}
+
+export async function getContact(contactId: string, account?: string): Promise<Contact> {
+  return invoke("get_contact", { account, contactId });
+}
+
+export async function createContact(request: SaveContactRequest): Promise<Contact> {
+  return invoke("create_contact", { request });
+}
+
+export async function updateContact(request: SaveContactRequest): Promise<Contact> {
+  return invoke("update_contact", { request });
+}
+
+export async function deleteContact(
+  contactId: string,
+  href?: string,
+  account?: string
+): Promise<void> {
+  return invoke("delete_contact", { account, contactId, href });
+}
+
+export async function listAddressBooks(account?: string): Promise<AddressBook[]> {
+  return invoke("list_address_books", { account });
+}
+
+export async function hasCardDAVConfig(account?: string): Promise<boolean> {
+  return invoke("has_carddav_config", { account });
 }

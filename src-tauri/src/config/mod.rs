@@ -40,6 +40,9 @@ pub struct EmailAccountConfig {
 
     /// SMTP configuration for sending
     pub smtp: Option<SmtpConfig>,
+
+    /// CardDAV configuration for contacts
+    pub carddav: Option<CardDAVConfig>,
 }
 
 /// IMAP server configuration
@@ -82,6 +85,26 @@ pub struct SmtpConfig {
 
     /// Authentication method
     pub auth: AuthConfig,
+}
+
+/// CardDAV server configuration for contacts
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardDAVConfig {
+    /// CardDAV server URL (e.g., https://contacts.example.com/dav/)
+    pub url: String,
+
+    /// Use TLS encryption (default: true)
+    #[serde(default = "default_true")]
+    pub tls: bool,
+
+    /// Path to custom certificate for TLS validation (for self-signed certs)
+    pub tls_cert: Option<String>,
+
+    /// Authentication method
+    pub auth: AuthConfig,
+
+    /// Address book path (optional, will auto-discover if not provided)
+    pub address_book: Option<String>,
 }
 
 /// Authentication configuration

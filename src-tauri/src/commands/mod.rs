@@ -7,6 +7,7 @@
 //!
 //! - `accounts`: Account listing and management
 //! - `config`: Application and account configuration
+//! - `contacts`: CardDAV contacts management
 //! - `conversations`: Conversation listing (deprecated - use sync)
 //! - `discovery`: Email autodiscovery
 //! - `envelopes`: Email envelope listing (deprecated - use sync)
@@ -17,6 +18,7 @@
 
 pub mod accounts;
 pub mod config;
+pub mod contacts;
 pub mod conversations;
 pub mod discovery;
 pub mod envelopes;
@@ -28,6 +30,7 @@ pub mod sync;
 // Re-export all commands for convenience
 pub use accounts::*;
 pub use config::*;
+pub use contacts::*;
 pub use conversations::*;
 pub use discovery::*;
 pub use envelopes::*;

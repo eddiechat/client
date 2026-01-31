@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use tauri::State;
 use tracing::info;
 
-use crate::config::{self, EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::config::{self, EmailAccountConfig, AuthConfig, CardDAVConfig, ImapConfig, PasswordSource, SmtpConfig};
 use crate::services::delete_account_data;
 use crate::state::SyncManager;
 use crate::sync::db::{
@@ -73,6 +73,12 @@ pub struct SaveEmailAccountRequest {
     pub smtp_tls_cert: Option<String>,
     pub username: String,
     pub password: String,
+    // CardDAV settings (optional)
+    pub carddav_url: Option<String>,
+    pub carddav_tls: Option<bool>,
+    pub carddav_tls_cert: Option<String>,
+    pub carddav_username: Option<String>,
+    pub carddav_password: Option<String>,
 }
 
 /// Save a new account configuration
@@ -86,9 +92,26 @@ pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieE
     };
 
     let smtp_auth = AuthConfig::Password {
-        user: request.username,
-        password: PasswordSource::Raw(request.password),
+        user: request.username.clone(),
+        password: PasswordSource::Raw(request.password.clone()),
     };
+
+    // Build CardDAV config if URL is provided
+    let carddav = request.carddav_url.as_ref().map(|url| {
+        let carddav_username = request.carddav_username.clone().unwrap_or_else(|| request.username.clone());
+        let carddav_password = request.carddav_password.clone().unwrap_or_else(|| request.password.clone());
+
+        CardDAVConfig {
+            url: url.clone(),
+            tls: request.carddav_tls.unwrap_or(true),
+            tls_cert: request.carddav_tls_cert.clone(),
+            auth: AuthConfig::Password {
+                user: carddav_username,
+                password: PasswordSource::Raw(carddav_password),
+            },
+            address_book: None,
+        }
+    });
 
     let account = EmailAccountConfig {
         name: Some(request.name.clone()),
@@ -109,6 +132,7 @@ pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieE
             tls_cert: request.smtp_tls_cert,
             auth: smtp_auth,
         }),
+        carddav,
     };
 
     // Save to database

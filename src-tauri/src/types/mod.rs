@@ -1,3 +1,4 @@
+pub mod contact;
 pub mod conversation;
 pub mod error;
 pub mod responses;
@@ -6,6 +7,8 @@ pub mod responses;
 pub use error::{EddieError, Result};
 #[allow(unused_imports)]
 pub use responses::*;
+
+pub use contact::*;
 
 use serde::{Deserialize, Serialize};
 

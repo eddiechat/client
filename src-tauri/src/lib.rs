@@ -137,6 +137,14 @@ pub fn run() {
             // Conversation commands
             commands::list_conversations,
             commands::get_conversation_messages,
+            // Contact commands (CardDAV)
+            commands::list_contacts,
+            commands::get_contact,
+            commands::create_contact,
+            commands::update_contact,
+            commands::delete_contact,
+            commands::list_address_books,
+            commands::has_carddav_config,
             // Sync commands
             commands::init_sync_engine,
             commands::get_sync_status,
