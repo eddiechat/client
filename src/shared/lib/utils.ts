@@ -70,7 +70,7 @@ export function getInitials(name: string): string {
  */
 export function getGravatarUrl(email: string, size: number = 40): string {
   const hash = md5(email.trim().toLowerCase());
-  // Use 404 as default to get a 404 if no gravatar exists (we'll handle fallback)
+  // Use 404 to trigger error handler when no gravatar exists (shows initials as fallback)
   return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
 }
 

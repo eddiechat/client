@@ -43,19 +43,24 @@ export function Avatar({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      {gravatarUrl && imageStatus !== "error" && (
+      {gravatarUrl && (
         <img
           src={gravatarUrl}
           alt={name}
           className="absolute inset-0 w-full h-full object-cover rounded-full"
-          style={{ display: imageStatus === "loaded" ? "block" : "none" }}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+            setImageStatus("error");
+          }}
           onLoad={() => setImageStatus("loaded")}
-          onError={() => setImageStatus("error")}
         />
       )}
-      {(imageStatus !== "loaded" || !gravatarUrl) && (
-        <span className="avatar-initials">{initials}</span>
-      )}
+      <span
+        className="avatar-initials"
+        style={{ display: imageStatus === "loaded" ? "none" : "block" }}
+      >
+        {initials}
+      </span>
     </div>
   );
 }

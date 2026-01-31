@@ -2,10 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Conversation, ChatMessage, ComposeAttachment } from "../../../tauri";
 import {
-  getAvatarColor,
-  getInitials,
   extractEmail,
-  getGravatarUrl,
   parseEmailContent,
   hasExpandableContent,
   formatMessageTime,
@@ -745,40 +742,18 @@ function MessageBubble({
         }`}
       >
         {!isOutgoing && (
-          <div
-            className="w-8 h-8 min-w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white uppercase self-end cursor-pointer overflow-hidden relative"
-            style={{ backgroundColor: getAvatarColor(message.envelope.from) }}
+          <Avatar
+            email={extractEmail(message.envelope.from)}
+            name={getSenderName(message.envelope.from)}
+            size={32}
+            className="self-end cursor-pointer"
             title={getAvatarTooltip(message.envelope.from, message.id)}
             onClick={() => {
               const email = extractEmail(message.envelope.from);
               const name = getSenderName(message.envelope.from);
               if (email) onAvatarClick(email, name);
             }}
-          >
-            {(() => {
-              const messageEmail = extractEmail(message.envelope.from);
-              const gravatarUrl = messageEmail
-                ? getGravatarUrl(messageEmail, 32)
-                : null;
-              return (
-                <>
-                  {gravatarUrl && (
-                    <img
-                      src={gravatarUrl}
-                      alt={getSenderName(message.envelope.from)}
-                      className="absolute inset-0 w-full h-full object-cover rounded-full"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  )}
-                  <span className="avatar-initials">
-                    {getInitials(message.envelope.from)}
-                  </span>
-                </>
-              );
-            })()}
-          </div>
+          />
         )}
         <div className="flex flex-col gap-0.5 min-w-0 overflow-hidden">
           {showSender && (
