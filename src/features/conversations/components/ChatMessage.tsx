@@ -11,7 +11,6 @@ interface ChatMessageProps {
   conversation: Conversation;
   isSelected: boolean;
   onSelect: (conversation: Conversation) => void;
-  currentAccountEmail?: string;
 }
 
 function formatTime(dateStr: string): string {
@@ -47,14 +46,9 @@ export function ChatMessage({
   conversation,
   isSelected,
   onSelect,
-  currentAccountEmail,
 }: ChatMessageProps) {
   const nameParts = getConversationNameParts(conversation);
   const avatarTooltip = getAvatarTooltip(conversation);
-
-  const userEmail =
-    currentAccountEmail?.toLowerCase() ||
-    extractEmail(conversation.user_name);
 
   const participantData = conversation.participants.map((p, idx) => ({
     participant: p,
@@ -62,10 +56,7 @@ export function ChatMessage({
     name: conversation.participant_names[idx] || extractEmail(p),
   }));
 
-  const otherParticipantData = participantData.filter(
-    (pd) => pd.email !== userEmail
-  );
-  const avatarsToShow = otherParticipantData.slice(0, 2);
+  const avatarsToShow = participantData.slice(0, 2);
 
   return (
     <div

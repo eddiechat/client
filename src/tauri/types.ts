@@ -11,6 +11,7 @@ export interface Envelope {
   in_reply_to?: string;
   from: string;
   to: string[];
+  cc: string[];
   subject: string;
   date: string;
   flags: string[];

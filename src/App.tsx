@@ -201,19 +201,8 @@ function App() {
       )
         return;
 
-      // Get all recipients (all participants except current user)
-      const recipients = selectedConversation.participants.filter(
-        (p) =>
-          !extractEmail(p)
-            .toLowerCase()
-            .includes((currentAccount || "").toLowerCase())
-      );
-
-      // If no recipients found, use first participant
-      const to =
-        recipients.length > 0
-          ? recipients
-          : [selectedConversation.participants[0]];
+      // Get all participants as recipients
+      const to = selectedConversation.participants;
 
       // Extract first line as subject for new message style
       const lines = text.split("\n");
@@ -332,7 +321,6 @@ function App() {
           loading={conversationsLoading}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          currentAccountEmail={currentAccountEmail}
         />
       </aside>
 

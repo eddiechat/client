@@ -544,8 +544,13 @@ impl SyncEngine {
         // Extract from name and address
         let (from_name, from_address) = parse_email_address(&envelope.from);
 
-        // Serialize to/flags as JSON
+        // Serialize to/cc/flags as JSON
         let to_json = serde_json::to_string(&envelope.to).unwrap_or_else(|_| "[]".to_string());
+        let cc_json = if envelope.cc.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_string(&envelope.cc).unwrap_or_else(|_| "[]".to_string()))
+        };
         let flags_json =
             serde_json::to_string(&envelope.flags).unwrap_or_else(|_| "[]".to_string());
 
@@ -560,7 +565,7 @@ impl SyncEngine {
             from_address,
             from_name,
             to_addresses: to_json,
-            cc_addresses: None,
+            cc_addresses: cc_json,
             subject: Some(envelope.subject.clone()),
             date,
             flags: flags_json,
@@ -640,6 +645,18 @@ impl SyncEngine {
         conversation_id: i64,
     ) -> Result<Vec<CachedChatMessage>, EddieError> {
         self.db.get_conversation_messages(conversation_id)
+    }
+
+    /// Rebuild all conversations from cached messages
+    ///
+    /// This regenerates conversation participant keys from all cached messages,
+    /// which includes CC addresses. Useful after enabling CC support.
+    pub fn rebuild_all_conversations(
+        &self,
+        account_id: &str,
+        user_email: &str,
+    ) -> Result<u32, EddieError> {
+        self.conversation_grouper.rebuild_conversations(account_id, user_email)
     }
 
     /// Queue a user action

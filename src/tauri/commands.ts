@@ -135,6 +135,13 @@ export async function fetchMessageBody(
   return invoke("fetch_message_body", { account, messageId });
 }
 
+export async function rebuildConversations(
+  userEmail: string,
+  account?: string
+): Promise<number> {
+  return invoke("rebuild_conversations", { account, userEmail });
+}
+
 export async function queueSyncAction(
   actionType: SyncActionType,
   folder: string,

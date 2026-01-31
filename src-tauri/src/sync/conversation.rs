@@ -97,32 +97,25 @@ impl ConversationGrouper {
 
     /// Generate a participant key for a message
     ///
-    /// The key is a sorted, comma-separated list of normalized email addresses,
-    /// excluding the user's own address.
+    /// The key is a sorted, comma-separated list of normalized email addresses.
     pub fn generate_participant_key(
-        user_email: &str,
+        _user_email: &str,
         from: &str,
         to: &[String],
         cc: Option<&[String]>,
     ) -> String {
-        let user_normalized = Participant::normalize_email(user_email);
-
         let mut participants: HashSet<String> = HashSet::new();
 
         // Add from address
         let from_participant = Participant::from_address(from);
         let from_normalized = Participant::normalize_email(&from_participant.email);
-        if from_normalized != user_normalized {
-            participants.insert(from_normalized);
-        }
+        participants.insert(from_normalized);
 
         // Add to addresses
         for addr in to {
             let participant = Participant::from_address(addr);
             let normalized = Participant::normalize_email(&participant.email);
-            if normalized != user_normalized {
-                participants.insert(normalized);
-            }
+            participants.insert(normalized);
         }
 
         // Add cc addresses
@@ -130,9 +123,7 @@ impl ConversationGrouper {
             for addr in cc_list {
                 let participant = Participant::from_address(addr);
                 let normalized = Participant::normalize_email(&participant.email);
-                if normalized != user_normalized {
-                    participants.insert(normalized);
-                }
+                participants.insert(normalized);
             }
         }
 
@@ -144,19 +135,18 @@ impl ConversationGrouper {
 
     /// Extract participant info from a message
     pub fn extract_participants(
-        user_email: &str,
+        _user_email: &str,
         from: &str,
         to: &[String],
         cc: Option<&[String]>,
     ) -> Vec<Participant> {
-        let user_normalized = Participant::normalize_email(user_email);
         let mut seen: HashSet<String> = HashSet::new();
         let mut participants: Vec<Participant> = Vec::new();
 
         // Add from
         let from_participant = Participant::from_address(from);
         let from_normalized = Participant::normalize_email(&from_participant.email);
-        if from_normalized != user_normalized && !seen.contains(&from_normalized) {
+        if !seen.contains(&from_normalized) {
             seen.insert(from_normalized);
             participants.push(from_participant);
         }
@@ -165,7 +155,7 @@ impl ConversationGrouper {
         for addr in to {
             let participant = Participant::from_address(addr);
             let normalized = Participant::normalize_email(&participant.email);
-            if normalized != user_normalized && !seen.contains(&normalized) {
+            if !seen.contains(&normalized) {
                 seen.insert(normalized);
                 participants.push(participant);
             }
@@ -176,12 +166,19 @@ impl ConversationGrouper {
             for addr in cc_list {
                 let participant = Participant::from_address(addr);
                 let normalized = Participant::normalize_email(&participant.email);
-                if normalized != user_normalized && !seen.contains(&normalized) {
+                if !seen.contains(&normalized) {
                     seen.insert(normalized);
                     participants.push(participant);
                 }
             }
         }
+
+        // Sort participants by normalized email for consistent ordering
+        participants.sort_by(|a, b| {
+            let a_normalized = Participant::normalize_email(&a.email);
+            let b_normalized = Participant::normalize_email(&b.email);
+            a_normalized.cmp(&b_normalized)
+        });
 
         participants
     }
@@ -730,8 +727,8 @@ mod tests {
             None,
         );
 
-        // Should exclude me@example.com and sort
-        assert_eq!(key, "alice@example.com,bob@example.com");
+        // Should include all participants and sort
+        assert_eq!(key, "alice@example.com,bob@example.com,me@example.com");
     }
 
     #[test]
@@ -750,7 +747,60 @@ mod tests {
             None,
         );
 
-        // Should be the same due to Gmail dot normalization
+        // Should be the same due to Gmail dot normalization (both normalize to johndoe,me)
         assert_eq!(key1, key2);
+        assert_eq!(key1, "johndoe@gmail.com,me@gmail.com");
+    }
+
+    #[test]
+    fn test_generate_participant_key_with_cc() {
+        let key = ConversationGrouper::generate_participant_key(
+            "me@example.com",
+            "alice@example.com",
+            &["bob@example.com".to_string()],
+            Some(&["charlie@example.com".to_string(), "david@example.com".to_string()]),
+        );
+
+        // Should include from, to, and cc addresses, all sorted
+        assert_eq!(key, "alice@example.com,bob@example.com,charlie@example.com,david@example.com");
+    }
+
+    #[test]
+    fn test_extract_participants_sorted() {
+        let participants = ConversationGrouper::extract_participants(
+            "me@example.com",
+            "david@example.com",  // From
+            &["alice@example.com".to_string(), "charlie@example.com".to_string()],  // To
+            Some(&["bob@example.com".to_string()]),  // CC
+        );
+
+        // Should be sorted alphabetically by normalized email
+        assert_eq!(participants.len(), 4);
+        assert_eq!(Participant::normalize_email(&participants[0].email), "alice@example.com");
+        assert_eq!(Participant::normalize_email(&participants[1].email), "bob@example.com");
+        assert_eq!(Participant::normalize_email(&participants[2].email), "charlie@example.com");
+        assert_eq!(Participant::normalize_email(&participants[3].email), "david@example.com");
+    }
+
+    #[test]
+    fn test_extract_participants_with_cc_sorted() {
+        let participants = ConversationGrouper::extract_participants(
+            "unused@example.com",
+            "zoe@example.com",  // From (last alphabetically)
+            &["alice@example.com".to_string()],  // To
+            Some(&["bob@example.com".to_string(), "charlie@example.com".to_string()]),  // CC
+        );
+
+        // Verify sorted order: alice, bob, charlie, zoe
+        assert_eq!(participants.len(), 4);
+        let emails: Vec<String> = participants.iter()
+            .map(|p| Participant::normalize_email(&p.email))
+            .collect();
+        assert_eq!(emails, vec![
+            "alice@example.com",
+            "bob@example.com",
+            "charlie@example.com",
+            "zoe@example.com",
+        ]);
     }
 }

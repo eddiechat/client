@@ -192,6 +192,30 @@ pub async fn fetch_message_body(
     Ok(message.into())
 }
 
+/// Rebuild all conversations from cached messages
+///
+/// This regenerates conversation participant keys from cached messages,
+/// which is useful after adding CC support or fixing participant grouping.
+/// Returns the number of conversations rebuilt.
+#[tauri::command]
+pub async fn rebuild_conversations(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+    user_email: String,
+) -> Result<u32, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
+    info!("Rebuilding conversations for account: {}", account_id);
+
+    let engine = manager.get_or_create(&account_id).await?;
+    let count = engine
+        .read()
+        .await
+        .rebuild_all_conversations(&account_id, &user_email)?;
+
+    info!("Rebuilt {} conversations", count);
+    Ok(count)
+}
+
 /// Queue an action for offline support
 #[tauri::command]
 pub async fn queue_sync_action(

@@ -127,9 +127,8 @@ impl SyncManager {
             smtp: smtp_config,
         };
 
-        // Sanitize email for use as filename (replace @ and . with _)
-        let safe_name = db_config.account_id.replace('@', "_").replace('.', "_");
-        let db_path = self.default_db_dir.join(format!("{}.db", safe_name));
+        // Use account ID as-is for database filename (preserving @ and . characters)
+        let db_path = self.default_db_dir.join(format!("{}.db", db_config.account_id));
         info!("Database path: {:?}", db_path);
 
         let sync_config = SyncConfig {

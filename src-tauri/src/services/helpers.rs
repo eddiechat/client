@@ -26,9 +26,9 @@ pub fn resolve_account_id_string(account: Option<String>) -> Result<String> {
     resolve_account_id(account.as_deref())
 }
 
-/// Sanitize an email address for use as a filename
+/// Return the email address as-is for use as a filename
 ///
-/// Replaces @ and . with underscores to create a safe filename.
+/// Previously sanitized @ and . but now preserves the original account identifier.
 pub fn sanitize_email_for_filename(email: &str) -> String {
-    email.replace('@', "_").replace('.', "_")
+    email.to_string()
 }

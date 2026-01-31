@@ -381,16 +381,11 @@ export function ConversationView({
 
   const conversationName = getConversationName(conversation);
   const headerTooltip = getHeaderAvatarTooltip(conversation);
-  const userEmail =
-    currentAccountEmail?.toLowerCase() ||
-    extractEmail(conversation.user_name);
   const participantData = conversation.participants.map((p, idx) => ({
     email: extractEmail(p),
     name: conversation.participant_names[idx] || extractEmail(p),
   }));
-  const headerAvatarsToShow = participantData
-    .filter((pd) => pd.email !== userEmail)
-    .slice(0, 2);
+  const headerAvatarsToShow = participantData.slice(0, 2);
 
   return (
     <div className="flex flex-col h-full">
