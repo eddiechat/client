@@ -1,0 +1,18 @@
+[package]
+name = "email-macros"
+version = "0.0.2"
+description = "Macros for email-lib"
+authors = ["soywod <clement.douin@posteo.net>"]
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "email_macros"
+proc-macro = true
+
+[dependencies]
+quote = "1"
+syn = { version = "2", features = [
+  "full",
+  # "extra-traits", # for debug purpose
+] }
