@@ -1,0 +1,22 @@
+[package]
+name = "shellexpand-utils"
+version = "0.2.1"
+description = "Rust utils for the shellexpand crate"
+homepage = "https://pimalaya.org/"
+documentation = "https://docs.rs/shellexpand-utils/latest/shellexpand_utils/"
+repository = "https://git.sr.ht/~soywod/pimalaya/tree/master/item/shellexpand-utils/README.md"
+authors = ["soywod <clement.douin@posteo.net>"]
+edition = "2021"
+license = "MIT"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "shellexpand_utils"
+
+[dependencies]
+log = "0.4"
+shellexpand = { version = "3.1", default-features = false, features = ["full"] }
+thiserror = "2"
