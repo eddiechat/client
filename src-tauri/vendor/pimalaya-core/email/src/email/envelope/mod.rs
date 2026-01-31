@@ -68,6 +68,8 @@ pub struct Envelope {
     pub from: Address,
     /// The first address from the email message header To.
     pub to: Address,
+    /// All addresses from the email message header CC.
+    pub cc: Vec<Address>,
     /// The Subject header from the email message.
     pub subject: String,
     /// The Date header from the email message.
@@ -87,6 +89,7 @@ impl Envelope {
         let mut envelope = Envelope {
             id: id.to_string(),
             flags,
+            cc: Vec::new(),
             ..Default::default()
         };
 
@@ -150,6 +153,34 @@ impl Envelope {
                     trace!("cannot extract envelope recipient from message header, skipping it");
                 }
             };
+
+            // Parse CC header
+            match msg.cc() {
+                Some(mail_parser::Address::List(addrs)) => {
+                    envelope.cc = addrs
+                        .iter()
+                        .filter_map(|a| {
+                            let name = a.name.as_ref().map(|n| n.to_string());
+                            let email = a.address.as_ref()?.to_string();
+                            Some(Address::new(name, email))
+                        })
+                        .collect();
+                }
+                Some(mail_parser::Address::Group(groups)) => {
+                    envelope.cc = groups
+                        .iter()
+                        .flat_map(|g| &g.addresses)
+                        .filter_map(|a| {
+                            let name = a.name.as_ref().map(|n| n.to_string());
+                            let email = a.address.as_ref()?.to_string();
+                            Some(Address::new(name, email))
+                        })
+                        .collect();
+                }
+                _ => {
+                    trace!("cannot extract envelope CC from message header, skipping it");
+                }
+            }
 
             envelope.subject = msg.subject().map(ToOwned::to_owned).unwrap_or_default();
 

@@ -138,6 +138,38 @@ impl Envelope {
                     msg.extend(&to);
                     msg.push(b'\n');
 
+                    // Extract CC addresses from IMAP envelope
+                    let cc = envelope
+                        .cc
+                        .iter()
+                        .filter_map(|imap_addr| {
+                            let mut addr = Vec::default();
+
+                            if let Some(name) = imap_addr.name.0.as_ref() {
+                                addr.push(b'"');
+                                addr.extend(name.as_ref());
+                                addr.push(b'"');
+                                addr.push(b' ');
+                            }
+
+                            addr.push(b'<');
+                            addr.extend(imap_addr.mailbox.0.as_ref()?.as_ref());
+                            addr.push(b'@');
+                            addr.extend(imap_addr.host.0.as_ref()?.as_ref());
+                            addr.push(b'>');
+
+                            Some(addr)
+                        })
+                        .fold(b"Cc: ".to_vec(), |mut addrs, addr| {
+                            if addrs.len() > 4 {  // "Cc: " is 4 bytes
+                                addrs.push(b',')
+                            }
+                            addrs.extend(addr);
+                            addrs
+                        });
+                    msg.extend(&cc);
+                    msg.push(b'\n');
+
                     if let Some(subject) = envelope.subject.0.as_ref() {
                         msg.extend(b"Subject: ");
                         msg.extend(subject.as_ref());
