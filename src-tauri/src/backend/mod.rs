@@ -339,13 +339,13 @@ impl EmailBackend {
         let result: Vec<Envelope> = envelopes
             .into_iter()
             .map(|e| {
-                info!(
-                    "Fetched envelope: [{}] {} >> {}: {}",
-                    e.date.to_rfc3339(),
-                    e.from.to_string(),
-                    e.to.to_string(),
-                    e.subject
-                );
+                // info!(
+                //     "Fetched envelope: [{}] {} >> {}: {}",
+                //     e.date.to_rfc3339(),
+                //     e.from.to_string(),
+                //     e.to.to_string(),
+                //     e.subject
+                // );
                 Envelope {
                     id: e.id.clone(),
                     message_id: if e.message_id.is_empty() {
@@ -474,10 +474,10 @@ impl EmailBackend {
         let message_id = parsed.message_id().map(|s| s.to_string());
         let in_reply_to = parsed.in_reply_to().as_text().map(|s| s.to_string());
 
-        info!(
-            "Fetched message: [{}] {} >> {:?}: {}",
-            date, from, to, subject
-        );
+        // info!(
+        //     "Fetched message: [{}] {} >> {:?}: {}",
+        //     date, from, to, subject
+        // );
 
         Ok(ChatMessage {
             id: id.to_string(),

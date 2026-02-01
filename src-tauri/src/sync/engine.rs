@@ -123,7 +123,7 @@ pub enum SyncEvent {
     FlagsChanged { folder: String, uids: Vec<u32> },
     ConversationsUpdated { conversation_ids: Vec<i64> },
     Error { message: String },
-    SyncComplete,
+    SyncComplete {},
 }
 
 /// The main sync engine
@@ -282,7 +282,7 @@ impl SyncEngine {
                 .await;
 
                 self.set_online(true);
-                self.emit_event(SyncEvent::SyncComplete);
+                self.emit_event(SyncEvent::SyncComplete {});
             }
             Err(e) => {
                 error!("Full sync failed: {}", e);
@@ -377,8 +377,11 @@ impl SyncEngine {
 
         info!("Rebuilt {} conversations", conv_count);
 
-        // Get affected conversation IDs
-        let conversations = self.db.get_conversations(&self.account_id, true)?;
+        // Update conversation classifications based on existing message classifications
+        self.db.update_conversation_classifications(&self.account_id)?;
+
+        // Get affected conversation IDs (all conversations)
+        let conversations = self.db.get_conversations(&self.account_id, None)?;
         let affected_conversations: Vec<i64> = conversations.iter().map(|c| c.id).collect();
 
         self.emit_event(SyncEvent::ConversationsUpdated {
@@ -621,7 +624,7 @@ impl SyncEngine {
             });
         }
 
-        self.emit_event(SyncEvent::SyncComplete);
+        self.emit_event(SyncEvent::SyncComplete {});
 
         Ok(SyncResult {
             new_messages: message_ids.len() as u32,
@@ -634,9 +637,9 @@ impl SyncEngine {
     /// Get conversations from cache
     pub fn get_conversations(
         &self,
-        include_hidden: bool,
+        classification_filter: Option<&str>,
     ) -> Result<Vec<CachedConversation>, EddieError> {
-        self.db.get_conversations(&self.account_id, include_hidden)
+        self.db.get_conversations(&self.account_id, classification_filter)
     }
 
     /// Get messages for a conversation

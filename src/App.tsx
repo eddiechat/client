@@ -29,6 +29,7 @@ function App() {
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<'connections' | 'all' | 'others'>('connections');
 
   // Compose mode state (messenger-style compose in chat view)
   const [isComposing, setIsComposing] = useState(false);
@@ -57,12 +58,12 @@ function App() {
   // Show setup wizard when no accounts are configured
   const showSetupWizard = !accountsLoading && accounts.length === 0;
 
-  // Conversations hook
+  // Conversations hook with tab filtering
   const {
     conversations,
     loading: conversationsLoading,
     refresh: refreshConversations,
-  } = useConversations(currentAccount || undefined);
+  } = useConversations(currentAccount || undefined, activeFilter);
 
   // Messages for selected conversation
   const {
@@ -322,6 +323,8 @@ function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           currentAccountEmail={currentAccountEmail}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
         />
       </aside>
 

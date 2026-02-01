@@ -72,6 +72,7 @@ pub struct CachedConversation {
     pub message_count: u32,
     pub unread_count: u32,
     pub is_outgoing: bool, // Last message direction
+    pub classification: Option<String>, // NULL until a 'chat' message is found, then 'chat'
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -632,6 +633,7 @@ impl SyncDatabase {
                 message_count INTEGER DEFAULT 0,
                 unread_count INTEGER DEFAULT 0,
                 is_outgoing INTEGER DEFAULT 0,
+                classification TEXT,  -- NULL until a 'chat' message is found, then set to 'chat'
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                 UNIQUE(account_id, participant_key)
@@ -641,6 +643,7 @@ impl SyncDatabase {
             CREATE INDEX IF NOT EXISTS idx_conversations_account ON conversations(account_id);
             CREATE INDEX IF NOT EXISTS idx_conversations_last_date ON conversations(last_message_date DESC);
             CREATE INDEX IF NOT EXISTS idx_conversations_participant_key ON conversations(participant_key);
+            CREATE INDEX IF NOT EXISTS idx_conversations_classification ON conversations(classification);
 
             -- Message to conversation mapping
             CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -1257,7 +1260,7 @@ impl SyncDatabase {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                    last_message_from, message_count, unread_count, is_outgoing, created_at, updated_at
+                    last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
              FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
         ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
@@ -1273,42 +1276,48 @@ impl SyncDatabase {
     }
 
     /// Get all conversations for an account, sorted by last message date
+    ///
+    /// Filter options:
+    /// - Some("chat"): Only show conversations classified as 'chat' (Connections tab)
+    /// - None: Show all conversations regardless of classification (All tab)
     pub fn get_conversations(
         &self,
         account_id: &str,
-        include_hidden: bool,
+        classification_filter: Option<&str>,
     ) -> Result<Vec<CachedConversation>, EddieError> {
         let conn = self.connection()?;
 
-        let sql = if include_hidden {
+        let sql = if classification_filter.is_some() {
+            // Filter by classification (e.g., 'chat' for Connections tab)
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                    last_message_from, message_count, unread_count, is_outgoing, created_at, updated_at
-             FROM conversations WHERE account_id = ?1
+                    last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
+             FROM conversations
+             WHERE account_id = ?1 AND classification = ?2
              ORDER BY last_message_date DESC"
         } else {
-            // Exclude conversations where all messages are hidden (non-chat)
-            "SELECT c.id, c.account_id, c.participant_key, c.participants, c.last_message_date, c.last_message_preview,
-                    c.last_message_from, c.message_count, c.unread_count, c.is_outgoing, c.created_at, c.updated_at
-             FROM conversations c
-             WHERE c.account_id = ?1
-               AND EXISTS (
-                   SELECT 1 FROM conversation_messages cm
-                   JOIN messages m ON m.id = cm.message_id
-                   LEFT JOIN message_classifications mc ON mc.message_id = m.id
-                   WHERE cm.conversation_id = c.id AND (mc.is_hidden_from_chat IS NULL OR mc.is_hidden_from_chat = 0)
-               )
-             ORDER BY c.last_message_date DESC"
+            // Show all conversations (All tab)
+            "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
+                    last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
+             FROM conversations
+             WHERE account_id = ?1
+             ORDER BY last_message_date DESC"
         };
 
         let mut stmt = conn
             .prepare(sql)
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-        let conversations = stmt
-            .query_map(params![account_id], Self::row_to_conversation)
-            .map_err(|e| EddieError::Backend(e.to_string()))?
-            .filter_map(|r| r.ok())
-            .collect();
+        let conversations = if let Some(classification) = classification_filter {
+            stmt.query_map(params![account_id, classification], Self::row_to_conversation)
+                .map_err(|e| EddieError::Backend(e.to_string()))?
+                .filter_map(|r| r.ok())
+                .collect()
+        } else {
+            stmt.query_map(params![account_id], Self::row_to_conversation)
+                .map_err(|e| EddieError::Backend(e.to_string()))?
+                .filter_map(|r| r.ok())
+                .collect()
+        };
 
         Ok(conversations)
     }
@@ -1497,14 +1506,15 @@ impl SyncDatabase {
             message_count: row.get(7)?,
             unread_count: row.get(8)?,
             is_outgoing: row.get::<_, i32>(9)? != 0,
+            classification: row.get(10)?,
             created_at: row
-                .get::<_, String>(10)
+                .get::<_, String>(11)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
             updated_at: row
-                .get::<_, String>(11)
+                .get::<_, String>(12)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
@@ -1645,6 +1655,53 @@ impl SyncDatabase {
                 classification.is_hidden_from_chat as i32,
                 classification.classified_at.to_rfc3339(),
             ],
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        // If this is a 'chat' classification, update the conversation classification
+        if classification.classification == "chat" {
+            conn.execute(
+                r#"
+                UPDATE conversations
+                SET classification = 'chat',
+                    updated_at = datetime('now')
+                WHERE id IN (
+                    SELECT conversation_id
+                    FROM conversation_messages
+                    WHERE message_id = ?1
+                )
+                AND classification IS NULL
+                "#,
+                params![classification.message_id],
+            ).map_err(|e| EddieError::Backend(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
+    /// Update conversation classifications based on existing message classifications
+    /// This is called after rebuilding conversations to ensure they have the correct classification
+    pub fn update_conversation_classifications(
+        &self,
+        account_id: &str,
+    ) -> Result<(), EddieError> {
+        let conn = self.connection()?;
+
+        // Update conversations to 'chat' if any of their messages are classified as 'chat'
+        conn.execute(
+            r#"
+            UPDATE conversations
+            SET classification = 'chat',
+                updated_at = datetime('now')
+            WHERE account_id = ?1
+              AND classification IS NULL
+              AND id IN (
+                SELECT DISTINCT cm.conversation_id
+                FROM conversation_messages cm
+                JOIN message_classifications mc ON cm.message_id = mc.message_id
+                WHERE mc.classification = 'chat'
+              )
+            "#,
+            params![account_id],
         ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(())

@@ -146,6 +146,7 @@ pub fn run() {
             commands::get_cached_conversation_messages,
             commands::fetch_message_body,
             commands::rebuild_conversations,
+            commands::drop_and_resync,
             commands::queue_sync_action,
             commands::set_sync_online,
             commands::has_pending_sync_actions,

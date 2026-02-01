@@ -210,5 +210,5 @@ export interface SyncEventPayload {
   FlagsChanged?: { folder: string; uids: number[] };
   ConversationsUpdated?: { conversation_ids: number[] };
   Error?: { message: string };
-  SyncComplete?: null;
+  SyncComplete?: {};
 }

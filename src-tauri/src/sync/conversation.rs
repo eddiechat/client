@@ -274,6 +274,7 @@ impl ConversationGrouper {
             message_count: 0, // Will be incremented atomically
             unread_count: 0,  // Will be incremented atomically
             is_outgoing,
+            classification: None, // Will be set when a chat message is found
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -462,7 +463,7 @@ impl ConversationGrouper {
         let existing: Option<CachedConversation> = {
             let mut stmt = tx.prepare(
                 "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                        last_message_from, message_count, unread_count, is_outgoing, created_at, updated_at
+                        last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
                  FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
             ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
@@ -481,14 +482,15 @@ impl ConversationGrouper {
                     message_count: row.get(7)?,
                     unread_count: row.get(8)?,
                     is_outgoing: row.get::<_, i32>(9)? != 0,
+                    classification: row.get(10)?,
                     created_at: row
-                        .get::<_, String>(10)
+                        .get::<_, String>(11)
                         .ok()
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(Utc::now),
                     updated_at: row
-                        .get::<_, String>(11)
+                        .get::<_, String>(12)
                         .ok()
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc))
@@ -559,6 +561,7 @@ impl ConversationGrouper {
                 message_count: 1,
                 unread_count: if !is_seen && !is_outgoing { 1 } else { 0 },
                 is_outgoing,
+                classification: None, // Will be set when a chat message is found
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }
