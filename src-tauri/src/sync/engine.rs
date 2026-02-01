@@ -772,6 +772,9 @@ impl SyncEngine {
         })
         .await;
 
+        // Mark monitor as running BEFORE spawning to avoid race condition
+        monitor.mark_running();
+
         // Start the monitor in a background task
         let monitor_clone = monitor.clone();
         tokio::spawn(async move {

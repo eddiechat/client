@@ -183,6 +183,11 @@ impl MailboxMonitor {
         let _ = self.notification_tx.send(ChangeNotification::Shutdown);
     }
 
+    /// Mark monitor as running (call before spawning the monitor task)
+    pub fn mark_running(&self) {
+        self.running.store(true, Ordering::SeqCst);
+    }
+
     /// Get the notification sender (for external triggers)
     pub fn notification_sender(&self) -> Sender<ChangeNotification> {
         self.notification_tx.clone()
@@ -192,11 +197,11 @@ impl MailboxMonitor {
     ///
     /// This runs in a background task and sends notifications when changes are detected.
     /// Currently uses polling; structured to support IDLE in the future.
+    ///
+    /// Note: The running flag should be set to true (via mark_running()) before calling this.
     pub async fn start(&self) {
-        if self.running.swap(true, Ordering::SeqCst) {
-            warn!("Monitor already running for account: {}", self.account_id);
-            return;
-        }
+        // Note: We don't check/set running here because it's set externally via mark_running()
+        // to avoid a race condition with the notification processing loop
 
         // Determine monitoring mode
         let mode = if self.supports_idle && self.config.prefer_idle {
