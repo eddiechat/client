@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import md5 from "md5";
-import { getGravatarUrl, getAvatarColor, getInitials } from "../../../shared";
+import { getGravatarUrl } from "../../../shared";
+import { Avatar } from "../../../shared/components";
 
 interface GravatarModalProps {
   email: string | null;
@@ -68,12 +69,7 @@ export function GravatarModal({
           />
         ) : (
           <div className="flex flex-col items-center gap-4">
-            <div
-              className="w-32 h-32 rounded-full flex items-center justify-center text-4xl font-bold text-white"
-              style={{ backgroundColor: getAvatarColor(email) }}
-            >
-              {getInitials(displayName)}
-            </div>
+            <Avatar email={email} name={displayName} size={128} />
             <p className="text-text-muted text-sm">No Gravatar profile</p>
           </div>
         )}
