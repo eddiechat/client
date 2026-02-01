@@ -54,25 +54,21 @@ export function ChatMessage({
     name: conversation.participant_names[idx] || extractEmail(p),
   }));
 
-  // Filter out the current user from sidebar avatars
-  // Check both email and name to ensure we correctly identify the user
+  // Filter out the current user from sidebar avatars (only by email, not by name)
   const externalParticipants = currentAccountEmail
-    ? participantData.filter((pd) => {
-        const emailMatch =
-          pd.email.toLowerCase() === currentAccountEmail.toLowerCase();
-        // Also check if this is the user based on the conversation metadata
-        const isUser =
-          conversation.user_in_conversation &&
-          pd.name === conversation.user_name;
-        return !emailMatch && !isUser;
-      })
+    ? participantData.filter(
+        (pd) => pd.email.toLowerCase() !== currentAccountEmail.toLowerCase()
+      )
     : participantData;
 
-  const avatarsToShow = externalParticipants.slice(0, 2);
+  // Show up to 3 avatars like the header does
+  const avatarsToShow = externalParticipants.slice(0, 3);
 
-  // Calculate width for avatar container (w-8 = 32px, overlap at 21px)
-  // Single avatar: 48px, Two avatars: 32 + 21 + (32-21) = 43px
-  const avatarContainerWidth = avatarsToShow.length > 1 ? 43 : 48;
+  // Calculate width for avatar container
+  // Single avatar: 48px, Multiple avatars: overlap at 21px each
+  // Formula: first avatar (32px) + (n-1) * overlap (21px) + final avatar width minus overlap (11px)
+  const avatarContainerWidth =
+    avatarsToShow.length === 1 ? 48 : 32 + (avatarsToShow.length - 1) * 21 + 11;
 
   return (
     <div
@@ -94,7 +90,7 @@ export function ChatMessage({
             style={
               avatarsToShow.length > 1
                 ? {
-                    left: index === 0 ? "0px" : "21px",
+                    left: `${index * 21}px`,
                     zIndex: 20 - index,
                   }
                 : undefined
