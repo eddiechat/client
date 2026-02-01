@@ -108,14 +108,21 @@ export function getFirstName(name: string): string {
 /**
  * Parse email content to extract the visible reply.
  * Removes quoted text, signatures, etc.
+ * Truncates to 20 lines maximum with ellipsis if longer.
  */
 export function parseEmailContent(emailBody: string | undefined | null): string {
   if (!emailBody) return "";
 
   const parser = new EmailReplyParser().read(emailBody);
-  const visibleText = parser.getVisibleText();
+  const visibleText = parser.getVisibleText().trim();
 
-  return visibleText.trim();
+  // Truncate to 20 lines max
+  const lines = visibleText.split('\n');
+  if (lines.length > 20) {
+    return lines.slice(0, 20).join('\n') + '\n...';
+  }
+
+  return visibleText;
 }
 
 /**
