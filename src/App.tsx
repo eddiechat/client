@@ -19,6 +19,7 @@ import {
   markConversationRead,
   sendMessageWithAttachments,
   syncFolder,
+  initSyncEngine,
 } from "./tauri";
 import type { Conversation, SaveEmailAccountRequest, ComposeAttachment } from "./tauri";
 import { extractEmail } from "./shared";
@@ -283,6 +284,9 @@ function App() {
 
   const handleSetupSuccess = useCallback(async () => {
     await refreshAccounts();
+    // Start IMAP sync for the newly created account
+    // Pass undefined to use the default account (the one we just created)
+    await initSyncEngine(undefined);
     await refreshConversations();
   }, [refreshAccounts, refreshConversations]);
 
