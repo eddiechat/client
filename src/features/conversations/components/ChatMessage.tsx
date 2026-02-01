@@ -1,10 +1,6 @@
 import type { Conversation } from "../../../tauri";
-import {
-  getAvatarColor,
-  getInitials,
-  extractEmail,
-  getGravatarUrl,
-} from "../../../shared";
+import { extractEmail } from "../../../shared";
+import { Avatar } from "../../../shared/components";
 import { getConversationNameParts } from "../utils";
 
 interface ChatMessageProps {
@@ -52,20 +48,27 @@ export function ChatMessage({
   const nameParts = getConversationNameParts(conversation);
   const avatarTooltip = getAvatarTooltip(conversation);
 
-  const userEmail =
-    currentAccountEmail?.toLowerCase() ||
-    extractEmail(conversation.user_name);
-
   const participantData = conversation.participants.map((p, idx) => ({
     participant: p,
     email: extractEmail(p),
     name: conversation.participant_names[idx] || extractEmail(p),
   }));
 
-  const otherParticipantData = participantData.filter(
-    (pd) => pd.email !== userEmail
-  );
-  const avatarsToShow = otherParticipantData.slice(0, 2);
+  // Filter out the current user from sidebar avatars (only by email, not by name)
+  const externalParticipants = currentAccountEmail
+    ? participantData.filter(
+        (pd) => pd.email.toLowerCase() !== currentAccountEmail.toLowerCase()
+      )
+    : participantData;
+
+  // Show up to 3 avatars like the header does
+  const avatarsToShow = externalParticipants.slice(0, 3);
+
+  // Calculate width for avatar container
+  // Single avatar: 48px, Multiple avatars: overlap at 21px each
+  // Formula: first avatar (32px) + (n-1) * overlap (21px) + final avatar width minus overlap (11px)
+  const avatarContainerWidth =
+    avatarsToShow.length === 1 ? 48 : 32 + (avatarsToShow.length - 1) * 21 + 11;
 
   return (
     <div
@@ -76,52 +79,33 @@ export function ChatMessage({
     >
       {/* Avatar group */}
       <div
-        className="w-12 h-12 min-w-12 relative flex items-center"
+        className="h-12 min-w-12 relative flex items-center"
+        style={{ width: `${avatarContainerWidth}px` }}
         title={avatarTooltip}
       >
-        {avatarsToShow.map((pd, index) => {
-          const avatarColor = getAvatarColor(pd.email || pd.name);
-          const initials = getInitials(pd.name);
-          const gravatarUrl = pd.email ? getGravatarUrl(pd.email, 48) : null;
-
-          return (
-            <div
-              key={index}
-              className={`flex items-center justify-center rounded-full text-white font-semibold uppercase overflow-hidden relative ${
-                avatarsToShow.length > 1
-                  ? `w-8 h-8 min-w-8 text-xs border-2 border-bg-secondary absolute ${
-                      index === 0 ? "left-0 z-20" : "left-4 z-10"
-                    }`
-                  : "w-12 h-12 min-w-12 text-lg"
-              }`}
-              style={{ backgroundColor: avatarColor }}
-            >
-              {gravatarUrl && (
-                <img
-                  src={gravatarUrl}
-                  alt={pd.name}
-                  className="absolute inset-0 w-full h-full object-cover rounded-full"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                    const initials =
-                      e.currentTarget.parentElement?.querySelector(
-                        ".avatar-initials"
-                      );
-                    if (initials) (initials as HTMLElement).style.display = "block";
-                  }}
-                  onLoad={(e) => {
-                    const initials =
-                      e.currentTarget.parentElement?.querySelector(
-                        ".avatar-initials"
-                      );
-                    if (initials) (initials as HTMLElement).style.display = "none";
-                  }}
-                />
-              )}
-              <span className="avatar-initials relative z-0">{initials}</span>
-            </div>
-          );
-        })}
+        {avatarsToShow.map((pd, index) => (
+          <div
+            key={index}
+            className={avatarsToShow.length > 1 ? "absolute" : ""}
+            style={
+              avatarsToShow.length > 1
+                ? {
+                    left: `${index * 21}px`,
+                    zIndex: 20 - index,
+                  }
+                : undefined
+            }
+          >
+            <Avatar
+              email={pd.email}
+              name={pd.name}
+              size={avatarsToShow.length > 1 ? 32 : 48}
+              className={
+                avatarsToShow.length > 1 ? "border-2 border-bg-secondary" : ""
+              }
+            />
+          </div>
+        ))}
       </div>
 
       {/* Content */}

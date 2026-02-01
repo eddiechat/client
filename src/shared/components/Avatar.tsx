@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getAvatarColor, getInitials, getGravatarUrl } from "../lib/utils";
 
 interface AvatarProps {
@@ -21,13 +21,22 @@ export function Avatar({
   const [imageStatus, setImageStatus] = useState<"loading" | "loaded" | "error">(
     "loading"
   );
-  const gravatarUrl = email ? getGravatarUrl(email, size) : null;
-  const avatarColor = getAvatarColor(email || name);
-  const initials = getInitials(name);
 
+  // Memoize expensive calculations to avoid recalculating on every render
+  const gravatarUrl = useMemo(
+    () => (email ? getGravatarUrl(email, size) : null),
+    [email, size]
+  );
+  const avatarColor = useMemo(
+    () => getAvatarColor(email || name),
+    [email, name]
+  );
+  const initials = useMemo(() => getInitials(name), [name]);
+
+  // Reset image loading state when gravatar URL changes
   useEffect(() => {
     setImageStatus("loading");
-  }, [email]);
+  }, [gravatarUrl]);
 
   const sizeClass = size <= 32 ? "text-xs" : size <= 40 ? "text-sm" : "text-lg";
 
@@ -43,19 +52,22 @@ export function Avatar({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      {gravatarUrl && imageStatus !== "error" && (
+      {gravatarUrl && (
         <img
           src={gravatarUrl}
           alt={name}
           className="absolute inset-0 w-full h-full object-cover rounded-full"
           style={{ display: imageStatus === "loaded" ? "block" : "none" }}
-          onLoad={() => setImageStatus("loaded")}
           onError={() => setImageStatus("error")}
+          onLoad={() => setImageStatus("loaded")}
         />
       )}
-      {(imageStatus !== "loaded" || !gravatarUrl) && (
-        <span className="avatar-initials">{initials}</span>
-      )}
+      <span
+        className="avatar-initials"
+        style={{ display: imageStatus === "loaded" ? "none" : "block" }}
+      >
+        {initials}
+      </span>
     </div>
   );
 }

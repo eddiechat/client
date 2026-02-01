@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use email::account::config::{passwd::PasswordConfig, AccountConfig as EmailLibAccountConfig};
 use email::backend::BackendBuilder;
-use email::envelope::list::{ListEnvelopes, ListEnvelopesOptions};
 use email::envelope::Id;
 use email::flag::{add::AddFlags, remove::RemoveFlags, set::SetFlags, Flag, Flags};
 use email::folder::{
@@ -324,6 +323,8 @@ impl EmailBackend {
             .await
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
+        use email::envelope::list::{ListEnvelopes, ListEnvelopesOptions};
+
         let opts = ListEnvelopesOptions {
             page,
             page_size,
@@ -338,13 +339,13 @@ impl EmailBackend {
         let result: Vec<Envelope> = envelopes
             .into_iter()
             .map(|e| {
-                info!(
-                    "Fetched envelope: [{}] {} >> {}: {}",
-                    e.date.to_rfc3339(),
-                    e.from.to_string(),
-                    e.to.to_string(),
-                    e.subject
-                );
+                // info!(
+                //     "Fetched envelope: [{}] {} >> {}: {}",
+                //     e.date.to_rfc3339(),
+                //     e.from.to_string(),
+                //     e.to.to_string(),
+                //     e.subject
+                // );
                 Envelope {
                     id: e.id.clone(),
                     message_id: if e.message_id.is_empty() {
@@ -355,6 +356,7 @@ impl EmailBackend {
                     in_reply_to: e.in_reply_to.clone(),
                     from: e.from.to_string(),
                     to: vec![e.to.to_string()],
+                    cc: e.cc.iter().map(|addr| addr.to_string()).collect(),
                     subject: e.subject.clone(),
                     date: e.date.to_rfc3339(),
                     flags: e.flags.iter().map(|f| f.to_string()).collect(),
@@ -452,15 +454,30 @@ impl EmailBackend {
             })
             .unwrap_or_default();
 
+        let cc: Vec<String> = parsed
+            .cc()
+            .map(|list| {
+                list.iter()
+                    .map(|a| {
+                        if let Some(name) = a.name() {
+                            format!("{} <{}>", name, a.address().unwrap_or(""))
+                        } else {
+                            a.address().unwrap_or("").to_string()
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
         let subject = parsed.subject().map(|s| s.to_string()).unwrap_or_default();
         let date = parsed.date().map(|d| d.to_rfc3339()).unwrap_or_default();
         let message_id = parsed.message_id().map(|s| s.to_string());
         let in_reply_to = parsed.in_reply_to().as_text().map(|s| s.to_string());
 
-        info!(
-            "Fetched message: [{}] {} >> {:?}: {}",
-            date, from, to, subject
-        );
+        // info!(
+        //     "Fetched message: [{}] {} >> {:?}: {}",
+        //     date, from, to, subject
+        // );
 
         Ok(ChatMessage {
             id: id.to_string(),
@@ -470,6 +487,7 @@ impl EmailBackend {
                 in_reply_to,
                 from,
                 to,
+                cc,
                 subject,
                 date,
                 flags: vec![],

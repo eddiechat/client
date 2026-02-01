@@ -1,0 +1,65 @@
+[package]
+name = "time-lib"
+description = "Asynchronous Rust library to manage synchronized timers"
+version = "1.0.0"
+authors = ["soywod <clement.douin@posteo.net>"]
+edition = "2021"
+license = "MIT"
+categories = ["asynchronous", "network-programming"]
+keywords = ["pim", "pomodoro", "time", "management", "technique"]
+homepage = "https://pimalaya.org/"
+documentation = "https://docs.rs/time-lib/latest/time/"
+repository = "https://github.com/pimalaya/core/tree/master/time/"
+
+[package.metadata.docs.rs]
+features = ["tokio", "client", "server", "tcp"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "time"
+
+[features]
+default = [
+  "tokio",
+  #"async-std",
+  "client",
+  "server",
+  "tcp",
+  #derive,
+]
+
+# Async runtime
+#
+tokio = ["dep:tokio"]
+async-std = ["dep:async-std"]
+
+# Client/server
+#
+server = ["tokio?/sync", "tokio?/rt", "tokio?/time"]
+client = []
+
+# TCP backend
+#
+tcp = ["tcp-binder", "tcp-client"]
+tcp-binder = ["dep:serde_json", "tokio?/net", "tokio?/io-util", "server", "derive"]
+tcp-client = ["dep:serde_json", "tokio?/net", "tokio?/io-util", "client", "derive"]
+
+# Serde (de)serialization
+#
+derive = ["dep:serde", "serde?/derive"]
+
+[dev-dependencies]
+async-std = { version = "1.13", features = ["attributes"] }
+mock_instant = "0.3"
+once_cell = "1"
+test-log = { version = "0.2", default-features = false, features = ["color", "trace"] }
+tokio = { version = "1.23", features = ["full"] }
+
+[dependencies]
+async-std = { version = "1.13", optional = true }
+async-trait = "0.1"
+futures = "0.3"
+serde = { version = "1", optional = true }
+serde_json = { version = "1", optional = true }
+tokio = { version = "1.23", optional = true, default-features = false }
+tracing = "0.1"

@@ -47,8 +47,11 @@ function formatConversation(cached: CachedConversation): Conversation {
  * 3. Builds conversations from cached data
  *
  * Subsequent loads read directly from the local cache.
+ *
+ * @param account - The account to load conversations for
+ * @param tab - The active tab filter: 'connections' | 'all' | 'others'
  */
-export function useConversations(account?: string): UseConversationsResult {
+export function useConversations(account?: string, tab: 'connections' | 'all' | 'others' = 'connections'): UseConversationsResult {
   const [conversations, setConversations] = useState<CachedConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -60,12 +63,13 @@ export function useConversations(account?: string): UseConversationsResult {
   // Refresh conversations from cache
   const refreshConversations = useCallback(async () => {
     try {
-      const cachedConvs = await getCachedConversations(false, account);
+      const cachedConvs = await getCachedConversations(tab, account);
+      console.log(`[useConversations] Refreshed ${cachedConvs.length} conversations for tab="${tab}"`, cachedConvs);
       setConversations(cachedConvs);
     } catch (e) {
       console.error("Failed to refresh conversations:", e);
     }
-  }, [account]);
+  }, [account, tab]);
 
   // Initialize sync engine and start syncing
   const initializeSync = useCallback(async () => {
@@ -78,7 +82,8 @@ export function useConversations(account?: string): UseConversationsResult {
       setSyncStatus(status);
 
       // Immediately try to load cached conversations
-      const cachedConvs = await getCachedConversations(false, account);
+      const cachedConvs = await getCachedConversations(tab, account);
+      console.log(`[useConversations] Initial load: ${cachedConvs.length} conversations for tab="${tab}"`, cachedConvs);
       if (cachedConvs.length > 0) {
         setConversations(cachedConvs);
         setLoading(false);
@@ -87,7 +92,7 @@ export function useConversations(account?: string): UseConversationsResult {
       setError(e instanceof Error ? e.message : String(e));
       setLoading(false);
     }
-  }, [account]);
+  }, [account, tab]);
 
   // Poll for sync status
   const pollSyncStatus = useCallback(async () => {
@@ -100,7 +105,7 @@ export function useConversations(account?: string): UseConversationsResult {
       setSyncing(isSyncing);
 
       if (status.is_online || status.last_sync) {
-        const cachedConvs = await getCachedConversations(false, account);
+        const cachedConvs = await getCachedConversations(tab, account);
         setConversations(cachedConvs);
         setLoading(false);
       }
@@ -111,7 +116,7 @@ export function useConversations(account?: string): UseConversationsResult {
     } catch (e) {
       console.error("Failed to poll sync status:", e);
     }
-  }, [account]);
+  }, [account, tab]);
 
   // Trigger a manual sync
   const triggerSync = useCallback(async () => {
@@ -133,6 +138,13 @@ export function useConversations(account?: string): UseConversationsResult {
       initializeSync();
     }
   }, [initializeSync]);
+
+  // Refresh conversations when tab changes
+  useEffect(() => {
+    if (initRef.current) {
+      refreshConversations();
+    }
+  }, [tab, refreshConversations]);
 
   // Listen for Tauri sync events
   useEffect(() => {

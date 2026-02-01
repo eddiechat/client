@@ -3,10 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type { Conversation, ChatMessage, ComposeAttachment } from "../../../tauri";
 import { searchEntities, type EntitySuggestion } from "../../../tauri/commands";
 import {
-  getAvatarColor,
-  getInitials,
   extractEmail,
-  getGravatarUrl,
   parseEmailContent,
   hasExpandableContent,
   formatMessageTime,
@@ -20,7 +17,6 @@ import { AttachmentList } from "./AttachmentList";
 import { ChatMessageAsEmail } from "./ChatMessageAsEmail";
 import { EmojiPicker, EmojiSuggestions } from "./EmojiPicker";
 import {
-  getConversationName,
   getHeaderAvatarTooltip,
   getSenderName,
   getAvatarTooltip,
@@ -475,18 +471,18 @@ export function ConversationView({
     );
   }
 
-  const conversationName = getConversationName(conversation);
   const headerTooltip = getHeaderAvatarTooltip(conversation);
-  const userEmail =
-    currentAccountEmail?.toLowerCase() ||
-    extractEmail(conversation.user_name);
   const participantData = conversation.participants.map((p, idx) => ({
     email: extractEmail(p),
     name: conversation.participant_names[idx] || extractEmail(p),
   }));
-  const headerAvatarsToShow = participantData
-    .filter((pd) => pd.email !== userEmail)
-    .slice(0, 2);
+  // Show all participants in header (including user)
+  const headerAvatarsToShow = participantData;
+
+  // Header should show all participant names (including user), not filtered
+  const conversationName = conversation.participant_names
+    .map((name) => name.split(" ")[0]) // Get first names
+    .join(", ");
 
   return (
     <div className="flex flex-col h-full">
@@ -688,19 +684,29 @@ function ComposeHeader({
         <>
           <div className="w-10 h-10 relative flex items-center">
             {composeParticipants.slice(0, 2).map((participant, index) => (
-              <Avatar
+              <div
                 key={index}
-                email={extractEmail(participant)}
-                name={participant}
-                size={40}
-                className={`${
+                className={composeParticipants.length > 1 ? "absolute" : ""}
+                style={
                   composeParticipants.length > 1
-                    ? `w-7 h-7 min-w-7 text-xs border-2 border-bg-secondary absolute ${
-                        index === 0 ? "left-0 z-20" : "left-3 z-10"
-                      }`
-                    : ""
-                }`}
-              />
+                    ? {
+                        left: `${index * 19}px`,
+                        zIndex: 20 - index,
+                      }
+                    : undefined
+                }
+              >
+                <Avatar
+                  email={extractEmail(participant)}
+                  name={participant}
+                  size={composeParticipants.length > 1 ? 28 : 40}
+                  className={
+                    composeParticipants.length > 1
+                      ? "border-2 border-bg-secondary"
+                      : ""
+                  }
+                />
+              </div>
             ))}
           </div>
           <div className="flex-1 min-w-0">
@@ -730,6 +736,13 @@ function ConversationHeader({
   headerAvatarsToShow,
   participantCount,
 }: ConversationHeaderProps) {
+  // Calculate width needed for avatar container based on number of avatars
+  // With 33% overlap: first avatar = 28px, each additional = 19px (28 * 0.67)
+  const containerWidth =
+    headerAvatarsToShow.length > 1
+      ? 28 + (headerAvatarsToShow.length - 1) * 19
+      : 40;
+
   return (
     <div
       className="flex items-center gap-3 px-4"
@@ -756,23 +769,34 @@ function ConversationHeader({
         </button>
       )}
       <div
-        className="w-10 h-10 relative flex items-center"
+        className="h-10 relative flex items-center"
+        style={{ width: `${containerWidth}px` }}
         title={headerTooltip}
       >
         {headerAvatarsToShow.map((pd, index) => (
-          <Avatar
+          <div
             key={index}
-            email={pd.email}
-            name={pd.name}
-            size={40}
-            className={`${
+            className={headerAvatarsToShow.length > 1 ? "absolute" : ""}
+            style={
               headerAvatarsToShow.length > 1
-                ? `w-7 h-7 min-w-7 text-xs border-2 border-bg-secondary absolute ${
-                    index === 0 ? "left-0 z-20" : "left-3 z-10"
-                  }`
-                : ""
-            }`}
-          />
+                ? {
+                    left: `${index * 19}px`,
+                    zIndex: 20 - index,
+                  }
+                : undefined
+            }
+          >
+            <Avatar
+              email={pd.email}
+              name={pd.name}
+              size={headerAvatarsToShow.length > 1 ? 28 : 40}
+              className={
+                headerAvatarsToShow.length > 1
+                  ? "border-2 border-bg-secondary"
+                  : ""
+              }
+            />
+          </div>
         ))}
       </div>
       <div className="flex-1 min-w-0">
@@ -849,40 +873,18 @@ function MessageBubble({
         }`}
       >
         {!isOutgoing && (
-          <div
-            className="w-8 h-8 min-w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white uppercase self-end cursor-pointer overflow-hidden relative"
-            style={{ backgroundColor: getAvatarColor(message.envelope.from) }}
+          <Avatar
+            email={extractEmail(message.envelope.from)}
+            name={getSenderName(message.envelope.from)}
+            size={32}
+            className="self-end cursor-pointer"
             title={getAvatarTooltip(message.envelope.from, message.id)}
             onClick={() => {
               const email = extractEmail(message.envelope.from);
               const name = getSenderName(message.envelope.from);
               if (email) onAvatarClick(email, name);
             }}
-          >
-            {(() => {
-              const messageEmail = extractEmail(message.envelope.from);
-              const gravatarUrl = messageEmail
-                ? getGravatarUrl(messageEmail, 32)
-                : null;
-              return (
-                <>
-                  {gravatarUrl && (
-                    <img
-                      src={gravatarUrl}
-                      alt={getSenderName(message.envelope.from)}
-                      className="absolute inset-0 w-full h-full object-cover rounded-full"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  )}
-                  <span className="avatar-initials">
-                    {getInitials(message.envelope.from)}
-                  </span>
-                </>
-              );
-            })()}
-          </div>
+          />
         )}
         <div className="flex flex-col gap-0.5 min-w-0 overflow-hidden">
           {showSender && (

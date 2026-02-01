@@ -11,6 +11,7 @@ export interface Envelope {
   in_reply_to?: string;
   from: string;
   to: string[];
+  cc: string[];
   subject: string;
   date: string;
   flags: string[];
@@ -209,5 +210,5 @@ export interface SyncEventPayload {
   FlagsChanged?: { folder: string; uids: number[] };
   ConversationsUpdated?: { conversation_ids: number[] };
   Error?: { message: string };
-  SyncComplete?: null;
+  SyncComplete?: {};
 }

@@ -70,7 +70,7 @@ export function getInitials(name: string): string {
  */
 export function getGravatarUrl(email: string, size: number = 40): string {
   const hash = md5(email.trim().toLowerCase());
-  // Use 404 as default to get a 404 if no gravatar exists (we'll handle fallback)
+  // Use 404 to trigger error handler when no gravatar exists (shows initials as fallback)
   return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
 }
 
@@ -108,14 +108,21 @@ export function getFirstName(name: string): string {
 /**
  * Parse email content to extract the visible reply.
  * Removes quoted text, signatures, etc.
+ * Truncates to 20 lines maximum with ellipsis if longer.
  */
 export function parseEmailContent(emailBody: string | undefined | null): string {
   if (!emailBody) return "";
 
   const parser = new EmailReplyParser().read(emailBody);
-  const visibleText = parser.getVisibleText();
+  const visibleText = parser.getVisibleText().trim();
 
-  return visibleText.trim();
+  // Truncate to 20 lines max
+  const lines = visibleText.split('\n');
+  if (lines.length > 20) {
+    return lines.slice(0, 20).join('\n') + '\n...';
+  }
+
+  return visibleText;
 }
 
 /**

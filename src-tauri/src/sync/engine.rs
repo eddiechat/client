@@ -123,7 +123,7 @@ pub enum SyncEvent {
     FlagsChanged { folder: String, uids: Vec<u32> },
     ConversationsUpdated { conversation_ids: Vec<i64> },
     Error { message: String },
-    SyncComplete,
+    SyncComplete {},
 }
 
 /// The main sync engine
@@ -282,7 +282,7 @@ impl SyncEngine {
                 .await;
 
                 self.set_online(true);
-                self.emit_event(SyncEvent::SyncComplete);
+                self.emit_event(SyncEvent::SyncComplete {});
             }
             Err(e) => {
                 error!("Full sync failed: {}", e);
@@ -377,8 +377,11 @@ impl SyncEngine {
 
         info!("Rebuilt {} conversations", conv_count);
 
-        // Get affected conversation IDs
-        let conversations = self.db.get_conversations(&self.account_id, true)?;
+        // Update conversation classifications based on existing message classifications
+        self.db.update_conversation_classifications(&self.account_id)?;
+
+        // Get affected conversation IDs (all conversations)
+        let conversations = self.db.get_conversations(&self.account_id, None)?;
         let affected_conversations: Vec<i64> = conversations.iter().map(|c| c.id).collect();
 
         self.emit_event(SyncEvent::ConversationsUpdated {
@@ -547,8 +550,13 @@ impl SyncEngine {
         // Extract from name and address
         let (from_name, from_address) = parse_email_address(&envelope.from);
 
-        // Serialize to/flags as JSON
+        // Serialize to/cc/flags as JSON
         let to_json = serde_json::to_string(&envelope.to).unwrap_or_else(|_| "[]".to_string());
+        let cc_json = if envelope.cc.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_string(&envelope.cc).unwrap_or_else(|_| "[]".to_string()))
+        };
         let flags_json =
             serde_json::to_string(&envelope.flags).unwrap_or_else(|_| "[]".to_string());
 
@@ -563,7 +571,7 @@ impl SyncEngine {
             from_address,
             from_name,
             to_addresses: to_json,
-            cc_addresses: None,
+            cc_addresses: cc_json,
             subject: Some(envelope.subject.clone()),
             date,
             flags: flags_json,
@@ -619,7 +627,7 @@ impl SyncEngine {
             });
         }
 
-        self.emit_event(SyncEvent::SyncComplete);
+        self.emit_event(SyncEvent::SyncComplete {});
 
         Ok(SyncResult {
             new_messages: message_ids.len() as u32,
@@ -632,9 +640,9 @@ impl SyncEngine {
     /// Get conversations from cache
     pub fn get_conversations(
         &self,
-        include_hidden: bool,
+        classification_filter: Option<&str>,
     ) -> Result<Vec<CachedConversation>, EddieError> {
-        self.db.get_conversations(&self.account_id, include_hidden)
+        self.db.get_conversations(&self.account_id, classification_filter)
     }
 
     /// Get messages for a conversation
@@ -643,6 +651,18 @@ impl SyncEngine {
         conversation_id: i64,
     ) -> Result<Vec<CachedChatMessage>, EddieError> {
         self.db.get_conversation_messages(conversation_id)
+    }
+
+    /// Rebuild all conversations from cached messages
+    ///
+    /// This regenerates conversation participant keys from all cached messages,
+    /// which includes CC addresses. Useful after enabling CC support.
+    pub fn rebuild_all_conversations(
+        &self,
+        account_id: &str,
+        user_email: &str,
+    ) -> Result<u32, EddieError> {
+        self.conversation_grouper.rebuild_conversations(account_id, user_email)
     }
 
     /// Queue a user action
@@ -760,6 +780,9 @@ impl SyncEngine {
             s.monitor_mode = Some("polling".to_string());
         })
         .await;
+
+        // Mark monitor as running BEFORE spawning to avoid race condition
+        monitor.mark_running();
 
         // Start the monitor in a background task
         let monitor_clone = monitor.clone();
@@ -890,21 +913,21 @@ impl SyncEngine {
         for folder in &folders {
             debug!("Checking folder for changes: {}", folder);
 
-            // Fetch current envelope count
-            match backend.list_envelopes(Some(folder), 0, 1).await {
+            // Fetch most recent messages to detect changes
+            match backend.list_envelopes(Some(folder), 0, 10).await {
                 Ok(envelopes) => {
-                    // Use envelope count as a proxy for changes
-                    // A more accurate check would use UIDNEXT or message count from SELECT
-                    let count = envelopes.len() as u32;
+                    // Get the most recent message ID (first in the list, as they're sorted newest-first)
+                    // Use and_then to flatten Option<Option<String>> to Option<String>
+                    let latest_message_id = envelopes.first().and_then(|e| e.message_id.clone());
 
                     if let Some(monitor) = &self.monitor {
-                        if monitor.check_folder_changes(folder, count).await {
+                        if monitor.check_folder_changes(folder, latest_message_id.as_deref()).await {
                             info!(
                                 "Changes detected in folder '{}', triggering sync",
                                 folder
                             );
                             any_changes = true;
-                            monitor.update_folder_state(folder, count).await;
+                            monitor.update_folder_state(folder, latest_message_id).await;
                         }
                     }
                 }

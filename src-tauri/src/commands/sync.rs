@@ -134,21 +134,44 @@ pub async fn initial_sync(
 }
 
 /// Get cached conversations from SQLite
+///
+/// Tab parameter:
+/// - "connections": Only show conversations classified as 'chat'
+/// - "all": Show all conversations regardless of classification
+/// - "others": Not implemented yet (returns empty list)
 #[tauri::command]
 pub async fn get_cached_conversations(
     manager: State<'_, SyncManager>,
     account: Option<String>,
-    include_hidden: Option<bool>,
+    tab: Option<String>,
 ) -> Result<Vec<ConversationResponse>, EddieError> {
     let account_id = resolve_account_id_string(account)?;
-    let include_hidden = include_hidden.unwrap_or(false);
+    let tab = tab.as_deref().unwrap_or("connections");
+
+    // Determine classification filter based on tab
+    let classification_filter = match tab {
+        "connections" => Some("chat"),
+        "all" => None,
+        "others" => {
+            // Not implemented yet - return empty list
+            return Ok(vec![]);
+        }
+        _ => Some("chat"), // Default to connections
+    };
 
     let engine = manager.get_or_create(&account_id).await?;
     let conversations = engine
         .read()
         .await
-        .get_conversations(include_hidden)
+        .get_conversations(classification_filter)
         .map_err(|e| EddieError::Database(e.to_string()))?;
+
+    tracing::info!(
+        "get_cached_conversations: tab={}, filter={:?}, found {} conversations",
+        tab,
+        classification_filter,
+        conversations.len()
+    );
 
     Ok(conversations.into_iter().map(|c| c.into()).collect())
 }
@@ -190,6 +213,71 @@ pub async fn fetch_message_body(
         .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     Ok(message.into())
+}
+
+/// Rebuild all conversations from cached messages
+///
+/// This regenerates conversation participant keys from cached messages,
+/// which is useful after adding CC support or fixing participant grouping.
+/// Returns the number of conversations rebuilt.
+#[tauri::command]
+pub async fn rebuild_conversations(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+    user_email: String,
+) -> Result<u32, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
+    info!("Rebuilding conversations for account: {}", account_id);
+
+    let engine = manager.get_or_create(&account_id).await?;
+    let count = engine
+        .read()
+        .await
+        .rebuild_all_conversations(&account_id, &user_email)?;
+
+    info!("Rebuilt {} conversations", count);
+    Ok(count)
+}
+
+/// Drop the sync database and re-fetch all messages
+///
+/// This deletes the local cache database and triggers a full re-sync.
+/// Useful for testing or recovering from database corruption.
+#[tauri::command]
+pub async fn drop_and_resync(
+    manager: State<'_, SyncManager>,
+    account: Option<String>,
+) -> Result<(), EddieError> {
+    let account_id = resolve_account_id_string(account)?;
+    info!("Dropping database and re-syncing for account: {}", account_id);
+
+    // Shutdown the sync engine to close database connections
+    manager.remove(&account_id).await;
+
+    // Delete the database file
+    let db_path = if cfg!(debug_assertions) {
+        std::path::PathBuf::from("../.sqlite/eddie_sync.db")
+    } else {
+        std::path::PathBuf::from("eddie_sync.db")
+    };
+
+    if db_path.exists() {
+        std::fs::remove_file(&db_path)
+            .map_err(|e| EddieError::Backend(format!("Failed to delete database: {}", e)))?;
+        info!("Deleted database file: {:?}", db_path);
+    }
+
+    // Re-initialize and trigger full sync
+    let engine = manager.get_or_create(&account_id).await?;
+    engine
+        .read()
+        .await
+        .full_sync()
+        .await
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+    info!("Database dropped and full sync initiated for account: {}", account_id);
+    Ok(())
 }
 
 /// Queue an action for offline support

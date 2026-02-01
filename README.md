@@ -55,6 +55,28 @@ We believe that an open and shared repository of agent skills, and the ability f
 | **Email Protocol** | email-lib (pimalaya) | IMAP/SMTP implementation |
 | **Config** | TOML | Human-readable configuration |
 
+### Vendored Dependencies
+
+Eddie uses a vendored version of the [pimalaya/core](https://github.com/pimalaya/core) email library to enable custom patches while maintaining easy upstream tracking:
+
+**Location**: `src-tauri/vendor/pimalaya-core/`
+
+**Method**: Git subtree (vendored commit: `c36dd7c5`)
+
+**Rationale**: The upstream email-lib didn't extract CC (carbon copy) recipients from IMAP envelope responses. We vendor the library to patch this functionality while maintaining the ability to pull and merge upstream updates.
+
+**Custom Patches**:
+- **CC Field Support**: Adds CC field extraction to the `Envelope` struct for both IMAP envelope parsing and full message parsing
+- Detailed patch documentation in [`src-tauri/vendor/patches/`](src-tauri/vendor/patches/)
+
+**Updating from Upstream**:
+```bash
+git subtree pull --prefix=src-tauri/vendor/pimalaya-core \
+  https://github.com/pimalaya/core.git master --squash
+```
+
+See [`src-tauri/vendor/README.md`](src-tauri/vendor/README.md) for complete vendoring documentation and maintenance workflow.
+
 ### Data Flow
 
 ```
@@ -212,6 +234,11 @@ eddie.chat/
 │   │       ├── mod.rs
 │   │       ├── responses.rs
 │   │       └── error.rs
+│   ├── vendor/                       # Vendored dependencies
+│   │   ├── pimalaya-core/            # email-lib, secret-lib, etc.
+│   │   ├── patches/                  # Patch documentation
+│   │   │   └── 001-envelope-cc-field.md
+│   │   └── README.md                 # Vendoring documentation
 │   ├── Cargo.toml                    # Rust dependencies
 │   ├── tauri.conf.json               # Tauri configuration
 │   └── icons/                        # Application icons

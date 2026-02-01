@@ -27,6 +27,7 @@ function formatMessage(cached: CachedChatMessage): ChatMessage {
         ? `${cached.from_name} <${cached.from_address}>`
         : cached.from_address,
       to: cached.to_addresses,
+      cc: cached.cc_addresses,
       subject: cached.subject || "",
       date: cached.date || "",
       flags: cached.flags,
@@ -107,6 +108,7 @@ export function useConversationMessages(
                 ? `${m.from_name} <${m.from_address}>`
                 : m.from_address,
               to: m.to_addresses,
+              cc: m.cc_addresses,
               subject: m.subject || "",
               date: m.date || "",
               flags: m.flags,
