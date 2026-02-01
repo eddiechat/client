@@ -22,6 +22,7 @@ export function AccountSetupWizard({
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [isNameManuallySet, setIsNameManuallySet] = useState(false);
   const [discovery, setDiscovery] = useState<DiscoveryResult | null>(null);
   const [imapHost, setImapHost] = useState("");
   const [imapPort, setImapPort] = useState(993);
@@ -39,6 +40,7 @@ export function AccountSetupWizard({
       setError(null);
       setEmail("");
       setDisplayName("");
+      setIsNameManuallySet(false);
       setDiscovery(null);
       setImapHost("");
       setImapPort(993);
@@ -50,6 +52,40 @@ export function AccountSetupWizard({
       setProcessing(false);
     }
   }, [isOpen]);
+
+  // Helper function to guess display name from email
+  const guessNameFromEmail = (emailAddress: string): string => {
+    const localPart = emailAddress.split("@")[0];
+    if (!localPart) return "";
+
+    // Replace all non-alphanumeric characters with spaces
+    const nameGuess = localPart
+      .replace(/[^a-zA-Z0-9]+/g, " ")
+      .trim()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+
+    return nameGuess;
+  };
+
+  // Handle email change with auto-fill for display name
+  const handleEmailChange = (newEmail: string) => {
+    setEmail(newEmail);
+
+    // Only auto-fill if user hasn't manually set the name
+    if (!isNameManuallySet) {
+      setDisplayName(guessNameFromEmail(newEmail));
+    }
+  };
+
+  // Handle display name change and mark as manually set
+  const handleDisplayNameChange = (newName: string) => {
+    setDisplayName(newName);
+    // Only mark as manually set if the name is not empty
+    // If empty, resume auto-guessing
+    setIsNameManuallySet(newName.trim().length > 0);
+  };
 
   const handleEmailSubmit = async () => {
     if (!email.trim()) {
@@ -189,7 +225,7 @@ export function AccountSetupWizard({
                   inputMode="email"
                   autoFocus
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => handleEmailChange(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleEmailSubmit()}
                   placeholder="you@example.com"
                   className={inputClass}
@@ -200,13 +236,13 @@ export function AccountSetupWizard({
                   htmlFor="displayName"
                   className="text-sm font-medium text-text-muted"
                 >
-                  Display Name (optional):
+                  Display Name:
                 </label>
                 <input
                   id="displayName"
                   type="text"
                   value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  onChange={(e) => handleDisplayNameChange(e.target.value)}
                   placeholder="Your Name"
                   className={inputClass}
                 />

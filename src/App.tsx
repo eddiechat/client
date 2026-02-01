@@ -19,6 +19,7 @@ import {
   markConversationRead,
   sendMessageWithAttachments,
   syncFolder,
+  initSyncEngine,
 } from "./tauri";
 import type { Conversation, SaveEmailAccountRequest, ComposeAttachment, ReplyTarget } from "./tauri";
 import { extractEmail } from "./shared";
@@ -29,6 +30,7 @@ function App() {
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<'connections' | 'all' | 'others'>('connections');
 
   // Compose mode state (messenger-style compose in chat view)
   const [isComposing, setIsComposing] = useState(false);
@@ -57,12 +59,12 @@ function App() {
   // Show setup wizard when no accounts are configured
   const showSetupWizard = !accountsLoading && accounts.length === 0;
 
-  // Conversations hook
+  // Conversations hook with tab filtering
   const {
     conversations,
     loading: conversationsLoading,
     refresh: refreshConversations,
-  } = useConversations(currentAccount || undefined);
+  } = useConversations(currentAccount || undefined, activeFilter);
 
   // Messages for selected conversation
   const {
@@ -209,19 +211,8 @@ function App() {
       )
         return;
 
-      // Get all recipients (all participants except current user)
-      const recipients = selectedConversation.participants.filter(
-        (p) =>
-          !extractEmail(p)
-            .toLowerCase()
-            .includes((currentAccount || "").toLowerCase())
-      );
-
-      // If no recipients found, use first participant
-      const to =
-        recipients.length > 0
-          ? recipients
-          : [selectedConversation.participants[0]];
+      // Get all participants as recipients
+      const to = selectedConversation.participants;
 
       let subject: string;
       let body: string;
@@ -317,6 +308,9 @@ function App() {
 
   const handleSetupSuccess = useCallback(async () => {
     await refreshAccounts();
+    // Start IMAP sync for the newly created account
+    // Pass undefined to use the default account (the one we just created)
+    await initSyncEngine(undefined);
     await refreshConversations();
   }, [refreshAccounts, refreshConversations]);
 
@@ -357,6 +351,8 @@ function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           currentAccountEmail={currentAccountEmail}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
         />
       </aside>
 

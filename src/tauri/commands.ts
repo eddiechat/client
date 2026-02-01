@@ -117,10 +117,10 @@ export async function initialSync(account?: string): Promise<void> {
 }
 
 export async function getCachedConversations(
-  includeHidden?: boolean,
+  tab?: 'connections' | 'all' | 'others',
   account?: string
 ): Promise<CachedConversation[]> {
-  return invoke("get_cached_conversations", { account, includeHidden });
+  return invoke("get_cached_conversations", { account, tab });
 }
 
 export async function getCachedConversationMessages(
@@ -135,6 +135,17 @@ export async function fetchMessageBody(
   account?: string
 ): Promise<CachedChatMessage> {
   return invoke("fetch_message_body", { account, messageId });
+}
+
+export async function rebuildConversations(
+  userEmail: string,
+  account?: string
+): Promise<number> {
+  return invoke("rebuild_conversations", { account, userEmail });
+}
+
+export async function dropAndResync(account?: string): Promise<void> {
+  return invoke("drop_and_resync", { account });
 }
 
 export async function queueSyncAction(

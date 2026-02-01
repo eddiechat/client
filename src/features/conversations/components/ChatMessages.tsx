@@ -1,8 +1,7 @@
-import { useState } from "react";
 import type { Conversation } from "../../../tauri";
 import { ChatMessage } from "./ChatMessage";
 
-type FilterType = "chats" | "important" | "requests" | "all";
+type FilterType = "connections" | "all" | "others";
 
 interface ChatMessagesProps {
   conversations: Conversation[];
@@ -12,6 +11,8 @@ interface ChatMessagesProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   currentAccountEmail?: string;
+  activeFilter: FilterType;
+  onFilterChange: (filter: FilterType) => void;
 }
 
 export function ChatMessages({
@@ -22,19 +23,20 @@ export function ChatMessages({
   searchQuery,
   onSearchChange,
   currentAccountEmail,
+  activeFilter,
+  onFilterChange,
 }: ChatMessagesProps) {
-  const [activeFilter, setActiveFilter] = useState<FilterType>("chats");
 
   // Filter conversations by search query
   const filteredConversations = searchQuery
     ? conversations.filter((conv) => {
-        const searchLower = searchQuery.toLowerCase();
-        return (
-          conv.participant_names.some((name) =>
-            name.toLowerCase().includes(searchLower)
-          ) || conv.last_message_preview.toLowerCase().includes(searchLower)
-        );
-      })
+      const searchLower = searchQuery.toLowerCase();
+      return (
+        conv.participant_names.some((name) =>
+          name.toLowerCase().includes(searchLower)
+        ) || conv.last_message_preview.toLowerCase().includes(searchLower)
+      );
+    })
     : conversations;
 
   return (
@@ -62,32 +64,29 @@ export function ChatMessages({
         </div>
         <div className="flex gap-2 mt-3">
           <button
-            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === "chats"
-                ? "bg-white text-bg-primary"
-                : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            }`}
-            onClick={() => setActiveFilter("chats")}
+            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${activeFilter === "connections"
+              ? "bg-white text-bg-primary"
+              : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+              }`}
+            onClick={() => onFilterChange("connections")}
           >
             Connections
           </button>
           <button
-            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === "requests"
-                ? "bg-white text-bg-primary"
-                : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            }`}
-            onClick={() => setActiveFilter("requests")}
+            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${activeFilter === "others"
+              ? "bg-white text-bg-primary"
+              : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+              }`}
+            onClick={() => onFilterChange("others")}
           >
-            Strangers
+            Others
           </button>
           <button
-            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === "all"
-                ? "bg-white text-bg-primary"
-                : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            }`}
-            onClick={() => setActiveFilter("all")}
+            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-all ${activeFilter === "all"
+              ? "bg-white text-bg-primary"
+              : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+              }`}
+            onClick={() => onFilterChange("all")}
           >
             All
           </button>

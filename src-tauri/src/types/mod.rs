@@ -17,6 +17,7 @@ pub struct Envelope {
     pub in_reply_to: Option<String>,
     pub from: String,
     pub to: Vec<String>,
+    pub cc: Vec<String>,
     pub subject: String,
     pub date: String,
     pub flags: Vec<String>,

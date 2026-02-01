@@ -1,0 +1,68 @@
+[package]
+name = "pgp-lib"
+description = "High-level, asynchronous API for rPGP, a pure Rust implementation of OpenPGP"
+version = "1.0.0"
+authors = ["soywod <clement.douin@posteo.net>"]
+edition = "2021"
+license = "MIT"
+categories = ["asynchronous"]
+keywords = ["pgp", "encrypt", "decrypt", "sign", "verify"]
+homepage = "https://pimalaya.org/"
+documentation = "https://docs.rs/pgp-lib/latest/pgp/"
+repository = "https://github.com/pimalaya/core/tree/master/pgp/"
+
+[package.metadata.docs.rs]
+features = ["key-discovery"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = [
+  "tokio",
+  #"async-std",
+  "rustls",
+  #"native-tls",
+  #"key-discovery",
+  #"vendored",
+]
+
+# Async runtime
+#
+tokio = ["dep:tokio", "http-lib?/tokio"]
+async-std = ["dep:async-std", "http-lib?/async-std"]
+
+# Rust crypto
+#
+rustls = ["http-lib?/rustls"]
+native-tls = ["http-lib?/native-tls"]
+
+# Public key discovery (WKD, HKP…)
+#
+key-discovery = ["dep:async-recursion", "dep:futures", "dep:http-lib", "dep:sha1", "dep:z-base-32"]
+
+# Vendored (mostly for OpenSSL)
+#
+vendored = ["http-lib?/vendored"]
+
+[lib]
+name = "pgp"
+
+[dev-dependencies]
+async-std = { version = "1.13", features = ["attributes"] }
+concat-with = "0.2"
+tempfile = "3.3"
+test-log = { version = "0.2", default-features = false, features = ["color", "trace"] }
+tokio = { version = "1.23", features = ["full"] }
+
+[dependencies]
+async-recursion = { version = "1", optional = true }
+async-std = { version = "1.13", optional = true }
+futures = { version = "0.3", optional = true }
+http-lib = { version = "0.1", optional = true, default-features = false, path = "../http" }
+pgp-native = { version = "0.10", package = "pgp" }
+rand = "0.8"
+sha1 = { version = "0.10", optional = true }
+smallvec = "1"
+thiserror = "2"
+tokio = { version = "1.23", optional = true, default-features = false, features = ["rt"] }
+tracing = "0.1"
+z-base-32 = { version = "0.1", optional = true }
