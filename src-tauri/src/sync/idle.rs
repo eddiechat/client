@@ -72,6 +72,7 @@ pub enum MonitorMode {
 pub struct FolderState {
     pub folder: String,
     pub message_count: Option<u32>,
+    pub latest_message_id: Option<String>,
     pub last_check: Option<DateTime<Utc>>,
 }
 
@@ -80,41 +81,53 @@ impl FolderState {
         Self {
             folder,
             message_count: None,
+            latest_message_id: None,
             last_check: None,
         }
     }
 
-    /// Check if the message count changed
-    pub fn has_changes(&self, new_count: u32) -> bool {
-        match self.message_count {
-            Some(old_count) => {
-                if old_count != new_count {
+    /// Check if folder has changes by comparing latest message ID
+    pub fn has_changes(&self, new_latest_id: Option<&str>) -> bool {
+        match (&self.latest_message_id, new_latest_id) {
+            (Some(old_id), Some(new_id)) => {
+                if old_id != new_id {
                     info!(
-                        "Folder '{}' message count changed: {} -> {}",
-                        self.folder, old_count, new_count
+                        "Folder '{}' latest message changed: {} -> {}",
+                        self.folder, old_id, new_id
                     );
                     true
                 } else {
                     debug!(
-                        "Folder '{}' message count unchanged: {}",
-                        self.folder, old_count
+                        "Folder '{}' latest message unchanged: {}",
+                        self.folder, old_id
                     );
                     false
                 }
             }
-            None => {
+            (None, Some(new_id)) => {
                 info!(
-                    "Folder '{}' initial message count: {}",
-                    self.folder, new_count
+                    "Folder '{}' initial latest message: {}",
+                    self.folder, new_id
                 );
                 true // First check, assume changes
+            }
+            (Some(_), None) => {
+                warn!(
+                    "Folder '{}' has no messages (was not empty before)",
+                    self.folder
+                );
+                true // Folder became empty, trigger sync
+            }
+            (None, None) => {
+                debug!("Folder '{}' is empty", self.folder);
+                false // Both empty, no changes
             }
         }
     }
 
     /// Update the tracked state
-    pub fn update(&mut self, message_count: u32) {
-        self.message_count = Some(message_count);
+    pub fn update(&mut self, latest_message_id: Option<String>) {
+        self.latest_message_id = latest_message_id;
         self.last_check = Some(Utc::now());
     }
 }
@@ -286,23 +299,23 @@ impl MailboxMonitor {
         self.run_poll_loop().await;
     }
 
-    /// Update folder state after a sync
-    pub async fn update_folder_state(&self, folder: &str, message_count: u32) {
+    /// Update folder state after checking
+    pub async fn update_folder_state(&self, folder: &str, latest_message_id: Option<String>) {
         let mut states = self.folder_states.write().await;
         if let Some(state) = states.iter_mut().find(|s| s.folder == folder) {
-            state.update(message_count);
+            state.update(latest_message_id.clone());
             debug!(
-                "Updated folder state for '{}': {} messages",
-                folder, message_count
+                "Updated folder state for '{}': latest_message_id = {:?}",
+                folder, latest_message_id
             );
         }
     }
 
-    /// Check if a folder has changes based on message count
-    pub async fn check_folder_changes(&self, folder: &str, new_count: u32) -> bool {
+    /// Check if a folder has changes based on latest message ID
+    pub async fn check_folder_changes(&self, folder: &str, latest_message_id: Option<&str>) -> bool {
         let states = self.folder_states.read().await;
         if let Some(state) = states.iter().find(|s| s.folder == folder) {
-            state.has_changes(new_count)
+            state.has_changes(latest_message_id)
         } else {
             true // Unknown folder, assume changes
         }
@@ -404,17 +417,22 @@ mod tests {
         let mut state = FolderState::new("INBOX".to_string());
 
         // First check - no previous state
-        assert!(state.has_changes(10));
-        state.update(10);
+        assert!(state.has_changes(Some("msg-123")));
+        state.update(Some("msg-123".to_string()));
 
-        // Same count - no changes
-        assert!(!state.has_changes(10));
+        // Same message ID - no changes
+        assert!(!state.has_changes(Some("msg-123")));
 
-        // Different count - changes
-        assert!(state.has_changes(15));
-        state.update(15);
+        // Different message ID - changes
+        assert!(state.has_changes(Some("msg-456")));
+        state.update(Some("msg-456".to_string()));
 
-        // Same new count - no changes
-        assert!(!state.has_changes(15));
+        // Same new message ID - no changes
+        assert!(!state.has_changes(Some("msg-456")));
+
+        // Empty folder
+        assert!(state.has_changes(None));
+        state.update(None);
+        assert!(!state.has_changes(None));
     }
 }

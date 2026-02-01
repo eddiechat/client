@@ -904,21 +904,21 @@ impl SyncEngine {
         for folder in &folders {
             debug!("Checking folder for changes: {}", folder);
 
-            // Fetch current envelope count
-            match backend.list_envelopes(Some(folder), 0, 1).await {
+            // Fetch most recent messages to detect changes
+            match backend.list_envelopes(Some(folder), 0, 10).await {
                 Ok(envelopes) => {
-                    // Use envelope count as a proxy for changes
-                    // A more accurate check would use UIDNEXT or message count from SELECT
-                    let count = envelopes.len() as u32;
+                    // Get the most recent message ID (first in the list, as they're sorted newest-first)
+                    // Use and_then to flatten Option<Option<String>> to Option<String>
+                    let latest_message_id = envelopes.first().and_then(|e| e.message_id.clone());
 
                     if let Some(monitor) = &self.monitor {
-                        if monitor.check_folder_changes(folder, count).await {
+                        if monitor.check_folder_changes(folder, latest_message_id.as_deref()).await {
                             info!(
                                 "Changes detected in folder '{}', triggering sync",
                                 folder
                             );
                             any_changes = true;
-                            monitor.update_folder_state(folder, count).await;
+                            monitor.update_folder_state(folder, latest_message_id).await;
                         }
                     }
                 }
