@@ -313,6 +313,42 @@ jobs:
       - name: Initialize iOS project
         run: bunx tauri ios init
 
+      - name: Configure manual signing for CI
+        env:
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          PBXPROJ="src-tauri/gen/apple/eddie-chat.xcodeproj/project.pbxproj"
+
+          # Switch from automatic to manual signing
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' "$PBXPROJ"
+
+          # Set the development team
+          sed -i '' "s/DEVELOPMENT_TEAM = \"[^\"]*\"/DEVELOPMENT_TEAM = \"${APPLE_TEAM_ID}\"/g" "$PBXPROJ"
+
+          # Get provisioning profile UUID
+          PP_PATH=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" | head -1)
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< \
+            $(security cms -D -i "$PP_PATH"))
+          PP_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< \
+            $(security cms -D -i "$PP_PATH"))
+
+          echo "Profile UUID: $PP_UUID"
+          echo "Profile Name: $PP_NAME"
+
+          # Set provisioning profile in project
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = \"[^\"]*\"/PROVISIONING_PROFILE_SPECIFIER = \"${PP_NAME}\"/g" "$PBXPROJ"
+
+          # If PROVISIONING_PROFILE_SPECIFIER doesn't exist, add it after CODE_SIGN_STYLE
+          if ! grep -q "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ"; then
+            sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"${PP_NAME}\";/g" "$PBXPROJ"
+          fi
+
+          # Set code sign identity
+          sed -i '' 's/CODE_SIGN_IDENTITY = "[^"]*"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' "$PBXPROJ"
+
+          echo "=== Manual signing configured ==="
+
       - name: Build iOS app for App Store
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
