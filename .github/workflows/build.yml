@@ -16,6 +16,9 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
+  # =============================================================================
+  # Desktop Builds
+  # =============================================================================
   build-desktop:
     strategy:
       fail-fast: false
@@ -88,24 +91,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  build-ios:
-    name: Mobile - iOS
+  # =============================================================================
+  # macOS App Store Build (Universal Binary, signed + uploaded)
+  # =============================================================================
+  build-macos-appstore:
+    name: macOS App Store
     runs-on: macos-latest
-    continue-on-error: true
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -120,25 +121,254 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      - name: Initialize iOS project (if needed)
+      - name: Import Apple certificates
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          MAC_INSTALLER_CERTIFICATE: ${{ secrets.MAC_INSTALLER_CERTIFICATE }}
+          MAC_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MAC_INSTALLER_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          if [ ! -d "src-tauri/gen/apple" ]; then
-            bunx tauri ios init
-          fi
+          # Decode certificates
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
+          echo -n "$MAC_INSTALLER_CERTIFICATE" | base64 --decode > /tmp/installer_certificate.p12
 
-      - name: Build iOS app
-        run: bunx tauri ios build
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" /tmp/build.keychain
+          security default-keychain -s /tmp/build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" /tmp/build.keychain
+          security set-keychain-settings -t 7200 -u /tmp/build.keychain
 
-      - name: Upload iOS artifacts
+          # Import certificates
+          security import /tmp/certificate.p12 -k /tmp/build.keychain \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productbuild
+          security import /tmp/installer_certificate.p12 -k /tmp/build.keychain \
+            -P "$MAC_INSTALLER_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productbuild
+
+          # Allow codesign to access keychain without UI prompt
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" /tmp/build.keychain
+
+          # Verify certificates imported
+          echo "=== Signing identities ==="
+          security find-identity -v -p codesigning /tmp/build.keychain
+          echo "=== Installer identities ==="
+          security find-identity -v /tmp/build.keychain
+
+      - name: Install macOS provisioning profile
+        env:
+          MACOS_PROVISION_PROFILE: ${{ secrets.MACOS_PROVISION_PROFILE }}
+        run: |
+          echo -n "$MACOS_PROVISION_PROFILE" | base64 --decode > src-tauri/embedded.provisionprofile
+          echo "Provisioning profile installed"
+
+      - name: Build Tauri app (Universal Binary)
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          bunx tauri build --target universal-apple-darwin --bundles app
+
+      - name: Create signed .pkg installer
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_NAME="eddie.chat"
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+
+          # Embed provisioning profile in app bundle
+          cp src-tauri/embedded.provisionprofile "${APP_PATH}/Contents/embedded.provisionprofile"
+
+          # Create signed installer package
+          xcrun productbuild \
+            --sign "3rd Party Mac Developer Installer: Proemial ApS (${APPLE_TEAM_ID})" \
+            --component "${APP_PATH}" /Applications \
+            "${APP_NAME}.pkg"
+
+          echo "=== Package created ==="
+          ls -la "${APP_NAME}.pkg"
+
+      - name: Validate with App Store
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo -n "$APPLE_API_PRIVATE_KEY" | base64 --decode > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+          xcrun altool --validate-app \
+            --type macos \
+            --file "eddie.chat.pkg" \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
+
+      - name: Upload to App Store Connect
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          xcrun altool --upload-app \
+            --type macos \
+            --file "eddie.chat.pkg" \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
+
+      - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build
-          path: |
-            src-tauri/gen/apple/build/**/*.ipa
-            src-tauri/gen/apple/build/**/*.app
+          name: macos-appstore-pkg
+          path: eddie.chat.pkg
+          retention-days: 30
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain /tmp/build.keychain || true
+          rm -f /tmp/certificate.p12 /tmp/installer_certificate.p12
+
+  # =============================================================================
+  # iOS App Store Build (signed + uploaded to TestFlight)
+  # =============================================================================
+  build-ios-appstore:
+    name: iOS App Store
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Import Apple certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode > $CERTIFICATE_PATH
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          security import $CERTIFICATE_PATH \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Verify
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
+
+      - name: Install iOS provisioning profile
+        env:
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+        run: |
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          echo -n "$IOS_MOBILE_PROVISION" | base64 --decode > $PP_PATH
+
+          # Install to standard location
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          # Extract UUID from profile and use it as filename
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< \
+            $(security cms -D -i $PP_PATH))
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/${UUID}.mobileprovision
+
+          echo "Installed provisioning profile with UUID: ${UUID}"
+
+      - name: Initialize iOS project
+        run: bunx tauri ios init
+
+      - name: Build iOS app for App Store
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          bunx tauri ios build -- --export-method app-store-connect
+
+      - name: Upload to TestFlight
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo -n "$APPLE_API_PRIVATE_KEY" | base64 --decode > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+          # Find the IPA
+          IPA_PATH=$(find src-tauri/gen/apple/build -name "*.ipa" -type f | head -1)
+
+          if [ -z "$IPA_PATH" ]; then
+            echo "ERROR: No IPA file found"
+            find src-tauri/gen/apple/build -type f
+            exit 1
+          fi
+
+          echo "Found IPA: $IPA_PATH"
+
+          # Validate first
+          xcrun altool --validate-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
+
+          # Upload
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-appstore-ipa
+          path: src-tauri/gen/apple/build/**/*.ipa
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+
+  # =============================================================================
+  # Android Build
+  # =============================================================================
   build-android:
     name: Mobile - Android
     runs-on: ubuntu-22.04
@@ -229,14 +459,6 @@ jobs:
           pattern: desktop-*
           merge-multiple: false
 
-      # Optional: Download mobile artifacts if they exist
-      - name: Download iOS artifacts
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: ios-build
-          path: artifacts/ios-build
-
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -272,12 +494,11 @@ jobs:
             artifacts/**/*.nsis.zip
             artifacts/**/*.apk
             artifacts/**/*.aab
-            artifacts/**/*.ipa
           body: |
             ## ⚠️ Development Build
 
             **This is an automated development build and has not been thoroughly tested.**
-            
+
             Use at your own risk. For stable releases, please use a versioned release (e.g., `v1.0.0`).
 
             ---
@@ -315,7 +536,7 @@ jobs:
   release-stable:
     name: Create Stable Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-desktop]
+    needs: [build-desktop, build-macos-appstore, build-ios-appstore]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -333,13 +554,19 @@ jobs:
           pattern: desktop-*
           merge-multiple: false
 
-      # Optional: Download mobile artifacts if they exist
-      - name: Download iOS artifacts
+      - name: Download macOS App Store artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: ios-build
-          path: artifacts/ios-build
+          name: macos-appstore-pkg
+          path: artifacts/macos-appstore
+
+      - name: Download iOS App Store artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ios-appstore-ipa
+          path: artifacts/ios-appstore
 
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
@@ -373,6 +600,7 @@ jobs:
             artifacts/**/*.apk
             artifacts/**/*.aab
             artifacts/**/*.ipa
+            artifacts/**/*.pkg
           body: |
             ## Release ${{ steps.version.outputs.version }}
 
@@ -389,12 +617,6 @@ jobs:
             | macOS | Intel | `.dmg` (x86_64) |
             | Linux | x64 | `.deb` or `.AppImage` |
 
-            ---
-
-            ### Installation
-
-            **Windows:** Download and run the `.msi` installer or `.exe` (NSIS).
-
-            **macOS:** Download the `.dmg`, open it, and drag the app to Applications.
-
-            **Linux:** Download the `.deb` (Debian/Ubuntu) or `.AppImage` (universal).
+            ### App Store
+            macOS and iOS builds have been uploaded to App Store Connect.
+            Check [App Store Connect](https://appstoreconnect.apple.com) for status.

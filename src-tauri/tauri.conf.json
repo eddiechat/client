@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "eddie.chat",
   "version": "0.1.0",
-  "identifier": "app.eddie.chat",
+  "identifier": "chat.eddie",
   "build": {
     "beforeDevCommand": "bun dev",
     "devUrl": "http://localhost:1420",
@@ -37,8 +37,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "macOS": {
+      "entitlements": "../entitlements.plist"
+    },
     "iOS": {
-      "developmentTeam": "C9CQHXKFH2",
+      "developmentTeam": "HPVXWVJC5Z",
       "minimumSystemVersion": "13.0"
     },
     "android": {
