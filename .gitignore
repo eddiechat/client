@@ -55,3 +55,7 @@ dist
 node_modules
 .claude
 .vscode
+
+.env.appstore
+test-ios-appstore.sh
+test-macos-appstore.sh

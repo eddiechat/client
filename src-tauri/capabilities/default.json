@@ -15,7 +15,6 @@
     "core:window:allow-maximize",
     "core:window:allow-set-size",
     "core:event:default",
-    "core:app:default",
-    "core:tray:default"
+    "core:app:default"
   ]
 }
