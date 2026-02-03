@@ -1317,39 +1317,81 @@ impl SyncDatabase {
         account_id: &str,
         classification_filter: Option<&str>,
     ) -> Result<Vec<CachedConversation>, EddieError> {
+        self.get_conversations_with_connection_filter(account_id, classification_filter, None)
+    }
+
+    /// Get conversations with optional classification and connection filtering
+    ///
+    /// connection_filter options:
+    /// - None: No connection filtering (all conversations)
+    /// - Some("connections"): Only conversations where at least one participant is a connection
+    /// - Some("others"): Only conversations where NO participants are connections
+    pub fn get_conversations_with_connection_filter(
+        &self,
+        account_id: &str,
+        classification_filter: Option<&str>,
+        connection_filter: Option<&str>,
+    ) -> Result<Vec<CachedConversation>, EddieError> {
         let conn = self.connection()?;
 
-        let sql = if classification_filter.is_some() {
-            // Filter by classification (e.g., 'chat' for Connections tab)
+        // Build the WHERE clause based on filters
+        let mut where_clauses = vec!["account_id = ?1".to_string()];
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(account_id.to_string())];
+
+        if let Some(classification) = classification_filter {
+            where_clauses.push("classification = ?".to_string());
+            params.push(Box::new(classification.to_string()));
+        }
+
+        // Add connection filter if specified
+        match connection_filter {
+            Some("connections") => {
+                // Only conversations where at least one participant is a connection
+                where_clauses.push(
+                    "EXISTS (
+                        SELECT 1 FROM entities e
+                        WHERE e.account_id = conversations.account_id
+                        AND e.is_connection = 1
+                        AND (',' || conversations.participant_key || ',') LIKE ('%,' || e.email || ',%')
+                    )".to_string()
+                );
+            }
+            Some("others") => {
+                // Only conversations where NO participants are connections
+                where_clauses.push(
+                    "NOT EXISTS (
+                        SELECT 1 FROM entities e
+                        WHERE e.account_id = conversations.account_id
+                        AND e.is_connection = 1
+                        AND (',' || conversations.participant_key || ',') LIKE ('%,' || e.email || ',%')
+                    )".to_string()
+                );
+            }
+            _ => {} // No connection filter
+        }
+
+        let where_clause = where_clauses.join(" AND ");
+        let sql = format!(
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
                     last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
              FROM conversations
-             WHERE account_id = ?1 AND classification = ?2
-             ORDER BY last_message_date DESC"
-        } else {
-            // Show all conversations (All tab)
-            "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                    last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
-             FROM conversations
-             WHERE account_id = ?1
-             ORDER BY last_message_date DESC"
-        };
+             WHERE {}
+             ORDER BY last_message_date DESC",
+            where_clause
+        );
 
         let mut stmt = conn
-            .prepare(sql)
+            .prepare(&sql)
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-        let conversations = if let Some(classification) = classification_filter {
-            stmt.query_map(params![account_id, classification], Self::row_to_conversation)
-                .map_err(|e| EddieError::Backend(e.to_string()))?
-                .filter_map(|r| r.ok())
-                .collect()
-        } else {
-            stmt.query_map(params![account_id], Self::row_to_conversation)
-                .map_err(|e| EddieError::Backend(e.to_string()))?
-                .filter_map(|r| r.ok())
-                .collect()
-        };
+        // Convert params to references
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+        let conversations = stmt
+            .query_map(param_refs.as_slice(), Self::row_to_conversation)
+            .map_err(|e| EddieError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
 
         Ok(conversations)
     }

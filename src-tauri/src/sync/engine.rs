@@ -645,6 +645,24 @@ impl SyncEngine {
         self.db.get_conversations(&self.account_id, classification_filter)
     }
 
+    /// Get conversations from cache with connection filtering
+    ///
+    /// connection_filter options:
+    /// - None: No connection filtering
+    /// - Some("connections"): Only conversations where at least one participant is a connection
+    /// - Some("others"): Only conversations where NO participants are connections
+    pub fn get_conversations_with_connection_filter(
+        &self,
+        classification_filter: Option<&str>,
+        connection_filter: Option<&str>,
+    ) -> Result<Vec<CachedConversation>, EddieError> {
+        self.db.get_conversations_with_connection_filter(
+            &self.account_id,
+            classification_filter,
+            connection_filter,
+        )
+    }
+
     /// Get messages for a conversation
     pub fn get_conversation_messages(
         &self,

@@ -136,9 +136,9 @@ pub async fn initial_sync(
 /// Get cached conversations from SQLite
 ///
 /// Tab parameter:
-/// - "connections": Only show conversations classified as 'chat'
+/// - "connections": Only show conversations classified as 'chat' where at least one participant is a connection
 /// - "all": Show all conversations regardless of classification
-/// - "others": Not implemented yet (returns empty list)
+/// - "others": Only show conversations classified as 'chat' where NO participants are connections
 #[tauri::command]
 pub async fn get_cached_conversations(
     manager: State<'_, SyncManager>,
@@ -148,28 +148,26 @@ pub async fn get_cached_conversations(
     let account_id = resolve_account_id_string(account)?;
     let tab = tab.as_deref().unwrap_or("connections");
 
-    // Determine classification filter based on tab
-    let classification_filter = match tab {
-        "connections" => Some("chat"),
-        "all" => None,
-        "others" => {
-            // Not implemented yet - return empty list
-            return Ok(vec![]);
-        }
-        _ => Some("chat"), // Default to connections
+    // Determine classification and connection filters based on tab
+    let (classification_filter, connection_filter) = match tab {
+        "connections" => (Some("chat"), Some("connections")),
+        "all" => (None, None),
+        "others" => (Some("chat"), Some("others")),
+        _ => (Some("chat"), Some("connections")), // Default to connections
     };
 
     let engine = manager.get_or_create(&account_id).await?;
     let conversations = engine
         .read()
         .await
-        .get_conversations(classification_filter)
+        .get_conversations_with_connection_filter(classification_filter, connection_filter)
         .map_err(|e| EddieError::Database(e.to_string()))?;
 
     tracing::info!(
-        "get_cached_conversations: tab={}, filter={:?}, found {} conversations",
+        "get_cached_conversations: tab={}, classification={:?}, connection={:?}, found {} conversations",
         tab,
         classification_filter,
+        connection_filter,
         conversations.len()
     );
 
