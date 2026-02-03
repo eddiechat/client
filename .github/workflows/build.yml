@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 concurrency:
@@ -20,6 +20,7 @@ jobs:
   # Desktop Builds
   # =============================================================================
   build-desktop:
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -97,7 +98,7 @@ jobs:
   build-macos-appstore:
     name: macOS App Store
     runs-on: macos-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    # if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -156,7 +157,7 @@ jobs:
           # Verify certificates imported
           echo "=== Signing identities ==="
           security find-identity -v -p codesigning /tmp/build.keychain
-          echo "=== Installer identities ==="
+          echo "=== All identities ==="
           security find-identity -v /tmp/build.keychain
 
       - name: Install macOS provisioning profile
@@ -173,15 +174,44 @@ jobs:
         run: |
           bunx tauri build --target universal-apple-darwin --bundles app
 
-      - name: Create signed .pkg installer
+      - name: Re-sign app with entitlements and create .pkg
         env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           APP_NAME="eddie.chat"
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          ENTITLEMENTS="entitlements.plist"
+
+          echo "=== App bundle contents ==="
+          ls -la "${APP_PATH}/Contents/"
+          ls -la "${APP_PATH}/Contents/MacOS/"
 
           # Embed provisioning profile in app bundle
           cp src-tauri/embedded.provisionprofile "${APP_PATH}/Contents/embedded.provisionprofile"
+
+          # Re-sign the main binary with entitlements
+          codesign --force --options runtime --sign "${APPLE_SIGNING_IDENTITY}" \
+            --entitlements "${ENTITLEMENTS}" \
+            "${APP_PATH}/Contents/MacOS/eddie-chat"
+
+          # Re-sign any helper binaries or frameworks if present
+          find "${APP_PATH}/Contents/Frameworks" -name "*.dylib" -o -name "*.framework" 2>/dev/null | while read f; do
+            codesign --force --options runtime --sign "${APPLE_SIGNING_IDENTITY}" "$f" || true
+          done
+
+          # Re-sign the entire app bundle
+          codesign --force --options runtime --sign "${APPLE_SIGNING_IDENTITY}" \
+            --entitlements "${ENTITLEMENTS}" \
+            "${APP_PATH}"
+
+          # Verify entitlements were applied
+          echo "=== Verifying entitlements ==="
+          codesign -d --entitlements - "${APP_PATH}/Contents/MacOS/eddie-chat"
+
+          # Verify codesign
+          echo "=== Verifying codesign ==="
+          codesign --verify --deep --strict "${APP_PATH}"
 
           # Create signed installer package
           xcrun productbuild \
@@ -237,7 +267,7 @@ jobs:
   build-ios-appstore:
     name: iOS App Store
     runs-on: macos-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    # if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -295,59 +325,70 @@ jobs:
           security find-identity -v -p codesigning $KEYCHAIN_PATH
 
       - name: Install iOS provisioning profile
+        id: profile
         env:
           IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
         run: |
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           echo -n "$IOS_MOBILE_PROVISION" | base64 --decode > $PP_PATH
 
-          # Install to standard location
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          # Extract UUID from profile and use it as filename
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< \
+          # Extract UUID and Name from profile
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< \
             $(security cms -D -i $PP_PATH))
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/${UUID}.mobileprovision
+          PP_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< \
+            $(security cms -D -i $PP_PATH))
 
-          echo "Installed provisioning profile with UUID: ${UUID}"
+          # Install to standard location using UUID as filename
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/${PP_UUID}.mobileprovision
+
+          echo "uuid=${PP_UUID}" >> $GITHUB_OUTPUT
+          echo "name=${PP_NAME}" >> $GITHUB_OUTPUT
+          echo "Installed provisioning profile: ${PP_NAME} (${PP_UUID})"
 
       - name: Initialize iOS project
         run: bunx tauri ios init
 
-      - name: Configure manual signing for CI
+      - name: Configure manual code signing
         env:
-          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PP_UUID: ${{ steps.profile.outputs.uuid }}
+          PP_NAME: ${{ steps.profile.outputs.name }}
         run: |
           PBXPROJ="src-tauri/gen/apple/eddie-chat.xcodeproj/project.pbxproj"
 
-          # Switch from automatic to manual signing
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' "$PBXPROJ"
+          echo "=== Before changes ==="
+          grep -n "CODE_SIGN\|PROVISIONING\|DEVELOPMENT_TEAM\|ProvisioningStyle" "$PBXPROJ" || true
 
-          # Set the development team
-          sed -i '' "s/DEVELOPMENT_TEAM = \"[^\"]*\"/DEVELOPMENT_TEAM = \"${APPLE_TEAM_ID}\"/g" "$PBXPROJ"
+          # Use Ruby for more reliable pbxproj editing
+          ruby << 'RUBY'
+          content = File.read(ENV['PBXPROJ'] || "src-tauri/gen/apple/eddie-chat.xcodeproj/project.pbxproj")
 
-          # Get provisioning profile UUID
-          PP_PATH=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" | head -1)
-          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< \
-            $(security cms -D -i "$PP_PATH"))
-          PP_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< \
-            $(security cms -D -i "$PP_PATH"))
+          # Switch to manual signing
+          content.gsub!('ProvisioningStyle = Automatic', 'ProvisioningStyle = Manual')
+          content.gsub!('CODE_SIGN_STYLE = Automatic', 'CODE_SIGN_STYLE = Manual')
 
-          echo "Profile UUID: $PP_UUID"
-          echo "Profile Name: $PP_NAME"
+          # Set Apple Distribution identity everywhere
+          content.gsub!(/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "[^"]*"/, '"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution"')
+          content.gsub!(/CODE_SIGN_IDENTITY = "[^"]*"/, 'CODE_SIGN_IDENTITY = "Apple Distribution"')
 
-          # Set provisioning profile in project
-          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = \"[^\"]*\"/PROVISIONING_PROFILE_SPECIFIER = \"${PP_NAME}\"/g" "$PBXPROJ"
+          # Set development team
+          team_id = ENV['APPLE_TEAM_ID']
+          content.gsub!(/DEVELOPMENT_TEAM = [^;]*;/, "DEVELOPMENT_TEAM = #{team_id};")
 
-          # If PROVISIONING_PROFILE_SPECIFIER doesn't exist, add it after CODE_SIGN_STYLE
-          if ! grep -q "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ"; then
-            sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"${PP_NAME}\";/g" "$PBXPROJ"
-          fi
+          # Set provisioning profile
+          pp_name = ENV['PP_NAME']
+          if content.include?('PROVISIONING_PROFILE_SPECIFIER')
+            content.gsub!(/PROVISIONING_PROFILE_SPECIFIER = "[^"]*"/, "PROVISIONING_PROFILE_SPECIFIER = \"#{pp_name}\"")
+          else
+            content.gsub!('CODE_SIGN_STYLE = Manual;', "CODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"#{pp_name}\";")
+          end
 
-          # Set code sign identity
-          sed -i '' 's/CODE_SIGN_IDENTITY = "[^"]*"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' "$PBXPROJ"
+          File.write(content.length > 0 ? (ENV['PBXPROJ'] || "src-tauri/gen/apple/eddie-chat.xcodeproj/project.pbxproj") : "", content)
+          RUBY
 
-          echo "=== Manual signing configured ==="
+          echo "=== After changes ==="
+          grep -n "CODE_SIGN\|PROVISIONING\|DEVELOPMENT_TEAM\|ProvisioningStyle" "$PBXPROJ" || true
 
       - name: Build iOS app for App Store
         env:
@@ -406,6 +447,7 @@ jobs:
   # Android Build
   # =============================================================================
   build-android:
+    if: false
     name: Mobile - Android
     runs-on: ubuntu-22.04
     continue-on-error: true
@@ -474,11 +516,10 @@ jobs:
 
   # =============================================================================
   # Development Release (Pre-release)
-  # Triggered on push to main branch
   # =============================================================================
   release-dev:
     name: Create Dev Release
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: false
     needs: [build-desktop]
     runs-on: ubuntu-latest
     permissions:
@@ -545,17 +586,6 @@ jobs:
             - Date: ${{ steps.date.outputs.date }}
             - Workflow: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
-            ---
-
-            ### Downloads
-
-            | Platform | Architecture | File |
-            |----------|--------------|------|
-            | Windows | x64 | `.msi` or `.exe` (NSIS) |
-            | macOS | Apple Silicon (M1+) | `.dmg` (aarch64) |
-            | macOS | Intel | `.dmg` (x86_64) |
-            | Linux | x64 | `.deb` or `.AppImage` |
-
       - name: Cleanup old dev releases
         uses: dev-drprasad/delete-older-releases@v0.3.4
         with:
@@ -567,11 +597,10 @@ jobs:
 
   # =============================================================================
   # Stable Release
-  # Triggered on push of version tags (v*)
   # =============================================================================
   release-stable:
     name: Create Stable Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: false
     needs: [build-desktop, build-macos-appstore, build-ios-appstore]
     runs-on: ubuntu-latest
     permissions:
@@ -641,17 +670,6 @@ jobs:
             ## Release ${{ steps.version.outputs.version }}
 
             See the automatically generated release notes below for changes since the last release.
-
-            ---
-
-            ### Downloads
-
-            | Platform | Architecture | File |
-            |----------|--------------|------|
-            | Windows | x64 | `.msi` or `.exe` (NSIS) |
-            | macOS | Apple Silicon (M1+) | `.dmg` (aarch64) |
-            | macOS | Intel | `.dmg` (x86_64) |
-            | Linux | x64 | `.deb` or `.AppImage` |
 
             ### App Store
             macOS and iOS builds have been uploaded to App Store Connect.
