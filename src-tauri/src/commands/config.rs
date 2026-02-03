@@ -63,6 +63,7 @@ pub struct SaveEmailAccountRequest {
     pub name: String,
     pub email: String,
     pub display_name: Option<String>,
+    pub aliases: Option<String>,
     pub imap_host: String,
     pub imap_port: u16,
     pub imap_tls: bool,
@@ -77,7 +78,10 @@ pub struct SaveEmailAccountRequest {
 
 /// Save a new account configuration
 #[tauri::command]
-pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieError> {
+pub async fn save_account(
+    request: SaveEmailAccountRequest,
+    manager: State<'_, SyncManager>,
+) -> Result<(), EddieError> {
     info!("Saving account: {}", request.name);
 
     let imap_auth = AuthConfig::Password {
@@ -123,11 +127,15 @@ pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieE
         .map(|c| serde_json::to_string(c))
         .transpose()?;
 
+    let has_aliases = request.aliases.is_some();
+    let account_id = request.email.clone();
+
     let db_config = EmailConnectionConfig {
-        account_id: request.email.clone(),
+        account_id: account_id.clone(),
         active: true,
         email: request.email,
         display_name: request.display_name,
+        aliases: request.aliases,
         imap_config: imap_json,
         smtp_config: smtp_json,
         created_at: chrono::Utc::now(),
@@ -137,6 +145,25 @@ pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieE
     init_config_db()?;
     save_connection_config(&db_config)?;
     set_active_account(&db_config.account_id)?;
+
+    // If aliases were provided, reprocess entities to mark recipients as connections
+    if has_aliases {
+        info!("Aliases provided, reprocessing entities for account: {}", account_id);
+
+        // Remove existing engine so it gets recreated with the new aliases
+        manager.remove(&account_id).await;
+
+        // Create new sync engine with updated aliases from database
+        if let Ok(engine) = manager.get_or_create(&account_id).await {
+            let engine_guard = engine.read().await;
+
+            // Update entities to mark recipients as connections when sender is user or alias
+            match engine_guard.reprocess_entities_for_aliases() {
+                Ok(count) => info!("Reprocessed {} entity connections for account: {}", count, account_id),
+                Err(e) => tracing::warn!("Failed to reprocess entities: {}", e),
+            }
+        }
+    }
 
     Ok(())
 }

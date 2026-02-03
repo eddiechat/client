@@ -5,6 +5,7 @@ export interface AccountEditData {
   name: string;
   email: string;
   display_name?: string;
+  aliases?: string;
   imap_host: string;
   imap_port: number;
   imap_tls: boolean;
@@ -34,6 +35,7 @@ export function AccountConfigModal({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [aliases, setAliases] = useState("");
   const [imapHost, setImapHost] = useState("");
   const [imapPort, setImapPort] = useState(993);
   const [imapTls, setImapTls] = useState(true);
@@ -61,6 +63,7 @@ export function AccountConfigModal({
         setName(editData.name);
         setEmail(editData.email);
         setDisplayName(editData.display_name || "");
+        setAliases(editData.aliases || "");
         setImapHost(editData.imap_host);
         setImapPort(editData.imap_port);
         setImapTls(editData.imap_tls);
@@ -97,6 +100,7 @@ export function AccountConfigModal({
     setName("");
     setEmail("");
     setDisplayName("");
+    setAliases("");
     setImapHost("");
     setImapPort(993);
     setImapTls(true);
@@ -142,6 +146,7 @@ export function AccountConfigModal({
         name: name.trim(),
         email: email.trim(),
         display_name: displayName.trim() || undefined,
+        aliases: aliases.trim() || undefined,
         imap_host: imapHost.trim(),
         imap_port: imapPort,
         imap_tls: imapTls,
@@ -287,6 +292,26 @@ export function AccountConfigModal({
                 placeholder="Your Name"
                 className={inputClass}
               />
+            </div>
+
+            <div>
+              <label
+                htmlFor="aliases"
+                className="text-sm font-medium text-text-muted"
+              >
+                Aliases (optional):
+              </label>
+              <input
+                id="aliases"
+                type="text"
+                value={aliases}
+                onChange={(e) => setAliases(e.target.value)}
+                placeholder="alias1@example.com, alias2@example.com"
+                className={inputClass}
+              />
+              <p className="text-xs text-text-muted mt-1">
+                Comma-separated list of email aliases for this account
+              </p>
             </div>
           </fieldset>
 

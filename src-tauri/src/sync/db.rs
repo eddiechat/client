@@ -142,6 +142,7 @@ pub struct EmailConnectionConfig {
     pub active: bool,
     pub email: String,
     pub display_name: Option<String>,
+    pub aliases: Option<String>, // Comma-separated list of email aliases
     pub imap_config: Option<String>, // JSON serialized ImapConfig
     pub smtp_config: Option<String>, // JSON serialized SmtpConfig
     pub created_at: DateTime<Utc>,
@@ -238,6 +239,7 @@ impl ConfigDatabase {
                 active INTEGER DEFAULT 0,
                 email TEXT NOT NULL,
                 display_name TEXT,
+                aliases TEXT,  -- Comma-separated list of email aliases
                 imap_config TEXT,  -- JSON serialized ImapConfig
                 smtp_config TEXT,  -- JSON serialized SmtpConfig
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -316,12 +318,13 @@ impl ConfigDatabase {
     pub fn upsert_connection_config(&self, config: &EmailConnectionConfig) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
-            "INSERT INTO connection_configs (account_id, active, email, display_name, imap_config, smtp_config, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+            "INSERT INTO connection_configs (account_id, active, email, display_name, aliases, imap_config, smtp_config, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
              ON CONFLICT(account_id) DO UPDATE SET
                 active = excluded.active,
                 email = excluded.email,
                 display_name = excluded.display_name,
+                aliases = excluded.aliases,
                 imap_config = excluded.imap_config,
                 smtp_config = excluded.smtp_config,
                 updated_at = datetime('now')",
@@ -330,6 +333,7 @@ impl ConfigDatabase {
                 config.active as i32,
                 config.email,
                 config.display_name,
+                config.aliases,
                 config.imap_config,
                 config.smtp_config,
             ],
@@ -347,7 +351,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs WHERE account_id = ?1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -365,7 +369,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs ORDER BY COALESCE(display_name, email) ASC",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -384,7 +388,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, created_at, updated_at
                  FROM connection_configs WHERE active = 1 LIMIT 1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -439,16 +443,17 @@ impl ConfigDatabase {
             active: row.get::<_, i32>(1)? != 0,
             email: row.get(2)?,
             display_name: row.get(3)?,
-            imap_config: row.get(4)?,
-            smtp_config: row.get(5)?,
+            aliases: row.get(4)?,
+            imap_config: row.get(5)?,
+            smtp_config: row.get(6)?,
             created_at: row
-                .get::<_, String>(6)
+                .get::<_, String>(7)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
             updated_at: row
-                .get::<_, String>(7)
+                .get::<_, String>(8)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
@@ -987,6 +992,26 @@ impl SyncDatabase {
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
+    }
+
+    /// Get all messages for an account
+    pub fn get_all_messages_for_account(&self, account_id: &str) -> Result<Vec<CachedChatMessage>, EddieError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
+                    from_address, from_name, to_addresses, cc_addresses, subject, date, flags,
+                    has_attachment, body_cached, text_body, html_body, raw_size, created_at, updated_at
+             FROM messages WHERE account_id = ?1
+             ORDER BY date ASC"
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let messages = stmt
+            .query_map(params![account_id], Self::row_to_cached_message)
+            .map_err(|e| EddieError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(messages)
     }
 
     /// Update flags for a message (replaces all flags)

@@ -45,6 +45,7 @@ export interface EmailAccountDetails {
   name: string;
   email: string;
   display_name?: string;
+  aliases?: string;
   imap_host: string;
   imap_port: number;
   imap_tls: boolean;
@@ -60,6 +61,7 @@ export interface SaveEmailAccountRequest {
   name: string;
   email: string;
   display_name?: string;
+  aliases?: string;
   imap_host: string;
   imap_port: number;
   imap_tls: boolean;

@@ -73,6 +73,7 @@ pub struct EmailAccountDetails {
     pub name: String,
     pub email: String,
     pub display_name: Option<String>,
+    pub aliases: Option<String>,
     pub imap_host: String,
     pub imap_port: u16,
     pub imap_tls: bool,

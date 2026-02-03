@@ -194,6 +194,7 @@ impl ConversationGrouper {
         &self,
         account_id: &str,
         user_email: &str,
+        user_aliases: &[String],
         message: &CachedChatMessage,
     ) -> Result<i64, EddieError> {
         // Parse addresses
@@ -230,10 +231,12 @@ impl ConversationGrouper {
         let participants_json = serde_json::to_string(&participants)
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-        // Check if message is from user (outgoing)
+        // Check if message is from user or one of their aliases (outgoing)
         let user_normalized = Participant::normalize_email(user_email);
         let from_participant = Participant::from_address(&message.from_address);
-        let is_outgoing = Participant::normalize_email(&from_participant.email) == user_normalized;
+        let from_normalized = Participant::normalize_email(&from_participant.email);
+        let is_outgoing = from_normalized == user_normalized
+            || user_aliases.iter().any(|alias| &from_normalized == alias);
 
         // Parse flags to check for \Seen
         let flags: Vec<String> = serde_json::from_str(&message.flags).unwrap_or_default();
@@ -309,6 +312,7 @@ impl ConversationGrouper {
         &self,
         account_id: &str,
         user_email: &str,
+        user_aliases: &[String],
     ) -> Result<u32, EddieError> {
         // Get all messages for the account across all folders
         let mut conn = self.db.connection()?;
@@ -383,7 +387,7 @@ impl ConversationGrouper {
         let mut count = 0;
         for message in &messages {
             if self
-                .assign_to_conversation_with_tx(&tx, account_id, user_email, message)
+                .assign_to_conversation_with_tx(&tx, account_id, user_email, user_aliases, message)
                 .is_ok()
             {
                 count += 1;
@@ -412,6 +416,7 @@ impl ConversationGrouper {
         tx: &rusqlite::Transaction,
         account_id: &str,
         user_email: &str,
+        user_aliases: &[String],
         message: &CachedChatMessage,
     ) -> Result<i64, EddieError> {
         // Parse addresses
@@ -448,10 +453,12 @@ impl ConversationGrouper {
         let participants_json = serde_json::to_string(&participants)
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-        // Check if message is from user (outgoing)
+        // Check if message is from user or one of their aliases (outgoing)
         let user_normalized = Participant::normalize_email(user_email);
         let from_participant = Participant::from_address(&message.from_address);
-        let is_outgoing = Participant::normalize_email(&from_participant.email) == user_normalized;
+        let from_normalized = Participant::normalize_email(&from_participant.email);
+        let is_outgoing = from_normalized == user_normalized
+            || user_aliases.iter().any(|alias| &from_normalized == alias);
 
         // Parse flags to check for \Seen
         let flags: Vec<String> = serde_json::from_str(&message.flags).unwrap_or_default();
@@ -631,6 +638,7 @@ impl ConversationGrouper {
         &self,
         account_id: &str,
         user_email: &str,
+        user_aliases: &[String],
         message: &CachedChatMessage,
         old_flags: &[String],
         new_flags: &[String],
@@ -660,8 +668,9 @@ impl ConversationGrouper {
         // Check if this is an incoming message
         let user_normalized = Participant::normalize_email(user_email);
         let from_participant = Participant::from_address(&message.from_address);
-        let is_outgoing =
-            Participant::normalize_email(&from_participant.email) == user_normalized;
+        let from_normalized = Participant::normalize_email(&from_participant.email);
+        let is_outgoing = from_normalized == user_normalized
+            || user_aliases.iter().any(|alias| &from_normalized == alias);
 
         // Only adjust unread count for incoming messages
         if is_outgoing {

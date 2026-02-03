@@ -97,6 +97,7 @@ pub async fn get_account_details(name: String) -> Result<EmailAccountDetails, Ed
         name: name.clone(),
         email: db_config.email.clone(),
         display_name: db_config.display_name.clone(),
+        aliases: db_config.aliases.clone(),
         imap_host: imap.host.clone(),
         imap_port: imap.port,
         imap_tls: imap.tls,

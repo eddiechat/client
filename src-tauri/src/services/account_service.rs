@@ -124,6 +124,7 @@ fn save_account_config(
         active: true,
         email: email.to_string(),
         display_name: display_name.clone(),
+        aliases: None, // TODO: Add aliases support to account creation
         imap_config: imap_json,
         smtp_config: smtp_json,
         created_at: Utc::now(),

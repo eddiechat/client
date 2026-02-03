@@ -130,6 +130,7 @@ pub enum SyncEvent {
 pub struct SyncEngine {
     account_id: String,
     user_email: String,
+    user_aliases: Vec<String>, // List of email aliases for this account
     account_config: EmailAccountConfig,
     config: SyncConfig,
     db: Arc<SyncDatabase>,
@@ -151,6 +152,7 @@ impl SyncEngine {
     pub fn new(
         account_id: String,
         user_email: String,
+        user_aliases: Vec<String>,
         account_config: EmailAccountConfig,
         config: SyncConfig,
         app_handle: Option<tauri::AppHandle>,
@@ -181,6 +183,7 @@ impl SyncEngine {
         let engine = Self {
             account_id,
             user_email,
+            user_aliases,
             account_config,
             config,
             db,
@@ -373,7 +376,7 @@ impl SyncEngine {
 
         let conv_count = self
             .conversation_grouper
-            .rebuild_conversations(&self.account_id, &self.user_email)?;
+            .rebuild_conversations(&self.account_id, &self.user_email, &self.user_aliases)?;
 
         info!("Rebuilt {} conversations", conv_count);
 
@@ -480,7 +483,7 @@ impl SyncEngine {
             message_ids.push(msg_id);
 
             // Extract entities (participants) from the message
-            extract_entities_from_message(&self.db, &self.account_id, &self.user_email, &cached_msg);
+            extract_entities_from_message(&self.db, &self.account_id, &self.user_email, &self.user_aliases, &cached_msg);
 
             // Classify if enabled
             if self.config.auto_classify {
@@ -605,6 +608,7 @@ impl SyncEngine {
                 if let Ok(conv_id) = self.conversation_grouper.assign_to_conversation(
                     &self.account_id,
                     &self.user_email,
+                    &self.user_aliases,
                     &message,
                 ) {
                     affected_conversations.insert(conv_id);
@@ -680,7 +684,7 @@ impl SyncEngine {
         account_id: &str,
         user_email: &str,
     ) -> Result<u32, EddieError> {
-        self.conversation_grouper.rebuild_conversations(account_id, user_email)
+        self.conversation_grouper.rebuild_conversations(account_id, user_email, &self.user_aliases)
     }
 
     /// Queue a user action
@@ -692,6 +696,120 @@ impl SyncEngine {
     /// Returns up to `limit` entities matching the query, prioritizing connections and recent contacts
     pub fn search_entities(&self, query: &str, limit: u32) -> Result<Vec<crate::sync::db::Entity>, EddieError> {
         self.db.search_entities(&self.account_id, query, limit)
+    }
+
+    /// Reprocess all messages to update entity connections based on current aliases
+    ///
+    /// This should be called after aliases are added/updated to retroactively mark
+    /// recipients as connections if the user (or their aliases) have sent messages to them.
+    pub fn reprocess_entities_for_aliases(&self) -> Result<u32, EddieError> {
+        info!("Reprocessing entities for account: {}", self.account_id);
+        info!("User email: {}, Aliases: {:?}", self.user_email, self.user_aliases);
+
+        // Get all messages for this account
+        let messages = self.db.get_all_messages_for_account(&self.account_id)?;
+        info!("Found {} messages to process", messages.len());
+
+        let mut entities_to_mark: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for message in messages {
+            // Check if message is from user or any alias
+            let from_lower = message.from_address.to_lowercase();
+            let user_email_lower = self.user_email.to_lowercase();
+            let is_from_user = from_lower == user_email_lower
+                || self.user_aliases.iter().any(|alias| alias == &from_lower);
+
+            if is_from_user {
+                // This is an outgoing message - collect all recipient emails
+                let contact_timestamp = message.date.unwrap_or_else(chrono::Utc::now);
+
+                // Process TO addresses
+                let to_addresses: Vec<String> = serde_json::from_str(&message.to_addresses).unwrap_or_default();
+                for addr in to_addresses {
+                    let (name, email) = parse_email_address(&addr);
+                    let email_lower = email.to_lowercase();
+
+                    // Skip self and aliases
+                    if email_lower == user_email_lower || self.user_aliases.iter().any(|alias| alias == &email_lower) {
+                        continue;
+                    }
+
+                    entities_to_mark.insert(email_lower.clone());
+
+                    self.db.upsert_entity(
+                        &self.account_id,
+                        &email,
+                        name.as_deref(),
+                        true, // Mark as connection
+                        contact_timestamp,
+                    )?;
+                }
+
+                // Process CC addresses
+                if let Some(cc_json) = &message.cc_addresses {
+                    let cc_addresses: Vec<String> = serde_json::from_str(cc_json).unwrap_or_default();
+                    for addr in cc_addresses {
+                        let (name, email) = parse_email_address(&addr);
+                        let email_lower = email.to_lowercase();
+
+                        // Skip self and aliases
+                        if email_lower == user_email_lower || self.user_aliases.iter().any(|alias| alias == &email_lower) {
+                            continue;
+                        }
+
+                        entities_to_mark.insert(email_lower.clone());
+
+                        self.db.upsert_entity(
+                            &self.account_id,
+                            &email,
+                            name.as_deref(),
+                            true, // Mark as connection
+                            contact_timestamp,
+                        )?;
+                    }
+                }
+            }
+        }
+
+        let count = entities_to_mark.len() as u32;
+        info!("Marked {} unique entities as connections for account: {}", count, self.account_id);
+        info!("Sample entities: {:?}", entities_to_mark.iter().take(5).collect::<Vec<_>>());
+
+        Ok(count)
+    }
+
+    /// Reclassify all messages for this account
+    ///
+    /// This re-runs the classifier on all messages and updates the message_classifications table,
+    /// then updates conversation classifications accordingly. This is useful after adding aliases
+    /// to ensure messages from aliases are properly classified as 'chat'.
+    pub fn reclassify_all_messages(&self) -> Result<u32, EddieError> {
+        info!("Reclassifying all messages for account: {}", self.account_id);
+
+        // Get all messages for this account
+        let messages = self.db.get_all_messages_for_account(&self.account_id)?;
+        let total_messages = messages.len();
+
+        info!("Found {} messages to reclassify", total_messages);
+
+        // Reclassify each message
+        let mut reclassified_count = 0u32;
+        for message in messages {
+            if let Err(e) = self.classifier.classify_and_store(&message) {
+                warn!("Failed to reclassify message {}: {}", message.id, e);
+            } else {
+                reclassified_count += 1;
+            }
+        }
+
+        info!("Reclassified {} messages", reclassified_count);
+
+        // Update conversation classifications based on the newly classified messages
+        self.db.update_conversation_classifications(&self.account_id)?;
+
+        info!("Updated conversation classifications for account: {}", self.account_id);
+
+        Ok(reclassified_count)
     }
 
     /// Replay pending actions from the action queue
@@ -1023,18 +1141,21 @@ fn parse_email_address(addr: &str) -> (Option<String>, String) {
 }
 
 /// Extract and store entities from a cached message
-/// If the message is from the user, recipients are marked as connections
+/// If the message is from the user or one of their aliases, recipients are marked as connections
 fn extract_entities_from_message(
     db: &SyncDatabase,
     account_id: &str,
     user_email: &str,
+    user_aliases: &[String],
     msg: &CachedChatMessage,
 ) {
     let contact_timestamp = msg.date.unwrap_or_else(Utc::now);
     let user_email_lower = user_email.to_lowercase();
+    let from_address_lower = msg.from_address.to_lowercase();
 
-    // Check if the message is from the user (outgoing)
-    let is_from_user = msg.from_address.to_lowercase() == user_email_lower;
+    // Check if the message is from the user or one of their aliases (outgoing)
+    let is_from_user = from_address_lower == user_email_lower
+        || user_aliases.iter().any(|alias| alias == &from_address_lower);
 
     // Extract sender (from)
     if !is_from_user {
@@ -1054,9 +1175,13 @@ fn extract_entities_from_message(
     let to_addresses: Vec<String> = serde_json::from_str(&msg.to_addresses).unwrap_or_default();
     for addr in to_addresses {
         let (name, email) = parse_email_address(&addr);
-        if email.to_lowercase() == user_email_lower {
-            continue; // Skip self
+        let email_lower = email.to_lowercase();
+
+        // Skip self and aliases
+        if email_lower == user_email_lower || user_aliases.iter().any(|alias| alias == &email_lower) {
+            continue;
         }
+
         if let Err(e) = db.upsert_entity(
             account_id,
             &email,
@@ -1073,9 +1198,13 @@ fn extract_entities_from_message(
         let cc_addresses: Vec<String> = serde_json::from_str(cc_json).unwrap_or_default();
         for addr in cc_addresses {
             let (name, email) = parse_email_address(&addr);
-            if email.to_lowercase() == user_email_lower {
-                continue; // Skip self
+            let email_lower = email.to_lowercase();
+
+            // Skip self and aliases
+            if email_lower == user_email_lower || user_aliases.iter().any(|alias| alias == &email_lower) {
+                continue;
             }
+
             if let Err(e) = db.upsert_entity(
                 account_id,
                 &email,
