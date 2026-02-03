@@ -1010,7 +1010,7 @@ fn extract_entities_from_message(
     db: &SyncDatabase,
     account_id: &str,
     user_email: &str,
-    msg: &CachedMessage,
+    msg: &CachedChatMessage,
 ) {
     let contact_timestamp = msg.date.unwrap_or_else(Utc::now);
     let user_email_lower = user_email.to_lowercase();
