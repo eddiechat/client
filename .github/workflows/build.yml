@@ -291,6 +291,9 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
+      - name: Install ImageMagick
+        run: brew install imagemagick
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
@@ -349,52 +352,119 @@ jobs:
       - name: Initialize iOS project
         run: bunx tauri ios init
 
+      - name: Strip alpha from generated iOS icons
+        run: |
+          # Apple rejects icons with alpha channel, but Tauri requires RGBA source icons
+          # Fix only the generated icons, not the source icons
+          find src-tauri/gen/apple -name "*.png" -exec magick {} -background white -alpha remove -alpha off {} \;
+
       - name: Configure manual code signing
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PP_UUID: ${{ steps.profile.outputs.uuid }}
           PP_NAME: ${{ steps.profile.outputs.name }}
         run: |
+          PROJECT_YML="src-tauri/gen/apple/project.yml"
           PBXPROJ="src-tauri/gen/apple/eddie-chat.xcodeproj/project.pbxproj"
 
-          echo "=== Before changes ==="
-          grep -n "CODE_SIGN\|PROVISIONING\|DEVELOPMENT_TEAM\|ProvisioningStyle" "$PBXPROJ" || true
+          echo "=== project.yml BEFORE ==="
+          cat "$PROJECT_YML"
 
-          # Use Ruby for more reliable pbxproj editing
+          # Fix project.yml — the XcodeGen source of truth
           ruby << 'RUBY'
-          content = File.read(ENV['PBXPROJ'] || "src-tauri/gen/apple/eddie-chat.xcodeproj/project.pbxproj")
+          require 'yaml'
 
-          # Switch to manual signing
-          content.gsub!('ProvisioningStyle = Automatic', 'ProvisioningStyle = Manual')
-          content.gsub!('CODE_SIGN_STYLE = Automatic', 'CODE_SIGN_STYLE = Manual')
-
-          # Set Apple Distribution identity everywhere
-          content.gsub!(/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "[^"]*"/, '"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution"')
-          content.gsub!(/CODE_SIGN_IDENTITY = "[^"]*"/, 'CODE_SIGN_IDENTITY = "Apple Distribution"')
-
-          # Set development team
-          team_id = ENV['APPLE_TEAM_ID']
-          content.gsub!(/DEVELOPMENT_TEAM = [^;]*;/, "DEVELOPMENT_TEAM = #{team_id};")
-
-          # Set provisioning profile
+          path = "src-tauri/gen/apple/project.yml"
+          yml = YAML.load_file(path)
+          team = ENV['APPLE_TEAM_ID']
           pp_name = ENV['PP_NAME']
-          if content.include?('PROVISIONING_PROFILE_SPECIFIER')
-            content.gsub!(/PROVISIONING_PROFILE_SPECIFIER = "[^"]*"/, "PROVISIONING_PROFILE_SPECIFIER = \"#{pp_name}\"")
-          else
-            content.gsub!('CODE_SIGN_STYLE = Manual;', "CODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"#{pp_name}\";")
+
+          # Fix signing in settingGroups
+          if yml.dig('settingGroups', 'app', 'base')
+            yml['settingGroups']['app']['base']['DEVELOPMENT_TEAM'] = team
+            yml['settingGroups']['app']['base']['CODE_SIGN_STYLE'] = 'Manual'
+            yml['settingGroups']['app']['base']['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
+            yml['settingGroups']['app']['base']['PROVISIONING_PROFILE_SPECIFIER'] = pp_name
           end
 
-          File.write(content.length > 0 ? (ENV['PBXPROJ'] || "src-tauri/gen/apple/eddie-chat.xcodeproj/project.pbxproj") : "", content)
+          # Fix signing in target settings
+          if yml.dig('targets', 'eddie-chat_iOS', 'settings', 'base')
+            yml['targets']['eddie-chat_iOS']['settings']['base']['CODE_SIGN_STYLE'] = 'Manual'
+            yml['targets']['eddie-chat_iOS']['settings']['base']['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
+            yml['targets']['eddie-chat_iOS']['settings']['base']['DEVELOPMENT_TEAM'] = team
+            yml['targets']['eddie-chat_iOS']['settings']['base']['PROVISIONING_PROFILE_SPECIFIER'] = pp_name
+          end
+
+          # Prevent libapp.a from being copied into the app bundle
+          target = yml['targets']['eddie-chat_iOS']
+          if target && target['sources']
+            target['sources'] = target['sources'].map do |s|
+              if s.is_a?(String) && s == 'Externals'
+                { 'path' => 'Externals', 'buildPhase' => 'none' }
+              elsif s.is_a?(Hash) && s['path'] == 'Externals'
+                s.merge('buildPhase' => 'none')
+              else
+                s
+              end
+            end
+          end
+
+          File.write(path, yml.to_yaml)
           RUBY
 
-          echo "=== After changes ==="
+          echo "=== project.yml AFTER ==="
+          cat "$PROJECT_YML"
+
+          # Regenerate pbxproj from the fixed project.yml
+          echo "=== Regenerating Xcode project from project.yml ==="
+          cd src-tauri/gen/apple
+          xcodegen generate
+          cd -
+
+          echo "=== pbxproj signing settings ==="
           grep -n "CODE_SIGN\|PROVISIONING\|DEVELOPMENT_TEAM\|ProvisioningStyle" "$PBXPROJ" || true
+
+          # Update ExportOptions.plist
+          cat > src-tauri/gen/apple/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>teamID</key>
+              <string>${APPLE_TEAM_ID}</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>chat.eddie</key>
+                  <string>${PP_NAME}</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
 
       - name: Build iOS app for App Store
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
         run: |
-          bunx tauri ios build -- --export-method app-store-connect
+          # Tauri needs APPLE_API_KEY_PATH pointing to the .p8 file
+          mkdir -p ~/private_keys
+          echo -n "$APPLE_API_PRIVATE_KEY" | base64 --decode > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+          export APPLE_API_KEY_PATH=~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+          # Clean stale Externals to avoid duplicate libapp.a error
+          rm -rf src-tauri/gen/apple/Externals/arm64/debug
+          rm -rf src-tauri/gen/apple/Externals/x86_64
+
+          bunx tauri ios build --export-method app-store-connect
 
       - name: Upload to TestFlight
         env:
@@ -415,6 +485,15 @@ jobs:
           fi
 
           echo "Found IPA: $IPA_PATH"
+
+          # Remove libapp.a from the IPA (Apple rejects standalone .a files in bundle)
+          echo "=== Removing libapp.a from IPA ==="
+          IPA_TMPDIR=$(mktemp -d)
+          unzip -q "$IPA_PATH" -d "$IPA_TMPDIR"
+          find "$IPA_TMPDIR" -name "libapp.a" -delete
+          cd "$IPA_TMPDIR" && zip -qr "$OLDPWD/$IPA_PATH" . && cd "$OLDPWD"
+          rm -rf "$IPA_TMPDIR"
+          echo "libapp.a removed from IPA"
 
           # Validate first
           xcrun altool --validate-app \
