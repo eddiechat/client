@@ -20,7 +20,6 @@ jobs:
   # Desktop Builds
   # =============================================================================
   build-desktop:
-    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -98,7 +97,7 @@ jobs:
   build-macos-appstore:
     name: macOS App Store
     runs-on: macos-latest
-    # if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -267,7 +266,7 @@ jobs:
   build-ios-appstore:
     name: iOS App Store
     runs-on: macos-latest
-    # if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -526,7 +525,6 @@ jobs:
   # Android Build
   # =============================================================================
   build-android:
-    if: false
     name: Mobile - Android
     runs-on: ubuntu-22.04
     continue-on-error: true
@@ -598,7 +596,6 @@ jobs:
   # =============================================================================
   release-dev:
     name: Create Dev Release
-    if: false
     needs: [build-desktop]
     runs-on: ubuntu-latest
     permissions:
@@ -679,7 +676,6 @@ jobs:
   # =============================================================================
   release-stable:
     name: Create Stable Release
-    if: false
     needs: [build-desktop, build-macos-appstore, build-ios-appstore]
     runs-on: ubuntu-latest
     permissions:
