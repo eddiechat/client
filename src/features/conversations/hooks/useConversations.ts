@@ -64,7 +64,6 @@ export function useConversations(account?: string, tab: 'connections' | 'all' | 
   const refreshConversations = useCallback(async () => {
     try {
       const cachedConvs = await getCachedConversations(tab, account);
-      console.log(`[useConversations] Refreshed ${cachedConvs.length} conversations for tab="${tab}"`, cachedConvs);
       setConversations(cachedConvs);
     } catch (e) {
       console.error("Failed to refresh conversations:", e);

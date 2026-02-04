@@ -27,10 +27,6 @@ export function Avatar({
     () => {
       if (email) {
         const url = getGravatarUrl(email, size);
-        // Debug logging
-        if (import.meta.env.DEV) {
-          console.log('[Avatar] email:', email, 'name:', name, 'gravatarUrl:', url);
-        }
         return url;
       }
       return null;
@@ -44,8 +40,8 @@ export function Avatar({
   const initials = useMemo(() => getInitials(name), [name]);
 
   // Reset image loading state when gravatar URL changes
-  // Initialize with current URL to prevent unnecessary reset on first mount
-  const prevUrlRef = useRef<string | null>(gravatarUrl);
+  // Track the URL to reset status when it actually changes
+  const prevUrlRef = useRef<string | null>(null);
   useEffect(() => {
     if (prevUrlRef.current !== gravatarUrl) {
       setImageStatus("loading");
@@ -79,15 +75,9 @@ export function Avatar({
           className="absolute inset-0 w-full h-full object-cover rounded-full"
           style={{ display: imageStatus === "loaded" ? "block" : "none" }}
           onError={() => {
-            if (import.meta.env.DEV) {
-              console.log('[Avatar] Image failed to load:', email, gravatarUrl);
-            }
             setImageStatus("error");
           }}
           onLoad={() => {
-            if (import.meta.env.DEV) {
-              console.log('[Avatar] Image loaded successfully:', email, gravatarUrl);
-            }
             setImageStatus("loaded");
           }}
         />
