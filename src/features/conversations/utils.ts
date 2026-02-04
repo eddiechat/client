@@ -111,13 +111,27 @@ export function getAvatarTooltip(from: string, messageId?: string): string {
  */
 export function isOutgoing(
   from: string,
-  currentAccountEmail?: string
+  currentAccountEmail?: string,
+  aliases?: string[]
 ): boolean {
   if (!currentAccountEmail) return false;
   const fromEmail = from.toLowerCase();
   const accountEmail = currentAccountEmail.toLowerCase();
-  return (
+
+  // Check against main account email
+  const isFromAccount =
     fromEmail.includes(accountEmail) ||
-    accountEmail.includes(fromEmail.replace(/<|>/g, "").split("@")[0])
-  );
+    accountEmail.includes(fromEmail.replace(/<|>/g, "").split("@")[0]);
+
+  if (isFromAccount) return true;
+
+  // Check against aliases
+  if (aliases && aliases.length > 0) {
+    return aliases.some(alias => {
+      const aliasEmail = alias.trim().toLowerCase();
+      return fromEmail.includes(aliasEmail);
+    });
+  }
+
+  return false;
 }

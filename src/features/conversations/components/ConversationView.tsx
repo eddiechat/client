@@ -29,6 +29,7 @@ interface ConversationViewProps {
   loading?: boolean;
   error?: string | null;
   currentAccountEmail?: string;
+  currentAccountAliases?: string[];
   onSendMessage: (text: string, attachments?: ComposeAttachment[]) => void;
   onBack?: () => void;
   isComposing?: boolean;
@@ -47,6 +48,7 @@ export function ConversationView({
   loading,
   error,
   currentAccountEmail,
+  currentAccountAliases = [],
   onSendMessage,
   onBack,
   isComposing,
@@ -530,7 +532,8 @@ export function ConversationView({
                 {messages.map((message, index) => {
                   const isOut = isOutgoing(
                     message.envelope.from,
-                    currentAccountEmail
+                    currentAccountEmail,
+                    currentAccountAliases
                   );
                   const showDateSeparator =
                     index === 0 ||

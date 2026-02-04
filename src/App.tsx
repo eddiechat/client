@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   AccountConfigModal,
   AccountSetupWizard,
@@ -44,6 +44,9 @@ function App() {
   // Account setup wizard state
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
 
+  // Current account aliases state
+  const [currentAccountAliases, setCurrentAccountAliases] = useState<string[]>([]);
+
   // Hooks for data fetching
   const {
     accounts,
@@ -55,6 +58,27 @@ function App() {
 
   // Get current account email for determining message direction
   const currentAccountEmail = currentAccount || undefined;
+
+  // Fetch account details (including aliases) when current account changes
+  useEffect(() => {
+    if (!currentAccount) {
+      setCurrentAccountAliases([]);
+      return;
+    }
+
+    getAccountDetails(currentAccount)
+      .then((details) => {
+        // Parse comma-separated aliases string into array
+        const aliases = details.aliases
+          ? details.aliases.split(',').map(a => a.trim()).filter(a => a.length > 0)
+          : [];
+        setCurrentAccountAliases(aliases);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch account aliases:", err);
+        setCurrentAccountAliases([]);
+      });
+  }, [currentAccount]);
 
   // Show setup wizard when no accounts are configured
   const showSetupWizard = !accountsLoading && accounts.length === 0;
@@ -345,6 +369,7 @@ function App() {
           loading={messagesLoading}
           error={messagesError}
           currentAccountEmail={currentAccountEmail}
+          currentAccountAliases={currentAccountAliases}
           onSendMessage={handleSendFromConversation}
           onBack={handleBack}
           isComposing={isComposing}
