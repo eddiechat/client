@@ -874,15 +874,17 @@ function MessageBubble({
       >
         {!isOutgoing && (
           <Avatar
-            email={extractEmail(message.envelope.from)}
-            name={getSenderName(message.envelope.from)}
+            email={message.envelope.from ? extractEmail(message.envelope.from) : ""}
+            name={message.envelope.from ? getSenderName(message.envelope.from) : "Unknown"}
             size={32}
             className="self-end cursor-pointer"
-            title={getAvatarTooltip(message.envelope.from, message.id)}
+            title={message.envelope.from ? getAvatarTooltip(message.envelope.from, message.id) : ""}
             onClick={() => {
-              const email = extractEmail(message.envelope.from);
-              const name = getSenderName(message.envelope.from);
-              if (email) onAvatarClick(email, name);
+              if (message.envelope.from) {
+                const email = extractEmail(message.envelope.from);
+                const name = getSenderName(message.envelope.from);
+                if (email) onAvatarClick(email, name);
+              }
             }}
           />
         )}
