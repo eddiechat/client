@@ -58,7 +58,6 @@ url = "2"
 # Device-specific encryption for password storage (replaces keyring)
 aes-gcm = "0.10"
 argon2 = "0.5"
-machine-uid = "0.5"
 
 # TLS support for probing
 tokio-rustls = "0.26"
@@ -70,6 +69,8 @@ tauri-plugin-deep-link = "2"
 # Desktop-only features (tray icon not supported on mobile)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
+# machine-uid has iOS compilation issues, use only on desktop
+machine-uid = "0.5"
 
 [features]
 default = []
