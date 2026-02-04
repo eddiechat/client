@@ -214,3 +214,25 @@ export async function downloadAttachment(
     downloadDir,
   });
 }
+
+// ========== Entity (Participant) Commands ==========
+
+export interface EntitySuggestion {
+  id: number;
+  email: string;
+  name: string | null;
+  is_connection: boolean;
+  latest_contact: string;
+  contact_count: number;
+}
+
+/** Search entities for autocomplete suggestions
+ * Returns up to `limit` entities matching the query, prioritizing connections and recent contacts
+ */
+export async function searchEntities(
+  query: string,
+  limit?: number,
+  account?: string
+): Promise<EntitySuggestion[]> {
+  return invoke("search_entities", { account, query, limit });
+}

@@ -265,6 +265,9 @@ impl MailboxMonitor {
             self.account_id, self.folders, interval
         );
 
+        let mut poll_count = 0u64;
+        let start_time = std::time::Instant::now();
+
         while self.running.load(Ordering::SeqCst) {
             poll_interval.tick().await;
 
@@ -272,14 +275,30 @@ impl MailboxMonitor {
                 break;
             }
 
-            debug!("Poll tick for account: {}", self.account_id);
+            poll_count += 1;
+            let elapsed = start_time.elapsed();
+
+            debug!(
+                "Poll tick #{} for account: {} (elapsed: {:?})",
+                poll_count, self.account_id, elapsed
+            );
 
             // Send poll trigger notification
             if let Err(e) = self.notification_tx.send(ChangeNotification::PollTrigger) {
-                error!("Failed to send poll trigger: {}", e);
+                error!(
+                    "Failed to send poll trigger #{} for account {}: {}",
+                    poll_count, self.account_id, e
+                );
                 break;
             }
         }
+
+        info!(
+            "Poll loop stopped for account: {} after {} polls over {:?}",
+            self.account_id,
+            poll_count,
+            start_time.elapsed()
+        );
     }
 
     /// Run the IDLE loop (placeholder for future implementation)

@@ -8,7 +8,6 @@ use crate::autodiscovery::{
     AuthMethod, DiscoveryPipeline, DiscoveryProgress, DiscoveryStage, EmailDiscoveryConfig,
     Security, UsernameHint,
 };
-use crate::credentials::CredentialStore;
 use crate::services::{create_account, AuthMethod as ServiceAuthMethod, CreateEmailAccountParams};
 use crate::types::responses::{DiscoveryResult, ProgressUpdate};
 use crate::types::EddieError;
@@ -101,58 +100,42 @@ pub async fn test_email_connection(
 // Credential storage commands
 // ============================================================================
 
-/// Store a password securely
+/// Store a password securely - Deprecated (now stored encrypted in database)
 #[tauri::command]
-pub async fn store_password(email: String, password: String) -> Result<(), EddieError> {
-    info!("Storing password for: {}", email);
-
-    let cred_store = CredentialStore::new();
-    cred_store
-        .store_password(&email, &password)
-        .map_err(|e| EddieError::Credential(e.to_string()))
+pub async fn store_password(_email: String, _password: String) -> Result<(), EddieError> {
+    // Passwords are now stored encrypted in the database during account creation
+    // This command is kept for backward compatibility but does nothing
+    Ok(())
 }
 
-/// Store an app-specific password securely (for iCloud, etc.)
+/// Store an app-specific password securely - Deprecated (now stored encrypted in database)
 #[tauri::command]
-pub async fn store_app_password(email: String, password: String) -> Result<(), EddieError> {
-    info!("Storing app password for: {}", email);
-
-    let cred_store = CredentialStore::new();
-    cred_store
-        .store_app_password(&email, &password)
-        .map_err(|e| EddieError::Credential(e.to_string()))
+pub async fn store_app_password(_email: String, _password: String) -> Result<(), EddieError> {
+    // Passwords are now stored encrypted in the database during account creation
+    // This command is kept for backward compatibility but does nothing
+    Ok(())
 }
 
-/// Delete all credentials for an account
+/// Delete all credentials for an account - Deprecated (credentials in database)
 #[tauri::command]
-pub async fn delete_credentials(email: String) -> Result<(), EddieError> {
-    info!("Deleting credentials for: {}", email);
-
-    let cred_store = CredentialStore::new();
-    cred_store
-        .delete_all_credentials(&email)
-        .map_err(|e| EddieError::Credential(e.to_string()))
+pub async fn delete_credentials(_email: String) -> Result<(), EddieError> {
+    // Credentials are now in the database and deleted when account is deleted
+    // This command is kept for backward compatibility but does nothing
+    Ok(())
 }
 
 /// Check if credentials exist for an account
 #[tauri::command]
-pub async fn has_credentials(email: String, credential_type: String) -> Result<bool, EddieError> {
-    info!("Checking credentials for {} (type: {})", email, credential_type);
+pub async fn has_credentials(email: String, _credential_type: String) -> Result<bool, EddieError> {
+    use crate::sync::db::{get_connection_config, init_config_db};
 
-    let cred_store = CredentialStore::new();
+    // Check if password exists in database
+    init_config_db()?;
+    let config = get_connection_config(&email)?;
 
-    let exists = match credential_type.as_str() {
-        "password" => cred_store.has_password(&email),
-        "app_password" => cred_store.get_app_password(&email).is_ok(),
-        _ => {
-            return Err(EddieError::InvalidInput(format!(
-                "Unknown credential type: {}",
-                credential_type
-            )))
-        }
-    };
-
-    Ok(exists)
+    Ok(config
+        .and_then(|c| c.encrypted_password)
+        .is_some())
 }
 
 // ============================================================================

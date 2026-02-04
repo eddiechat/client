@@ -130,6 +130,7 @@ pub enum SyncEvent {
 pub struct SyncEngine {
     account_id: String,
     user_email: String,
+    user_aliases: Vec<String>, // List of email aliases for this account
     account_config: EmailAccountConfig,
     config: SyncConfig,
     db: Arc<SyncDatabase>,
@@ -151,6 +152,7 @@ impl SyncEngine {
     pub fn new(
         account_id: String,
         user_email: String,
+        user_aliases: Vec<String>,
         account_config: EmailAccountConfig,
         config: SyncConfig,
         app_handle: Option<tauri::AppHandle>,
@@ -181,6 +183,7 @@ impl SyncEngine {
         let engine = Self {
             account_id,
             user_email,
+            user_aliases,
             account_config,
             config,
             db,
@@ -373,7 +376,7 @@ impl SyncEngine {
 
         let conv_count = self
             .conversation_grouper
-            .rebuild_conversations(&self.account_id, &self.user_email)?;
+            .rebuild_conversations(&self.account_id, &self.user_email, &self.user_aliases)?;
 
         info!("Rebuilt {} conversations", conv_count);
 
@@ -478,6 +481,9 @@ impl SyncEngine {
             // Upsert into database
             let msg_id = self.db.upsert_message(&cached_msg)?;
             message_ids.push(msg_id);
+
+            // Extract entities (participants) from the message
+            extract_entities_from_message(&self.db, &self.account_id, &self.user_email, &self.user_aliases, &cached_msg);
 
             // Classify if enabled
             if self.config.auto_classify {
@@ -602,6 +608,7 @@ impl SyncEngine {
                 if let Ok(conv_id) = self.conversation_grouper.assign_to_conversation(
                     &self.account_id,
                     &self.user_email,
+                    &self.user_aliases,
                     &message,
                 ) {
                     affected_conversations.insert(conv_id);
@@ -642,6 +649,24 @@ impl SyncEngine {
         self.db.get_conversations(&self.account_id, classification_filter)
     }
 
+    /// Get conversations from cache with connection filtering
+    ///
+    /// connection_filter options:
+    /// - None: No connection filtering
+    /// - Some("connections"): Only conversations where at least one participant is a connection
+    /// - Some("others"): Only conversations where NO participants are connections
+    pub fn get_conversations_with_connection_filter(
+        &self,
+        classification_filter: Option<&str>,
+        connection_filter: Option<&str>,
+    ) -> Result<Vec<CachedConversation>, EddieError> {
+        self.db.get_conversations_with_connection_filter(
+            &self.account_id,
+            classification_filter,
+            connection_filter,
+        )
+    }
+
     /// Get messages for a conversation
     pub fn get_conversation_messages(
         &self,
@@ -659,12 +684,132 @@ impl SyncEngine {
         account_id: &str,
         user_email: &str,
     ) -> Result<u32, EddieError> {
-        self.conversation_grouper.rebuild_conversations(account_id, user_email)
+        self.conversation_grouper.rebuild_conversations(account_id, user_email, &self.user_aliases)
     }
 
     /// Queue a user action
     pub fn queue_action(&self, action: ActionType) -> Result<i64, EddieError> {
         self.action_queue.queue(&self.account_id, action)
+    }
+
+    /// Search entities for autocomplete suggestions
+    /// Returns up to `limit` entities matching the query, prioritizing connections and recent contacts
+    pub fn search_entities(&self, query: &str, limit: u32) -> Result<Vec<crate::sync::db::Entity>, EddieError> {
+        self.db.search_entities(&self.account_id, query, limit)
+    }
+
+    /// Reprocess all messages to update entity connections based on current aliases
+    ///
+    /// This should be called after aliases are added/updated to retroactively mark
+    /// recipients as connections if the user (or their aliases) have sent messages to them.
+    pub fn reprocess_entities_for_aliases(&self) -> Result<u32, EddieError> {
+        info!("Reprocessing entities for account: {}", self.account_id);
+        info!("User email: {}, Aliases: {:?}", self.user_email, self.user_aliases);
+
+        // Get all messages for this account
+        let messages = self.db.get_all_messages_for_account(&self.account_id)?;
+        info!("Found {} messages to process", messages.len());
+
+        let mut entities_to_mark: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for message in messages {
+            // Check if message is from user or any alias
+            let from_lower = message.from_address.to_lowercase();
+            let user_email_lower = self.user_email.to_lowercase();
+            let is_from_user = from_lower == user_email_lower
+                || self.user_aliases.iter().any(|alias| alias == &from_lower);
+
+            if is_from_user {
+                // This is an outgoing message - collect all recipient emails
+                let contact_timestamp = message.date.unwrap_or_else(chrono::Utc::now);
+
+                // Process TO addresses
+                let to_addresses: Vec<String> = serde_json::from_str(&message.to_addresses).unwrap_or_default();
+                for addr in to_addresses {
+                    let (name, email) = parse_email_address(&addr);
+                    let email_lower = email.to_lowercase();
+
+                    // Skip self and aliases
+                    if email_lower == user_email_lower || self.user_aliases.iter().any(|alias| alias == &email_lower) {
+                        continue;
+                    }
+
+                    entities_to_mark.insert(email_lower.clone());
+
+                    self.db.upsert_entity(
+                        &self.account_id,
+                        &email,
+                        name.as_deref(),
+                        true, // Mark as connection
+                        contact_timestamp,
+                    )?;
+                }
+
+                // Process CC addresses
+                if let Some(cc_json) = &message.cc_addresses {
+                    let cc_addresses: Vec<String> = serde_json::from_str(cc_json).unwrap_or_default();
+                    for addr in cc_addresses {
+                        let (name, email) = parse_email_address(&addr);
+                        let email_lower = email.to_lowercase();
+
+                        // Skip self and aliases
+                        if email_lower == user_email_lower || self.user_aliases.iter().any(|alias| alias == &email_lower) {
+                            continue;
+                        }
+
+                        entities_to_mark.insert(email_lower.clone());
+
+                        self.db.upsert_entity(
+                            &self.account_id,
+                            &email,
+                            name.as_deref(),
+                            true, // Mark as connection
+                            contact_timestamp,
+                        )?;
+                    }
+                }
+            }
+        }
+
+        let count = entities_to_mark.len() as u32;
+        info!("Marked {} unique entities as connections for account: {}", count, self.account_id);
+        info!("Sample entities: {:?}", entities_to_mark.iter().take(5).collect::<Vec<_>>());
+
+        Ok(count)
+    }
+
+    /// Reclassify all messages for this account
+    ///
+    /// This re-runs the classifier on all messages and updates the message_classifications table,
+    /// then updates conversation classifications accordingly. This is useful after adding aliases
+    /// to ensure messages from aliases are properly classified as 'chat'.
+    pub fn reclassify_all_messages(&self) -> Result<u32, EddieError> {
+        info!("Reclassifying all messages for account: {}", self.account_id);
+
+        // Get all messages for this account
+        let messages = self.db.get_all_messages_for_account(&self.account_id)?;
+        let total_messages = messages.len();
+
+        info!("Found {} messages to reclassify", total_messages);
+
+        // Reclassify each message
+        let mut reclassified_count = 0u32;
+        for message in messages {
+            if let Err(e) = self.classifier.classify_and_store(&message) {
+                warn!("Failed to reclassify message {}: {}", message.id, e);
+            } else {
+                reclassified_count += 1;
+            }
+        }
+
+        info!("Reclassified {} messages", reclassified_count);
+
+        // Update conversation classifications based on the newly classified messages
+        self.db.update_conversation_classifications(&self.account_id)?;
+
+        info!("Updated conversation classifications for account: {}", self.account_id);
+
+        Ok(reclassified_count)
     }
 
     /// Replay pending actions from the action queue
@@ -867,14 +1012,54 @@ impl SyncEngine {
 
     /// Handle a poll trigger - check if folders have changed
     async fn handle_poll_trigger(&self) {
-        info!("Processing poll trigger for account: {}", self.account_id);
+        debug!("Processing poll trigger for account: {}", self.account_id);
 
         // Create backend for checking
         let backend = match self.create_backend().await {
             Ok(b) => b,
             Err(e) => {
-                error!("Failed to create backend for poll check: {}", e);
+                // Log detailed error information
+                error!(
+                    "Failed to create backend for poll check (account: {}): {} [error_type: {:?}]",
+                    self.account_id,
+                    e,
+                    std::any::type_name_of_val(&e)
+                );
+
+                // Check if this is a network error (potentially transient)
+                let is_network_error = matches!(e, EddieError::Network(_));
+                let error_msg = e.to_string();
+
+                if is_network_error {
+                    warn!(
+                        "Network error during poll for account {}, will retry on next poll cycle",
+                        self.account_id
+                    );
+                } else {
+                    error!(
+                        "Non-network error during poll for account {}: {}",
+                        self.account_id, error_msg
+                    );
+                }
+
+                // Mark as offline and update status
+                let was_online = self.is_online();
                 self.set_online(false);
+
+                if was_online {
+                    info!("Marking account {} as offline due to error", self.account_id);
+                    self.update_status(|s| {
+                        s.is_online = false;
+                        s.error = Some(error_msg);
+                    })
+                    .await;
+
+                    // Emit error event for UI
+                    self.emit_event(SyncEvent::Error {
+                        message: format!("Connection lost: {}", e),
+                    });
+                }
+
                 return;
             }
         };
@@ -888,25 +1073,51 @@ impl SyncEngine {
                 s.error = None;
             })
             .await;
+
+            // Emit event to notify frontend of restored connection
+            self.emit_event(SyncEvent::StatusChanged(SyncStatus {
+                state: SyncState::Idle,
+                account_id: self.account_id.clone(),
+                current_folder: None,
+                progress: None,
+                last_sync: None,
+                error: None,
+                is_online: true,
+                pending_actions: 0,
+                monitor_mode: None,
+            }));
         }
 
         // Get folders and check each one
         let folders = match self.get_folders_to_sync(&backend).await {
             Ok(f) => f,
             Err(e) => {
-                error!("Failed to get folders for poll check: {}", e);
+                error!(
+                    "Failed to get folders for poll check (account: {}): {}",
+                    self.account_id, e
+                );
                 return;
             }
         };
 
         let mut any_changes = false;
+        let check_start = std::time::Instant::now();
 
         for folder in &folders {
+            let folder_check_start = std::time::Instant::now();
             debug!("Checking folder for changes: {}", folder);
 
             // Fetch most recent messages to detect changes
             match backend.list_envelopes(Some(folder), 0, 10).await {
                 Ok(envelopes) => {
+                    let folder_check_elapsed = folder_check_start.elapsed();
+                    debug!(
+                        "Checked folder '{}' in {:?}, found {} envelopes",
+                        folder,
+                        folder_check_elapsed,
+                        envelopes.len()
+                    );
+
                     // Get the most recent message ID (first in the list, as they're sorted newest-first)
                     // Use and_then to flatten Option<Option<String>> to Option<String>
                     let latest_message_id = envelopes.first().and_then(|e| e.message_id.clone());
@@ -914,19 +1125,37 @@ impl SyncEngine {
                     if let Some(monitor) = &self.monitor {
                         if monitor.check_folder_changes(folder, latest_message_id.as_deref()).await {
                             info!(
-                                "Changes detected in folder '{}', triggering sync",
-                                folder
+                                "Changes detected in folder '{}' (latest_message_id: {:?}), triggering sync",
+                                folder,
+                                latest_message_id
                             );
                             any_changes = true;
                             monitor.update_folder_state(folder, latest_message_id).await;
+                        } else {
+                            debug!("No changes detected in folder '{}'", folder);
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to check folder '{}': {}", folder, e);
+                    let folder_check_elapsed = folder_check_start.elapsed();
+                    warn!(
+                        "Failed to check folder '{}' after {:?}: {} [error_type: {:?}]",
+                        folder,
+                        folder_check_elapsed,
+                        e,
+                        std::any::type_name_of_val(&e)
+                    );
                 }
             }
         }
+
+        let total_check_time = check_start.elapsed();
+        debug!(
+            "Poll check completed for {} folders in {:?}, changes_detected: {}",
+            folders.len(),
+            total_check_time,
+            any_changes
+        );
 
         if any_changes {
             info!("Changes detected, triggering full sync");
@@ -993,6 +1222,84 @@ fn parse_email_address(addr: &str) -> (Option<String>, String) {
 
     // Plain email address
     (None, addr.to_lowercase())
+}
+
+/// Extract and store entities from a cached message
+/// If the message is from the user or one of their aliases, recipients are marked as connections
+fn extract_entities_from_message(
+    db: &SyncDatabase,
+    account_id: &str,
+    user_email: &str,
+    user_aliases: &[String],
+    msg: &CachedChatMessage,
+) {
+    let contact_timestamp = msg.date.unwrap_or_else(Utc::now);
+    let user_email_lower = user_email.to_lowercase();
+    let from_address_lower = msg.from_address.to_lowercase();
+
+    // Check if the message is from the user or one of their aliases (outgoing)
+    let is_from_user = from_address_lower == user_email_lower
+        || user_aliases.iter().any(|alias| alias == &from_address_lower);
+
+    // Extract sender (from)
+    if !is_from_user {
+        // Don't add self as an entity
+        if let Err(e) = db.upsert_entity(
+            account_id,
+            &msg.from_address,
+            msg.from_name.as_deref(),
+            false, // sender is not a connection unless we've sent to them
+            contact_timestamp,
+        ) {
+            debug!("Failed to upsert entity for from address: {}", e);
+        }
+    }
+
+    // Extract recipients (to)
+    let to_addresses: Vec<String> = serde_json::from_str(&msg.to_addresses).unwrap_or_default();
+    for addr in to_addresses {
+        let (name, email) = parse_email_address(&addr);
+        let email_lower = email.to_lowercase();
+
+        // Skip self and aliases
+        if email_lower == user_email_lower || user_aliases.iter().any(|alias| alias == &email_lower) {
+            continue;
+        }
+
+        if let Err(e) = db.upsert_entity(
+            account_id,
+            &email,
+            name.as_deref(),
+            is_from_user, // Mark as connection if user sent the message
+            contact_timestamp,
+        ) {
+            debug!("Failed to upsert entity for to address: {}", e);
+        }
+    }
+
+    // Extract CC recipients
+    if let Some(cc_json) = &msg.cc_addresses {
+        let cc_addresses: Vec<String> = serde_json::from_str(cc_json).unwrap_or_default();
+        for addr in cc_addresses {
+            let (name, email) = parse_email_address(&addr);
+            let email_lower = email.to_lowercase();
+
+            // Skip self and aliases
+            if email_lower == user_email_lower || user_aliases.iter().any(|alias| alias == &email_lower) {
+                continue;
+            }
+
+            if let Err(e) = db.upsert_entity(
+                account_id,
+                &email,
+                name.as_deref(),
+                is_from_user, // Mark as connection if user sent the message
+                contact_timestamp,
+            ) {
+                debug!("Failed to upsert entity for cc address: {}", e);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

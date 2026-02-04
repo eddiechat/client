@@ -150,9 +150,22 @@ impl SyncManager {
         // Get app handle for event emission
         let app_handle = self.app_handle.read().await.clone();
 
+        // Parse aliases from comma-separated string
+        let user_aliases = db_config
+            .aliases
+            .as_ref()
+            .map(|s| {
+                s.split(',')
+                    .map(|a| a.trim().to_lowercase())
+                    .filter(|a| !a.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         SyncEngine::new(
             db_config.account_id.clone(),
             account.email.clone(),
+            user_aliases,
             account,
             sync_config,
             app_handle,

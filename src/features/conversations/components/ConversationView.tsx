@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Conversation, ChatMessage, ComposeAttachment } from "../../../tauri";
+import { searchEntities, type EntitySuggestion } from "../../../tauri/commands";
 import {
   extractEmail,
   parseEmailContent,
@@ -68,6 +69,10 @@ export function ConversationView({
     startPos: number;
   } | null>(null);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
+  // Entity autocomplete state
+  const [entitySuggestions, setEntitySuggestions] = useState<EntitySuggestion[]>([]);
+  const [entitySuggestionIndex, setEntitySuggestionIndex] = useState(0);
+  const entitySearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
@@ -119,6 +124,62 @@ export function ConversationView({
   useEffect(() => {
     setAttachments([]);
   }, [conversation?.id]);
+
+  // Cleanup entity search timer on unmount
+  useEffect(() => {
+    return () => {
+      if (entitySearchTimerRef.current) {
+        clearTimeout(entitySearchTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Get the current word being typed in To field (after the last comma)
+  const getCurrentToWord = (value: string): string => {
+    const parts = value.split(",");
+    return parts[parts.length - 1].trim();
+  };
+
+  // Search entities with debounce
+  const searchEntitySuggestions = useCallback(async (query: string) => {
+    if (query.length < 1) {
+      setEntitySuggestions([]);
+      return;
+    }
+    try {
+      const results = await searchEntities(query, 5);
+      setEntitySuggestions(results);
+      setEntitySuggestionIndex(0);
+    } catch (error) {
+      console.error("Failed to search entities:", error);
+      setEntitySuggestions([]);
+    }
+  }, []);
+
+  // Handle To input change with debounced entity search
+  const handleToInputChange = (value: string) => {
+    setToInputValue(value);
+
+    // Debounce entity search
+    if (entitySearchTimerRef.current) {
+      clearTimeout(entitySearchTimerRef.current);
+    }
+
+    const currentWord = getCurrentToWord(value);
+    entitySearchTimerRef.current = setTimeout(() => {
+      searchEntitySuggestions(currentWord);
+    }, 150);
+  };
+
+  // Handle selecting an entity suggestion
+  const handleSelectEntitySuggestion = (suggestion: EntitySuggestion) => {
+    const parts = toInputValue.split(",");
+    parts[parts.length - 1] = " " + suggestion.email;
+    const newValue = parts.join(",").trim() + ", ";
+    setToInputValue(newValue);
+    setEntitySuggestions([]);
+    toInputRef.current?.focus();
+  };
 
   const handleAddAttachment = async () => {
     try {
@@ -256,14 +317,45 @@ export function ConversationView({
   };
 
   const handleToKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Handle entity suggestion navigation
+    if (entitySuggestions.length > 0) {
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setEntitySuggestionIndex((prev) =>
+            prev < entitySuggestions.length - 1 ? prev + 1 : prev
+          );
+          return;
+        case "ArrowUp":
+          e.preventDefault();
+          setEntitySuggestionIndex((prev) => (prev > 0 ? prev - 1 : prev));
+          return;
+        case "Tab":
+          e.preventDefault();
+          handleSelectEntitySuggestion(entitySuggestions[entitySuggestionIndex]);
+          return;
+        case "Escape":
+          e.preventDefault();
+          setEntitySuggestions([]);
+          return;
+      }
+    }
+
     if (e.key === "Enter") {
       e.preventDefault();
+      // If there are entity suggestions, select the current one
+      if (entitySuggestions.length > 0) {
+        handleSelectEntitySuggestion(entitySuggestions[entitySuggestionIndex]);
+        return;
+      }
+      // Otherwise, confirm participants
       const participants = toInputValue
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
       if (participants.length > 0 && onComposeParticipantsConfirm) {
         setParticipantsConfirmed(true);
+        setEntitySuggestions([]);
         onComposeParticipantsConfirm(participants);
       }
     }
@@ -310,8 +402,12 @@ export function ConversationView({
           composeParticipants={composeParticipants}
           toInputValue={toInputValue}
           toInputRef={toInputRef}
-          onToInputChange={setToInputValue}
+          onToInputChange={handleToInputChange}
           onToKeyDown={handleToKeyDown}
+          entitySuggestions={entitySuggestions}
+          entitySuggestionIndex={entitySuggestionIndex}
+          onSelectEntitySuggestion={handleSelectEntitySuggestion}
+          onEntitySuggestionHover={setEntitySuggestionIndex}
         />
 
         {/* Empty area */}
@@ -499,6 +595,10 @@ interface ComposeHeaderProps {
   toInputRef: React.RefObject<HTMLInputElement | null>;
   onToInputChange: (value: string) => void;
   onToKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  entitySuggestions: EntitySuggestion[];
+  entitySuggestionIndex: number;
+  onSelectEntitySuggestion: (suggestion: EntitySuggestion) => void;
+  onEntitySuggestionHover: (index: number) => void;
 }
 
 function ComposeHeader({
@@ -509,6 +609,10 @@ function ComposeHeader({
   toInputRef,
   onToInputChange,
   onToKeyDown,
+  entitySuggestions,
+  entitySuggestionIndex,
+  onSelectEntitySuggestion,
+  onEntitySuggestionHover,
 }: ComposeHeaderProps) {
   return (
     <div
@@ -535,19 +639,46 @@ function ComposeHeader({
         </button>
       )}
       {!hasParticipants ? (
-        <div className="flex-1 flex items-center gap-2">
+        <div className="flex-1 flex items-center gap-2 relative">
           <span className="text-[15px] font-medium text-text-muted whitespace-nowrap">
             To:
           </span>
-          <input
-            ref={toInputRef}
-            type="text"
-            className="flex-1 bg-transparent border-none text-text-primary text-[15px] outline-none py-2 placeholder:text-text-muted"
-            placeholder="Enter email addresses (comma-separated)"
-            value={toInputValue}
-            onChange={(e) => onToInputChange(e.target.value)}
-            onKeyDown={onToKeyDown}
-          />
+          <div className="flex-1 relative">
+            <input
+              ref={toInputRef}
+              type="text"
+              className="w-full bg-transparent border-none text-text-primary text-[15px] outline-none py-2 placeholder:text-text-muted"
+              placeholder="Enter email addresses (comma-separated)"
+              value={toInputValue}
+              onChange={(e) => onToInputChange(e.target.value)}
+              onKeyDown={onToKeyDown}
+              autoComplete="off"
+            />
+            {entitySuggestions.length > 0 && (
+              <div className="suggestions-dropdown">
+                {entitySuggestions.map((suggestion, index) => (
+                  <div
+                    key={suggestion.id}
+                    className={`suggestion-item ${index === entitySuggestionIndex ? "selected" : ""} ${suggestion.is_connection ? "is-connection" : ""}`}
+                    onMouseDown={() => onSelectEntitySuggestion(suggestion)}
+                    onMouseEnter={() => onEntitySuggestionHover(index)}
+                  >
+                    <span className="suggestion-email">{suggestion.email}</span>
+                    {suggestion.name && (
+                      <span className="suggestion-name">{suggestion.name}</span>
+                    )}
+                    {suggestion.is_connection && (
+                      <span className="suggestion-badge" title="You've emailed this person">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <>

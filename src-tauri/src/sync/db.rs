@@ -123,6 +123,18 @@ pub struct SyncProgress {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Entity (participant) for autocomplete and connection tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Entity {
+    pub id: i64,
+    pub account_id: String,
+    pub email: String,
+    pub name: Option<String>,
+    pub is_connection: bool,          // True if user has sent email to this entity
+    pub latest_contact: DateTime<Utc>, // Most recent interaction timestamp
+    pub contact_count: u32,           // Number of interactions
+}
+
 /// Connection configuration stored in database
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailConnectionConfig {
@@ -130,8 +142,10 @@ pub struct EmailConnectionConfig {
     pub active: bool,
     pub email: String,
     pub display_name: Option<String>,
+    pub aliases: Option<String>, // Comma-separated list of email aliases
     pub imap_config: Option<String>, // JSON serialized ImapConfig
     pub smtp_config: Option<String>, // JSON serialized SmtpConfig
+    pub encrypted_password: Option<String>, // Device-encrypted password (base64)
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -226,8 +240,10 @@ impl ConfigDatabase {
                 active INTEGER DEFAULT 0,
                 email TEXT NOT NULL,
                 display_name TEXT,
+                aliases TEXT,  -- Comma-separated list of email aliases
                 imap_config TEXT,  -- JSON serialized ImapConfig
                 smtp_config TEXT,  -- JSON serialized SmtpConfig
+                encrypted_password TEXT,  -- Device-encrypted password (base64)
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -271,6 +287,7 @@ impl ConfigDatabase {
                     display_name TEXT,
                     imap_config TEXT,
                     smtp_config TEXT,
+                    encrypted_password TEXT,  -- Device-encrypted password
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
@@ -297,6 +314,48 @@ impl ConfigDatabase {
             info!("Migration complete");
         }
 
+        // Migration: Add encrypted_password column if it doesn't exist
+        let has_encrypted_password: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('connection_configs') WHERE name = 'encrypted_password'",
+                [],
+                |row| row.get::<_, i32>(0).map(|count| count > 0),
+            )
+            .unwrap_or(false);
+
+        if !has_encrypted_password {
+            info!("Adding encrypted_password column to connection_configs table");
+            conn.execute(
+                "ALTER TABLE connection_configs ADD COLUMN encrypted_password TEXT",
+                [],
+            )
+            .map_err(|e| {
+                EddieError::Backend(format!("Failed to add encrypted_password column: {}", e))
+            })?;
+            info!("encrypted_password column added successfully");
+        }
+
+        // Migration: Add aliases column if it doesn't exist
+        let has_aliases: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('connection_configs') WHERE name = 'aliases'",
+                [],
+                |row| row.get::<_, i32>(0).map(|count| count > 0),
+            )
+            .unwrap_or(false);
+
+        if !has_aliases {
+            info!("Adding aliases column to connection_configs table");
+            conn.execute(
+                "ALTER TABLE connection_configs ADD COLUMN aliases TEXT",
+                [],
+            )
+            .map_err(|e| {
+                EddieError::Backend(format!("Failed to add aliases column: {}", e))
+            })?;
+            info!("aliases column added successfully");
+        }
+
         Ok(())
     }
 
@@ -304,22 +363,26 @@ impl ConfigDatabase {
     pub fn upsert_connection_config(&self, config: &EmailConnectionConfig) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
-            "INSERT INTO connection_configs (account_id, active, email, display_name, imap_config, smtp_config, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+            "INSERT INTO connection_configs (account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))
              ON CONFLICT(account_id) DO UPDATE SET
                 active = excluded.active,
                 email = excluded.email,
                 display_name = excluded.display_name,
+                aliases = excluded.aliases,
                 imap_config = excluded.imap_config,
                 smtp_config = excluded.smtp_config,
+                encrypted_password = excluded.encrypted_password,
                 updated_at = datetime('now')",
             params![
                 config.account_id,
                 config.active as i32,
                 config.email,
                 config.display_name,
+                config.aliases,
                 config.imap_config,
                 config.smtp_config,
+                config.encrypted_password,
             ],
         )
         .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -335,7 +398,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, created_at, updated_at
                  FROM connection_configs WHERE account_id = ?1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -353,7 +416,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, created_at, updated_at
                  FROM connection_configs ORDER BY COALESCE(display_name, email) ASC",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -372,7 +435,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, created_at, updated_at
                  FROM connection_configs WHERE active = 1 LIMIT 1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -427,16 +490,18 @@ impl ConfigDatabase {
             active: row.get::<_, i32>(1)? != 0,
             email: row.get(2)?,
             display_name: row.get(3)?,
-            imap_config: row.get(4)?,
-            smtp_config: row.get(5)?,
+            aliases: row.get(4)?,
+            imap_config: row.get(5)?,
+            smtp_config: row.get(6)?,
+            encrypted_password: row.get(7)?,
             created_at: row
-                .get::<_, String>(6)
+                .get::<_, String>(8)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
             updated_at: row
-                .get::<_, String>(7)
+                .get::<_, String>(9)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
@@ -707,6 +772,26 @@ impl SyncDatabase {
                 supports_idle INTEGER DEFAULT 0,
                 detected_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            -- Entities table for participant tracking and autocomplete
+            CREATE TABLE IF NOT EXISTS entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                name TEXT,
+                is_connection INTEGER DEFAULT 0,  -- 1 if user has sent email to this entity
+                latest_contact TEXT NOT NULL DEFAULT (datetime('now')),
+                contact_count INTEGER DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(account_id, email)
+            );
+
+            -- Indexes for entity lookups and autocomplete
+            CREATE INDEX IF NOT EXISTS idx_entities_account ON entities(account_id);
+            CREATE INDEX IF NOT EXISTS idx_entities_email ON entities(account_id, email);
+            CREATE INDEX IF NOT EXISTS idx_entities_connection ON entities(account_id, is_connection);
+            CREATE INDEX IF NOT EXISTS idx_entities_latest_contact ON entities(account_id, latest_contact DESC);
         "#).map_err(|e| EddieError::Backend(format!("Failed to initialize schema: {}", e)))?;
 
         Ok(())
@@ -955,6 +1040,26 @@ impl SyncDatabase {
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
+    }
+
+    /// Get all messages for an account
+    pub fn get_all_messages_for_account(&self, account_id: &str) -> Result<Vec<CachedChatMessage>, EddieError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, account_id, folder_name, uid, message_id, in_reply_to, references_header,
+                    from_address, from_name, to_addresses, cc_addresses, subject, date, flags,
+                    has_attachment, body_cached, text_body, html_body, raw_size, created_at, updated_at
+             FROM messages WHERE account_id = ?1
+             ORDER BY date ASC"
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let messages = stmt
+            .query_map(params![account_id], Self::row_to_cached_message)
+            .map_err(|e| EddieError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(messages)
     }
 
     /// Update flags for a message (replaces all flags)
@@ -1285,39 +1390,81 @@ impl SyncDatabase {
         account_id: &str,
         classification_filter: Option<&str>,
     ) -> Result<Vec<CachedConversation>, EddieError> {
+        self.get_conversations_with_connection_filter(account_id, classification_filter, None)
+    }
+
+    /// Get conversations with optional classification and connection filtering
+    ///
+    /// connection_filter options:
+    /// - None: No connection filtering (all conversations)
+    /// - Some("connections"): Only conversations where at least one participant is a connection
+    /// - Some("others"): Only conversations where NO participants are connections
+    pub fn get_conversations_with_connection_filter(
+        &self,
+        account_id: &str,
+        classification_filter: Option<&str>,
+        connection_filter: Option<&str>,
+    ) -> Result<Vec<CachedConversation>, EddieError> {
         let conn = self.connection()?;
 
-        let sql = if classification_filter.is_some() {
-            // Filter by classification (e.g., 'chat' for Connections tab)
+        // Build the WHERE clause based on filters
+        let mut where_clauses = vec!["account_id = ?1".to_string()];
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(account_id.to_string())];
+
+        if let Some(classification) = classification_filter {
+            where_clauses.push("classification = ?".to_string());
+            params.push(Box::new(classification.to_string()));
+        }
+
+        // Add connection filter if specified
+        match connection_filter {
+            Some("connections") => {
+                // Only conversations where at least one participant is a connection
+                where_clauses.push(
+                    "EXISTS (
+                        SELECT 1 FROM entities e
+                        WHERE e.account_id = conversations.account_id
+                        AND e.is_connection = 1
+                        AND (',' || conversations.participant_key || ',') LIKE ('%,' || e.email || ',%')
+                    )".to_string()
+                );
+            }
+            Some("others") => {
+                // Only conversations where NO participants are connections
+                where_clauses.push(
+                    "NOT EXISTS (
+                        SELECT 1 FROM entities e
+                        WHERE e.account_id = conversations.account_id
+                        AND e.is_connection = 1
+                        AND (',' || conversations.participant_key || ',') LIKE ('%,' || e.email || ',%')
+                    )".to_string()
+                );
+            }
+            _ => {} // No connection filter
+        }
+
+        let where_clause = where_clauses.join(" AND ");
+        let sql = format!(
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
                     last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
              FROM conversations
-             WHERE account_id = ?1 AND classification = ?2
-             ORDER BY last_message_date DESC"
-        } else {
-            // Show all conversations (All tab)
-            "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                    last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
-             FROM conversations
-             WHERE account_id = ?1
-             ORDER BY last_message_date DESC"
-        };
+             WHERE {}
+             ORDER BY last_message_date DESC",
+            where_clause
+        );
 
         let mut stmt = conn
-            .prepare(sql)
+            .prepare(&sql)
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-        let conversations = if let Some(classification) = classification_filter {
-            stmt.query_map(params![account_id, classification], Self::row_to_conversation)
-                .map_err(|e| EddieError::Backend(e.to_string()))?
-                .filter_map(|r| r.ok())
-                .collect()
-        } else {
-            stmt.query_map(params![account_id], Self::row_to_conversation)
-                .map_err(|e| EddieError::Backend(e.to_string()))?
-                .filter_map(|r| r.ok())
-                .collect()
-        };
+        // Convert params to references
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+        let conversations = stmt
+            .query_map(param_refs.as_slice(), Self::row_to_conversation)
+            .map_err(|e| EddieError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
 
         Ok(conversations)
     }
@@ -1878,6 +2025,133 @@ impl SyncDatabase {
                     row.get::<_, i32>(2)? != 0,
                     row.get::<_, i32>(3)? != 0,
                 ))
+            })
+            .optional()
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    // ========== Entity Operations ==========
+
+    /// Upsert an entity (participant) - updates if exists, creates if not
+    /// If is_connection is true, it will be set to true (never reverted to false)
+    pub fn upsert_entity(
+        &self,
+        account_id: &str,
+        email: &str,
+        name: Option<&str>,
+        is_connection: bool,
+        contact_timestamp: DateTime<Utc>,
+    ) -> Result<i64, EddieError> {
+        let conn = self.connection()?;
+
+        // Use INSERT OR REPLACE pattern with special handling for is_connection
+        // is_connection should only be upgraded to true, never downgraded to false
+        conn.execute(
+            "INSERT INTO entities (account_id, email, name, is_connection, latest_contact, contact_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1)
+             ON CONFLICT(account_id, email) DO UPDATE SET
+                name = COALESCE(excluded.name, entities.name),
+                is_connection = CASE WHEN excluded.is_connection = 1 THEN 1 ELSE entities.is_connection END,
+                latest_contact = CASE WHEN excluded.latest_contact > entities.latest_contact THEN excluded.latest_contact ELSE entities.latest_contact END,
+                contact_count = entities.contact_count + 1,
+                updated_at = datetime('now')",
+            params![
+                account_id,
+                email.to_lowercase(),
+                name,
+                is_connection as i32,
+                contact_timestamp.to_rfc3339(),
+            ],
+        )
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        // Get the ID
+        let id = conn
+            .query_row(
+                "SELECT id FROM entities WHERE account_id = ?1 AND email = ?2",
+                params![account_id, email.to_lowercase()],
+                |row| row.get(0),
+            )
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(id)
+    }
+
+    /// Search entities for autocomplete
+    /// Prioritizes: 1) connections, 2) recent contacts
+    /// Returns up to `limit` results matching the query
+    pub fn search_entities(
+        &self,
+        account_id: &str,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<Entity>, EddieError> {
+        let conn = self.connection()?;
+
+        // Search by email or name prefix, prioritizing connections and recent contacts
+        let search_pattern = format!("{}%", query.to_lowercase());
+        let mut stmt = conn.prepare(
+            "SELECT id, account_id, email, name, is_connection, latest_contact, contact_count
+             FROM entities
+             WHERE account_id = ?1 AND (email LIKE ?2 OR LOWER(name) LIKE ?2)
+             ORDER BY is_connection DESC, latest_contact DESC
+             LIMIT ?3"
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let entities = stmt
+            .query_map(params![account_id, search_pattern, limit], |row| {
+                Ok(Entity {
+                    id: row.get(0)?,
+                    account_id: row.get(1)?,
+                    email: row.get(2)?,
+                    name: row.get(3)?,
+                    is_connection: row.get::<_, i32>(4)? != 0,
+                    latest_contact: row
+                        .get::<_, String>(5)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    contact_count: row.get(6)?,
+                })
+            })
+            .map_err(|e| EddieError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(entities)
+    }
+
+    /// Get an entity by email
+    pub fn get_entity(
+        &self,
+        account_id: &str,
+        email: &str,
+    ) -> Result<Option<Entity>, EddieError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, account_id, email, name, is_connection, latest_contact, contact_count
+             FROM entities WHERE account_id = ?1 AND email = ?2"
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let result = stmt
+            .query_row(params![account_id, email.to_lowercase()], |row| {
+                Ok(Entity {
+                    id: row.get(0)?,
+                    account_id: row.get(1)?,
+                    email: row.get(2)?,
+                    name: row.get(3)?,
+                    is_connection: row.get::<_, i32>(4)? != 0,
+                    latest_contact: row
+                        .get::<_, String>(5)
+                        .ok()
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    contact_count: row.get(6)?,
+                })
             })
             .optional()
             .map_err(|e| EddieError::Backend(e.to_string()))?;

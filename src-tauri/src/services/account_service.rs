@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use tracing::info;
 
 use crate::config::{EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
-use crate::credentials::CredentialStore;
+use crate::encryption::DeviceEncryption;
 use crate::services::helpers::sanitize_email_for_filename;
 use crate::sync::db::{
     delete_connection_config, get_connection_config, init_config_db, save_connection_config,
@@ -46,6 +46,12 @@ pub enum AuthMethod {
 pub fn create_account(params: CreateEmailAccountParams) -> Result<()> {
     info!("Creating account: {}", params.name);
 
+    // Extract password from auth method for encryption
+    let password = match &params.auth_method {
+        AuthMethod::Password { password, .. } => password.clone(),
+        AuthMethod::AppPassword { password } => password.clone(),
+    };
+
     // Build auth config based on auth method
     let auth_config = build_auth_config(&params.email, &params.auth_method)?;
 
@@ -70,31 +76,21 @@ pub fn create_account(params: CreateEmailAccountParams) -> Result<()> {
         }),
     };
 
-    save_account_config(&params.email, &params.display_name, &account_config)
+    save_account_config(&params.email, &params.display_name, &account_config, &password)
 }
 
-/// Build auth config from auth method and store credentials
+/// Build auth config from auth method
+/// Note: Password encryption and storage is now handled by save_account_config
 fn build_auth_config(email: &str, auth_method: &AuthMethod) -> Result<AuthConfig> {
     match auth_method {
         AuthMethod::Password { username, password } => {
-            // Store password in credential store for secure storage
-            let cred_store = CredentialStore::new();
-            cred_store
-                .store_password(email, password)
-                .map_err(|e| EddieError::Credential(e.to_string()))?;
-
             Ok(AuthConfig::Password {
                 user: username.clone(),
                 password: PasswordSource::Raw(password.clone()),
             })
         }
-        AuthMethod::AppPassword { password } => {
-            // Store app password in credential store
-            let cred_store = CredentialStore::new();
-            cred_store
-                .store_app_password(email, password)
-                .map_err(|e| EddieError::Credential(e.to_string()))?;
-
+        AuthMethod::AppPassword { password: _ } => {
+            // Password will be encrypted and stored in database by save_account_config
             Ok(AuthConfig::AppPassword {
                 user: email.to_string(),
             })
@@ -107,6 +103,7 @@ fn save_account_config(
     email: &str,
     display_name: &Option<String>,
     account: &EmailAccountConfig,
+    password: &str,
 ) -> Result<()> {
     let imap_json = account
         .imap
@@ -119,13 +116,22 @@ fn save_account_config(
         .map(|c| serde_json::to_string(c))
         .transpose()?;
 
+    // Encrypt password for secure storage
+    let encryption = DeviceEncryption::new()
+        .map_err(|e| EddieError::Config(format!("Failed to initialize encryption: {}", e)))?;
+    let encrypted_password = encryption
+        .encrypt(password)
+        .map_err(|e| EddieError::Config(format!("Failed to encrypt password: {}", e)))?;
+
     let db_config = EmailConnectionConfig {
         account_id: email.to_string(),
         active: true,
         email: email.to_string(),
         display_name: display_name.clone(),
+        aliases: None, // TODO: Add aliases support to account creation
         imap_config: imap_json,
         smtp_config: smtp_json,
+        encrypted_password: Some(encrypted_password),
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
