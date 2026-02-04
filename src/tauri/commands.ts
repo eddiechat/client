@@ -19,6 +19,12 @@ import type {
   SyncActionType,
 } from "./types";
 
+// ========== App Commands ==========
+
+export async function getAppVersion(): Promise<string> {
+  return invoke("get_app_version");
+}
+
 // ========== Account Commands ==========
 
 export async function saveAccount(request: SaveEmailAccountRequest): Promise<void> {

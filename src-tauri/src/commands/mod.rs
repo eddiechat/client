@@ -6,6 +6,7 @@
 //! ## Module Organization
 //!
 //! - `accounts`: Account listing and management
+//! - `app`: Application-level information and utilities
 //! - `config`: Application and account configuration
 //! - `conversations`: Conversation listing (deprecated - use sync)
 //! - `discovery`: Email autodiscovery
@@ -16,6 +17,7 @@
 //! - `sync`: Sync engine operations (recommended)
 
 pub mod accounts;
+pub mod app;
 pub mod config;
 pub mod conversations;
 pub mod discovery;
@@ -27,6 +29,7 @@ pub mod sync;
 
 // Re-export all commands for convenience
 pub use accounts::*;
+pub use app::*;
 pub use config::*;
 pub use conversations::*;
 pub use discovery::*;

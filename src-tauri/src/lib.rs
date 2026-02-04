@@ -80,6 +80,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // App commands
+            commands::get_app_version,
             // Config commands
             commands::init_config,
             commands::init_config_from_paths,

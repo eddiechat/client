@@ -1,5 +1,6 @@
 import type { EmailAccount } from "../../../tauri";
-// import { useState } from "react";
+import { getAppVersion } from "../../../tauri";
+import { useState, useEffect } from "react";
 // import { dropAndResync } from "../../../tauri";
 
 interface SidebarHeaderProps {
@@ -15,6 +16,32 @@ export function SidebarHeader({
   onEditAccount,
   onCompose,
 }: SidebarHeaderProps) {
+  const [version, setVersion] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Detect if we're on mobile platform
+    const checkPlatform = async () => {
+      try {
+        // Check user agent for mobile platforms
+        const ua = navigator.userAgent.toLowerCase();
+        const mobile = ua.includes('android') || ua.includes('iphone') || ua.includes('ipad');
+        setIsMobile(mobile);
+
+        // Only fetch version on mobile
+        if (mobile) {
+          const appVersion = await getAppVersion();
+          const devSuffix = import.meta.env.DEV ? " (dev)" : "";
+          setVersion(`${appVersion}${devSuffix}`);
+        }
+      } catch (err) {
+        console.error("Failed to detect platform or get version:", err);
+      }
+    };
+
+    checkPlatform();
+  }, []);
+
   // const [isResyncing, setIsResyncing] = useState(false);
 
   // const handleResync = async () => {
@@ -44,9 +71,16 @@ export function SidebarHeader({
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <img src="/eddie-swirl-green.svg" alt="Eddie logo" className="w-6 h-6" />
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">
-            eddie
-          </h1>
+          <div className="flex items-baseline gap-1.5">
+            <h1 className="text-xl font-semibold text-text-primary tracking-tight">
+              eddie
+            </h1>
+            {isMobile && version && (
+              <span className="text-xs text-text-muted font-normal">
+                v{version}
+              </span>
+            )}
+          </div>
         </div>
         {accounts.length > 0 && (
           <span
