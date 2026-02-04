@@ -46,7 +46,12 @@ export function Avatar({
   return (
     <div
       className={`${baseClasses} ${interactiveClasses} ${className}`}
-      style={{ backgroundColor: avatarColor, width: size, height: size, minWidth: size }}
+      style={{
+        backgroundColor: imageStatus === "loaded" ? "transparent" : avatarColor,
+        width: size,
+        height: size,
+        minWidth: size,
+      }}
       title={title}
       onClick={onClick}
       role={onClick ? "button" : undefined}

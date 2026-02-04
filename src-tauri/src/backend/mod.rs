@@ -22,10 +22,10 @@ use email::smtp::config::{SmtpAuthConfig, SmtpConfig as EmailSmtpConfig};
 use email::tls::{Encryption, Tls};
 use secret::Secret;
 use std::path::PathBuf;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::config::{EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
-use crate::credentials::CredentialStore;
+use crate::encryption::DeviceEncryption;
 use crate::sync::db::{get_active_connection_config, get_connection_config, init_config_db};
 use crate::types::error::EddieError;
 use crate::types::{Attachment, Envelope, Folder, ChatMessage};
@@ -170,15 +170,55 @@ impl EmailBackend {
     ) -> Result<(String, ImapAuthConfig), EddieError> {
         match auth_config {
             AuthConfig::Password { user, password } => {
+                debug!("Using password authentication for user: {}", user);
                 let passwd = Self::resolve_password(password).await?;
+                if passwd.is_empty() {
+                    return Err(EddieError::Auth(format!(
+                        "Empty password returned for user: {}",
+                        user
+                    )));
+                }
                 Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
             }
             AuthConfig::AppPassword { user } => {
-                // Get app password from credential store
-                let cred_store = CredentialStore::new();
-                let password = cred_store.get_app_password(email).map_err(|e| {
-                    EddieError::Config(format!("Failed to get app password: {}", e))
-                })?;
+                debug!("Using app password authentication for {}", email);
+
+                // Get encrypted password from database
+                init_config_db()?;
+                let db_config = get_connection_config(email)?
+                    .ok_or_else(|| {
+                        EddieError::Auth(format!("No account configuration found for {}", email))
+                    })?;
+
+                let encrypted_password = db_config.encrypted_password
+                    .ok_or_else(|| {
+                        EddieError::Auth(format!(
+                            "No password stored for {}. Please re-enter your password.",
+                            email
+                        ))
+                    })?;
+
+                // Decrypt password
+                let encryption = DeviceEncryption::new()
+                    .map_err(|e| EddieError::Auth(format!("Failed to initialize encryption: {}", e)))?;
+
+                let password = encryption.decrypt(&encrypted_password)
+                    .map_err(|e| {
+                        warn!("Failed to decrypt password for {}: {}", email, e);
+                        EddieError::Auth(format!(
+                            "Failed to decrypt password for {}. You may need to re-enter your password.",
+                            email
+                        ))
+                    })?;
+
+                if password.is_empty() {
+                    return Err(EddieError::Auth(format!(
+                        "Empty password decrypted for {}. Please re-enter your password.",
+                        email
+                    )));
+                }
+
+                debug!("Successfully retrieved and decrypted password for {} (length: {})", email, password.len());
                 Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(password)))))
             }
         }
@@ -227,10 +267,33 @@ impl EmailBackend {
                 Ok((user.clone(), SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(passwd)))))
             }
             AuthConfig::AppPassword { user } => {
-                let cred_store = CredentialStore::new();
-                let password = cred_store.get_app_password(email).map_err(|e| {
-                    EddieError::Config(format!("Failed to get app password: {}", e))
-                })?;
+                // Get encrypted password from database (same as IMAP)
+                init_config_db()?;
+                let db_config = get_connection_config(email)?
+                    .ok_or_else(|| {
+                        EddieError::Auth(format!("No account configuration found for {}", email))
+                    })?;
+
+                let encrypted_password = db_config.encrypted_password
+                    .ok_or_else(|| {
+                        EddieError::Auth(format!(
+                            "No password stored for {}. Please re-enter your password.",
+                            email
+                        ))
+                    })?;
+
+                // Decrypt password
+                let encryption = DeviceEncryption::new()
+                    .map_err(|e| EddieError::Auth(format!("Failed to initialize encryption: {}", e)))?;
+
+                let password = encryption.decrypt(&encrypted_password)
+                    .map_err(|e| {
+                        EddieError::Auth(format!(
+                            "Failed to decrypt password for {}: {}",
+                            email, e
+                        ))
+                    })?;
+
                 Ok((user.clone(), SmtpAuthConfig::Password(PasswordConfig(Secret::new_raw(password)))))
             }
         }
@@ -266,24 +329,55 @@ impl EmailBackend {
     pub async fn list_folders(&self) -> Result<Vec<Folder>, EddieError> {
         let imap_config = self.build_imap_config().await?;
 
+        info!(
+            "Attempting IMAP connection for {}: {}:{} (TLS: {})",
+            self.account_config.email,
+            self.account_config.imap.as_ref().map(|i| i.host.as_str()).unwrap_or("unknown"),
+            self.account_config.imap.as_ref().map(|i| i.port).unwrap_or(0),
+            self.account_config.imap.as_ref().map(|i| i.tls).unwrap_or(false)
+        );
+
         let ctx = email::imap::ImapContextBuilder::new(
             self.email_account_config.clone(),
             Arc::new(imap_config),
         );
 
+        let start_time = std::time::Instant::now();
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
             .map_err(|e| {
-                let error_msg = format!("Failed to build IMAP backend: {}. Config: host={}, port={}, encryption={:?}",
+                let elapsed = start_time.elapsed();
+                let error_msg = format!(
+                    "Failed to build IMAP backend after {:?}: {}. Config: host={}, port={}, encryption={}, error_chain: {:?}",
+                    elapsed,
                     e,
                     self.account_config.imap.as_ref().map(|i| i.host.as_str()).unwrap_or("unknown"),
                     self.account_config.imap.as_ref().map(|i| i.port).unwrap_or(0),
-                    self.account_config.imap.as_ref().map(|i| i.tls).unwrap_or(false)
+                    self.account_config.imap.as_ref().map(|i| i.tls).unwrap_or(false),
+                    e.source()
                 );
                 warn!("{}", error_msg);
-                EddieError::Backend(error_msg)
+
+                // Classify error type for better diagnostics
+                let error_str = e.to_string().to_lowercase();
+                if error_str.contains("timeout") || error_str.contains("timed out") {
+                    EddieError::Network(format!("Connection timeout: {}", error_msg))
+                } else if error_str.contains("connection") || error_str.contains("refused") || error_str.contains("reset") {
+                    EddieError::Network(format!("Connection error: {}", error_msg))
+                } else if error_str.contains("auth") || error_str.contains("login") || error_str.contains("password") {
+                    EddieError::Auth(format!("Authentication error: {}", error_msg))
+                } else if error_str.contains("dns") || error_str.contains("resolve") {
+                    EddieError::Network(format!("DNS resolution error: {}", error_msg))
+                } else if error_str.contains("tls") || error_str.contains("ssl") || error_str.contains("certificate") {
+                    EddieError::Network(format!("TLS/SSL error: {}", error_msg))
+                } else {
+                    EddieError::Backend(error_msg)
+                }
             })?;
+
+        let elapsed = start_time.elapsed();
+        info!("IMAP connection established successfully in {:?}", elapsed);
 
         let folders = backend
             .list_folders()
@@ -313,15 +407,38 @@ impl EmailBackend {
         let imap_config = self.build_imap_config().await?;
         let folder = folder.unwrap_or(INBOX);
 
+        debug!(
+            "Listing envelopes for {}: folder={}, page={}, page_size={}",
+            self.account_config.email, folder, page, page_size
+        );
+
         let ctx = email::imap::ImapContextBuilder::new(
             self.email_account_config.clone(),
             Arc::new(imap_config),
         );
 
+        let start_time = std::time::Instant::now();
         let backend = BackendBuilder::new(self.email_account_config.clone(), ctx)
             .build()
             .await
-            .map_err(|e| EddieError::Backend(e.to_string()))?;
+            .map_err(|e| {
+                let elapsed = start_time.elapsed();
+                let error_msg = format!(
+                    "Failed to build IMAP backend after {:?} while listing envelopes: {}",
+                    elapsed, e
+                );
+                warn!("{}", error_msg);
+
+                // Classify error type
+                let error_str = e.to_string().to_lowercase();
+                if error_str.contains("timeout") || error_str.contains("timed out") {
+                    EddieError::Network(format!("Connection timeout: {}", error_msg))
+                } else if error_str.contains("connection") {
+                    EddieError::Network(format!("Connection error: {}", error_msg))
+                } else {
+                    EddieError::Backend(error_msg)
+                }
+            })?;
 
         use email::envelope::list::{ListEnvelopes, ListEnvelopesOptions};
 

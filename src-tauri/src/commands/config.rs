@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use tauri::State;
 use tracing::info;
 
-use crate::config::{self, EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::config::{self, EmailAccountConfig, AuthConfig, ImapConfig, SmtpConfig};
+use crate::encryption::DeviceEncryption;
 use crate::services::delete_account_data;
 use crate::state::SyncManager;
 use crate::sync::db::{
@@ -63,6 +64,7 @@ pub struct SaveEmailAccountRequest {
     pub name: String,
     pub email: String,
     pub display_name: Option<String>,
+    pub aliases: Option<String>,
     pub imap_host: String,
     pub imap_port: u16,
     pub imap_tls: bool,
@@ -72,22 +74,51 @@ pub struct SaveEmailAccountRequest {
     pub smtp_tls: bool,
     pub smtp_tls_cert: Option<String>,
     pub username: String,
-    pub password: String,
+    pub password: Option<String>,
 }
 
 /// Save a new account configuration
 #[tauri::command]
-pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieError> {
+pub async fn save_account(
+    request: SaveEmailAccountRequest,
+    manager: State<'_, SyncManager>,
+) -> Result<(), EddieError> {
     info!("Saving account: {}", request.name);
 
-    let imap_auth = AuthConfig::Password {
-        user: request.username.clone(),
-        password: PasswordSource::Raw(request.password.clone()),
+    init_config_db()?;
+
+    // Determine the encrypted password to use
+    let encrypted_password = match &request.password {
+        Some(new_password) if !new_password.is_empty() => {
+            // New password provided - encrypt it
+            info!("Encrypting new password for account: {}", request.email);
+            let encryption = DeviceEncryption::new()
+                .map_err(|e| EddieError::Config(format!("Failed to initialize encryption: {}", e)))?;
+            Some(encryption
+                .encrypt(new_password)
+                .map_err(|e| EddieError::Config(format!("Failed to encrypt password: {}", e)))?)
+        }
+        _ => {
+            // No password provided - check if we're updating an existing account
+            if let Some(existing_config) = get_connection_config(&request.email)? {
+                info!("Reusing existing encrypted password for account: {}", request.email);
+                existing_config.encrypted_password
+            } else {
+                // New account but no password provided
+                return Err(EddieError::InvalidInput(
+                    "Password is required when creating a new account".to_string()
+                ));
+            }
+        }
     };
 
-    let smtp_auth = AuthConfig::Password {
+    // Use a placeholder password for the AuthConfig (actual password comes from database)
+    let imap_auth = AuthConfig::AppPassword {
+        user: request.username.clone(),
+    };
+
+    let smtp_auth = AuthConfig::AppPassword {
         user: request.username,
-        password: PasswordSource::Raw(request.password),
     };
 
     let account = EmailAccountConfig {
@@ -123,20 +154,43 @@ pub async fn save_account(request: SaveEmailAccountRequest) -> Result<(), EddieE
         .map(|c| serde_json::to_string(c))
         .transpose()?;
 
+    let has_aliases = request.aliases.is_some();
+    let account_id = request.email.clone();
+
     let db_config = EmailConnectionConfig {
-        account_id: request.email.clone(),
+        account_id: account_id.clone(),
         active: true,
         email: request.email,
         display_name: request.display_name,
+        aliases: request.aliases,
         imap_config: imap_json,
         smtp_config: smtp_json,
+        encrypted_password,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };
 
-    init_config_db()?;
     save_connection_config(&db_config)?;
     set_active_account(&db_config.account_id)?;
+
+    // If aliases were provided, reprocess entities to mark recipients as connections
+    if has_aliases {
+        info!("Aliases provided, reprocessing entities for account: {}", account_id);
+
+        // Remove existing engine so it gets recreated with the new aliases
+        manager.remove(&account_id).await;
+
+        // Create new sync engine with updated aliases from database
+        if let Ok(engine) = manager.get_or_create(&account_id).await {
+            let engine_guard = engine.read().await;
+
+            // Update entities to mark recipients as connections when sender is user or alias
+            match engine_guard.reprocess_entities_for_aliases() {
+                Ok(count) => info!("Reprocessed {} entity connections for account: {}", count, account_id),
+                Err(e) => tracing::warn!("Failed to reprocess entities: {}", e),
+            }
+        }
+    }
 
     Ok(())
 }

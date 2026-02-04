@@ -55,8 +55,10 @@ sha2 = "0.10"
 rand = "0.8"
 url = "2"
 
-# Secure credential storage
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+# Device-specific encryption for password storage (replaces keyring)
+aes-gcm = "0.10"
+argon2 = "0.5"
+machine-uid = "0.5"
 
 # TLS support for probing
 tokio-rustls = "0.26"

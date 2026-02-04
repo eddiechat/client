@@ -108,9 +108,27 @@ impl CredentialStore {
     /// Get an app-specific password
     pub fn get_app_password(&self, email: &str) -> Result<String, CredentialError> {
         let key = format!("app_password:{}", email);
-        let entry = Entry::new(&self.service, &key)?;
-        let password = entry.get_password()?;
-        debug!("Retrieved app-specific password for {}", email);
+        debug!("Attempting to retrieve app password for {} with key '{}'", email, key);
+
+        let entry = Entry::new(&self.service, &key).map_err(|e| {
+            let err = CredentialError::from(e);
+            debug!("Failed to create keyring entry for {}: {}", email, err);
+            err
+        })?;
+
+        let password = entry.get_password().map_err(|e| {
+            let err = CredentialError::from(e);
+            debug!("Failed to retrieve password from keyring for {}: {}", email, err);
+            err
+        })?;
+
+        if password.is_empty() {
+            let err = CredentialError::NotFound(format!("Empty password returned for {}", email));
+            debug!("{}", err);
+            return Err(err);
+        }
+
+        debug!("Retrieved app-specific password for {} (length: {})", email, password.len());
         Ok(password)
     }
 

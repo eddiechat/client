@@ -148,7 +148,14 @@ export function AccountSetupWizard({
       onSuccess();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // Handle Tauri errors which are objects with a message property
+      if (typeof e === 'object' && e !== null && 'message' in e) {
+        setError(String(e.message));
+      } else if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError(String(e));
+      }
       setStep("auth");
     } finally {
       setProcessing(false);
