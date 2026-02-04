@@ -156,11 +156,18 @@ export function AccountConfigModal({
         smtp_tls: smtpTls,
         smtp_tls_cert: smtpTlsCert.trim() || undefined,
         username: username.trim(),
-        password,
+        password: password || undefined,
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Handle Tauri errors which are objects with a message property
+      if (typeof err === 'object' && err !== null && 'message' in err) {
+        setError(String(err.message));
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(String(err));
+      }
     } finally {
       setSaving(false);
     }
@@ -173,7 +180,14 @@ export function AccountConfigModal({
       await onDelete(editData.name);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Handle Tauri errors which are objects with a message property
+      if (typeof err === 'object' && err !== null && 'message' in err) {
+        setError(String(err.message));
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(String(err));
+      }
     } finally {
       setDeleting(false);
       setConfirmDelete(false);

@@ -145,6 +145,7 @@ pub struct EmailConnectionConfig {
     pub aliases: Option<String>, // Comma-separated list of email aliases
     pub imap_config: Option<String>, // JSON serialized ImapConfig
     pub smtp_config: Option<String>, // JSON serialized SmtpConfig
+    pub encrypted_password: Option<String>, // Device-encrypted password (base64)
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -242,6 +243,7 @@ impl ConfigDatabase {
                 aliases TEXT,  -- Comma-separated list of email aliases
                 imap_config TEXT,  -- JSON serialized ImapConfig
                 smtp_config TEXT,  -- JSON serialized SmtpConfig
+                encrypted_password TEXT,  -- Device-encrypted password (base64)
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -285,6 +287,7 @@ impl ConfigDatabase {
                     display_name TEXT,
                     imap_config TEXT,
                     smtp_config TEXT,
+                    encrypted_password TEXT,  -- Device-encrypted password
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
@@ -311,6 +314,48 @@ impl ConfigDatabase {
             info!("Migration complete");
         }
 
+        // Migration: Add encrypted_password column if it doesn't exist
+        let has_encrypted_password: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('connection_configs') WHERE name = 'encrypted_password'",
+                [],
+                |row| row.get::<_, i32>(0).map(|count| count > 0),
+            )
+            .unwrap_or(false);
+
+        if !has_encrypted_password {
+            info!("Adding encrypted_password column to connection_configs table");
+            conn.execute(
+                "ALTER TABLE connection_configs ADD COLUMN encrypted_password TEXT",
+                [],
+            )
+            .map_err(|e| {
+                EddieError::Backend(format!("Failed to add encrypted_password column: {}", e))
+            })?;
+            info!("encrypted_password column added successfully");
+        }
+
+        // Migration: Add aliases column if it doesn't exist
+        let has_aliases: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('connection_configs') WHERE name = 'aliases'",
+                [],
+                |row| row.get::<_, i32>(0).map(|count| count > 0),
+            )
+            .unwrap_or(false);
+
+        if !has_aliases {
+            info!("Adding aliases column to connection_configs table");
+            conn.execute(
+                "ALTER TABLE connection_configs ADD COLUMN aliases TEXT",
+                [],
+            )
+            .map_err(|e| {
+                EddieError::Backend(format!("Failed to add aliases column: {}", e))
+            })?;
+            info!("aliases column added successfully");
+        }
+
         Ok(())
     }
 
@@ -318,8 +363,8 @@ impl ConfigDatabase {
     pub fn upsert_connection_config(&self, config: &EmailConnectionConfig) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
-            "INSERT INTO connection_configs (account_id, active, email, display_name, aliases, imap_config, smtp_config, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+            "INSERT INTO connection_configs (account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))
              ON CONFLICT(account_id) DO UPDATE SET
                 active = excluded.active,
                 email = excluded.email,
@@ -327,6 +372,7 @@ impl ConfigDatabase {
                 aliases = excluded.aliases,
                 imap_config = excluded.imap_config,
                 smtp_config = excluded.smtp_config,
+                encrypted_password = excluded.encrypted_password,
                 updated_at = datetime('now')",
             params![
                 config.account_id,
@@ -336,6 +382,7 @@ impl ConfigDatabase {
                 config.aliases,
                 config.imap_config,
                 config.smtp_config,
+                config.encrypted_password,
             ],
         )
         .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -351,7 +398,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, created_at, updated_at
                  FROM connection_configs WHERE account_id = ?1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -369,7 +416,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, created_at, updated_at
                  FROM connection_configs ORDER BY COALESCE(display_name, email) ASC",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -388,7 +435,7 @@ impl ConfigDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, created_at, updated_at
+                "SELECT account_id, active, email, display_name, aliases, imap_config, smtp_config, encrypted_password, created_at, updated_at
                  FROM connection_configs WHERE active = 1 LIMIT 1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -446,14 +493,15 @@ impl ConfigDatabase {
             aliases: row.get(4)?,
             imap_config: row.get(5)?,
             smtp_config: row.get(6)?,
+            encrypted_password: row.get(7)?,
             created_at: row
-                .get::<_, String>(7)
+                .get::<_, String>(8)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
             updated_at: row
-                .get::<_, String>(8)
+                .get::<_, String>(9)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))

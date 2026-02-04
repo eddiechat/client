@@ -71,7 +71,7 @@ export interface SaveEmailAccountRequest {
   smtp_tls: boolean;
   smtp_tls_cert?: string;
   username: string;
-  password: string;
+  password?: string;
 }
 
 export interface SaveDiscoveredEmailAccountRequest {

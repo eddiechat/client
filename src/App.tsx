@@ -256,7 +256,12 @@ function App() {
       setAccountModalOpen(true);
     } catch (err) {
       console.error("Failed to get account details:", err);
-      alert(`Failed to load account details: ${err}`);
+      const errorMessage = typeof err === 'object' && err !== null && 'message' in err
+        ? String(err.message)
+        : err instanceof Error
+        ? err.message
+        : String(err);
+      alert(`Failed to load account details: ${errorMessage}`);
     }
   }, [currentAccount, showSetupWizard, setupWizardOpen]);
 

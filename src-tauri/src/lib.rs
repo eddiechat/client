@@ -18,7 +18,7 @@ mod autodiscovery;
 mod backend;
 mod commands;
 mod config;
-mod credentials;
+mod encryption;
 mod services;
 mod state;
 mod sync;

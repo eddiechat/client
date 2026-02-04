@@ -1012,14 +1012,54 @@ impl SyncEngine {
 
     /// Handle a poll trigger - check if folders have changed
     async fn handle_poll_trigger(&self) {
-        info!("Processing poll trigger for account: {}", self.account_id);
+        debug!("Processing poll trigger for account: {}", self.account_id);
 
         // Create backend for checking
         let backend = match self.create_backend().await {
             Ok(b) => b,
             Err(e) => {
-                error!("Failed to create backend for poll check: {}", e);
+                // Log detailed error information
+                error!(
+                    "Failed to create backend for poll check (account: {}): {} [error_type: {:?}]",
+                    self.account_id,
+                    e,
+                    std::any::type_name_of_val(&e)
+                );
+
+                // Check if this is a network error (potentially transient)
+                let is_network_error = matches!(e, EddieError::Network(_));
+                let error_msg = e.to_string();
+
+                if is_network_error {
+                    warn!(
+                        "Network error during poll for account {}, will retry on next poll cycle",
+                        self.account_id
+                    );
+                } else {
+                    error!(
+                        "Non-network error during poll for account {}: {}",
+                        self.account_id, error_msg
+                    );
+                }
+
+                // Mark as offline and update status
+                let was_online = self.is_online();
                 self.set_online(false);
+
+                if was_online {
+                    info!("Marking account {} as offline due to error", self.account_id);
+                    self.update_status(|s| {
+                        s.is_online = false;
+                        s.error = Some(error_msg);
+                    })
+                    .await;
+
+                    // Emit error event for UI
+                    self.emit_event(SyncEvent::Error {
+                        message: format!("Connection lost: {}", e),
+                    });
+                }
+
                 return;
             }
         };
@@ -1033,25 +1073,51 @@ impl SyncEngine {
                 s.error = None;
             })
             .await;
+
+            // Emit event to notify frontend of restored connection
+            self.emit_event(SyncEvent::StatusChanged(SyncStatus {
+                state: SyncState::Idle,
+                account_id: self.account_id.clone(),
+                current_folder: None,
+                progress: None,
+                last_sync: None,
+                error: None,
+                is_online: true,
+                pending_actions: 0,
+                monitor_mode: None,
+            }));
         }
 
         // Get folders and check each one
         let folders = match self.get_folders_to_sync(&backend).await {
             Ok(f) => f,
             Err(e) => {
-                error!("Failed to get folders for poll check: {}", e);
+                error!(
+                    "Failed to get folders for poll check (account: {}): {}",
+                    self.account_id, e
+                );
                 return;
             }
         };
 
         let mut any_changes = false;
+        let check_start = std::time::Instant::now();
 
         for folder in &folders {
+            let folder_check_start = std::time::Instant::now();
             debug!("Checking folder for changes: {}", folder);
 
             // Fetch most recent messages to detect changes
             match backend.list_envelopes(Some(folder), 0, 10).await {
                 Ok(envelopes) => {
+                    let folder_check_elapsed = folder_check_start.elapsed();
+                    debug!(
+                        "Checked folder '{}' in {:?}, found {} envelopes",
+                        folder,
+                        folder_check_elapsed,
+                        envelopes.len()
+                    );
+
                     // Get the most recent message ID (first in the list, as they're sorted newest-first)
                     // Use and_then to flatten Option<Option<String>> to Option<String>
                     let latest_message_id = envelopes.first().and_then(|e| e.message_id.clone());
@@ -1059,19 +1125,37 @@ impl SyncEngine {
                     if let Some(monitor) = &self.monitor {
                         if monitor.check_folder_changes(folder, latest_message_id.as_deref()).await {
                             info!(
-                                "Changes detected in folder '{}', triggering sync",
-                                folder
+                                "Changes detected in folder '{}' (latest_message_id: {:?}), triggering sync",
+                                folder,
+                                latest_message_id
                             );
                             any_changes = true;
                             monitor.update_folder_state(folder, latest_message_id).await;
+                        } else {
+                            debug!("No changes detected in folder '{}'", folder);
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to check folder '{}': {}", folder, e);
+                    let folder_check_elapsed = folder_check_start.elapsed();
+                    warn!(
+                        "Failed to check folder '{}' after {:?}: {} [error_type: {:?}]",
+                        folder,
+                        folder_check_elapsed,
+                        e,
+                        std::any::type_name_of_val(&e)
+                    );
                 }
             }
         }
+
+        let total_check_time = check_start.elapsed();
+        debug!(
+            "Poll check completed for {} folders in {:?}, changes_detected: {}",
+            folders.len(),
+            total_check_time,
+            any_changes
+        );
 
         if any_changes {
             info!("Changes detected, triggering full sync");
