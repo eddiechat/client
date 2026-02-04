@@ -133,11 +133,16 @@ function App() {
         .sort();
 
       const existingConversation = conversations.find((conv) => {
+        // Filter out current user from conversation participants before comparing
+        // Backend includes all participants including the current user,
+        // but when composing users only enter the recipients
+        const currentUserEmail = currentAccount?.toLowerCase();
         const convParticipants = conv.participants
           .map((p) => extractEmail(p).toLowerCase())
+          .filter((p) => p !== currentUserEmail)
           .sort();
 
-        // Check if participants match (excluding current user)
+        // Check if participants match
         return (
           JSON.stringify(normalizedParticipants) ===
           JSON.stringify(convParticipants)
@@ -154,7 +159,7 @@ function App() {
         setComposeParticipants(participants);
       }
     },
-    [conversations]
+    [conversations, currentAccount]
   );
 
   // Handle sending a new message in compose mode (no existing conversation)
