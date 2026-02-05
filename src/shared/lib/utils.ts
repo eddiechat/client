@@ -81,11 +81,24 @@ export function getGravatarUrl(email: string, size: number = 40): string {
  * Handles both "Name <email>" and "email" formats.
  */
 export function extractEmail(participant: string): string {
-  const match = participant.match(/<([^>]+)>/);
-  if (match) {
-    return match[1].trim().toLowerCase();
+  if (!participant) {
+    if (import.meta.env.DEV) {
+      console.warn('[extractEmail] received empty/null participant:', participant);
+    }
+    return "";
   }
-  return participant.trim().toLowerCase();
+
+  const match = participant.match(/<([^>]+)>/);
+  const result = match ? match[1].trim().toLowerCase() : participant.trim().toLowerCase();
+
+  if (import.meta.env.DEV && !result.includes('@')) {
+    console.warn('[extractEmail] extracted value is not an email:', {
+      input: participant,
+      output: result
+    });
+  }
+
+  return result;
 }
 
 /**

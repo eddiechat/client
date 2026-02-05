@@ -29,6 +29,7 @@ interface ConversationViewProps {
   loading?: boolean;
   error?: string | null;
   currentAccountEmail?: string;
+  currentAccountAliases?: string[];
   onSendMessage: (text: string, attachments?: ComposeAttachment[], replyTarget?: ReplyTarget) => void;
   onBack?: () => void;
   isComposing?: boolean;
@@ -47,6 +48,7 @@ export function ConversationView({
   loading,
   error,
   currentAccountEmail,
+  currentAccountAliases = [],
   onSendMessage,
   onBack,
   isComposing,
@@ -534,7 +536,8 @@ export function ConversationView({
                 {messages.map((message, index) => {
                   const isOut = isOutgoing(
                     message.envelope.from,
-                    currentAccountEmail
+                    currentAccountEmail,
+                    currentAccountAliases
                   );
                   const showDateSeparator =
                     index === 0 ||
@@ -878,15 +881,17 @@ function MessageBubble({
       >
         {!isOutgoing && (
           <Avatar
-            email={extractEmail(message.envelope.from)}
-            name={getSenderName(message.envelope.from)}
+            email={message.envelope.from ? extractEmail(message.envelope.from) : ""}
+            name={message.envelope.from ? getSenderName(message.envelope.from) : "Unknown"}
             size={32}
             className="self-end cursor-pointer"
-            title={getAvatarTooltip(message.envelope.from, message.id)}
+            title={message.envelope.from ? getAvatarTooltip(message.envelope.from, message.id) : ""}
             onClick={() => {
-              const email = extractEmail(message.envelope.from);
-              const name = getSenderName(message.envelope.from);
-              if (email) onAvatarClick(email, name);
+              if (message.envelope.from) {
+                const email = extractEmail(message.envelope.from);
+                const name = getSenderName(message.envelope.from);
+                if (email) onAvatarClick(email, name);
+              }
             }}
           />
         )}

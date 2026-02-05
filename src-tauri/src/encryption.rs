@@ -17,6 +17,9 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use thiserror::Error;
 use tracing::debug;
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use std::{fs, path::PathBuf};
+
 /// Application-specific salt for key derivation
 /// This should be unique per application to prevent cross-app key derivation
 const APP_SALT: &[u8] = b"eddie.chat.v1.encryption.salt.2026";
@@ -60,9 +63,7 @@ impl DeviceEncryption {
     /// Derive a device-specific encryption key
     fn derive_device_key() -> Result<[u8; 32], EncryptionError> {
         // Get machine-specific identifier
-        let machine_id = machine_uid::get().map_err(|e| {
-            EncryptionError::DeviceId(format!("Failed to get machine ID: {}", e))
-        })?;
+        let machine_id = Self::get_device_id()?;
 
         // Get current username
         let username = std::env::var("USER")
@@ -110,6 +111,56 @@ impl DeviceEncryption {
 
         debug!("Successfully derived device-specific encryption key");
         Ok(output_key)
+    }
+
+    /// Get device-specific identifier
+    /// On desktop: use machine-uid crate
+    /// On mobile: use persistent UUID stored in app data directory
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn get_device_id() -> Result<String, EncryptionError> {
+        machine_uid::get().map_err(|e| {
+            EncryptionError::DeviceId(format!("Failed to get machine ID: {}", e))
+        })
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fn get_device_id() -> Result<String, EncryptionError> {
+        // On mobile, use a persistent UUID stored in the app data directory
+        let device_id_path = Self::get_mobile_device_id_path()?;
+
+        // If device ID file exists, read it
+        if device_id_path.exists() {
+            fs::read_to_string(&device_id_path)
+                .map_err(|e| {
+                    EncryptionError::DeviceId(format!("Failed to read device ID file: {}", e))
+                })
+        } else {
+            // Generate new UUID and store it
+            let device_id = uuid::Uuid::new_v4().to_string();
+
+            // Ensure parent directory exists
+            if let Some(parent) = device_id_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    EncryptionError::DeviceId(format!("Failed to create device ID directory: {}", e))
+                })?;
+            }
+
+            fs::write(&device_id_path, &device_id).map_err(|e| {
+                EncryptionError::DeviceId(format!("Failed to write device ID file: {}", e))
+            })?;
+
+            debug!("Generated new mobile device ID");
+            Ok(device_id)
+        }
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fn get_mobile_device_id_path() -> Result<PathBuf, EncryptionError> {
+        let data_dir = dirs::data_dir().ok_or_else(|| {
+            EncryptionError::DeviceId("Failed to get app data directory".to_string())
+        })?;
+
+        Ok(data_dir.join("eddie.chat").join(".device_id"))
     }
 
     /// Encrypt a plaintext string

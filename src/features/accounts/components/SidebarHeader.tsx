@@ -1,5 +1,6 @@
 import type { EmailAccount } from "../../../tauri";
-// import { useState } from "react";
+import { getAppVersion } from "../../../tauri";
+import { useState, useEffect } from "react";
 // import { dropAndResync } from "../../../tauri";
 
 interface SidebarHeaderProps {
@@ -15,6 +16,23 @@ export function SidebarHeader({
   onEditAccount,
   onCompose,
 }: SidebarHeaderProps) {
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Fetch version on mount
+    const fetchVersion = async () => {
+      try {
+        const appVersion = await getAppVersion();
+        const devSuffix = import.meta.env.DEV ? " (dev)" : "";
+        setVersion(`${appVersion}${devSuffix}`);
+      } catch (err) {
+        console.error("Failed to get version:", err);
+      }
+    };
+
+    fetchVersion();
+  }, []);
+
   // const [isResyncing, setIsResyncing] = useState(false);
 
   // const handleResync = async () => {
@@ -44,9 +62,16 @@ export function SidebarHeader({
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <img src="/eddie-swirl-green.svg" alt="Eddie logo" className="w-6 h-6" />
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">
-            eddie
-          </h1>
+          <div className="flex items-baseline gap-1.5">
+            <h1 className="text-xl font-semibold text-text-primary tracking-tight">
+              eddie
+            </h1>
+            {version && (
+              <span className="text-xs text-text-muted font-normal">
+                v{version}
+              </span>
+            )}
+          </div>
         </div>
         {accounts.length > 0 && (
           <span
