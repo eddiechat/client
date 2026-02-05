@@ -17,29 +17,20 @@ export function SidebarHeader({
   onCompose,
 }: SidebarHeaderProps) {
   const [version, setVersion] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Detect if we're on mobile platform
-    const checkPlatform = async () => {
+    // Fetch version on mount
+    const fetchVersion = async () => {
       try {
-        // Check user agent for mobile platforms
-        const ua = navigator.userAgent.toLowerCase();
-        const mobile = ua.includes('android') || ua.includes('iphone') || ua.includes('ipad');
-        setIsMobile(mobile);
-
-        // Only fetch version on mobile
-        if (mobile) {
-          const appVersion = await getAppVersion();
-          const devSuffix = import.meta.env.DEV ? " (dev)" : "";
-          setVersion(`${appVersion}${devSuffix}`);
-        }
+        const appVersion = await getAppVersion();
+        const devSuffix = import.meta.env.DEV ? " (dev)" : "";
+        setVersion(`${appVersion}${devSuffix}`);
       } catch (err) {
-        console.error("Failed to detect platform or get version:", err);
+        console.error("Failed to get version:", err);
       }
     };
 
-    checkPlatform();
+    fetchVersion();
   }, []);
 
   // const [isResyncing, setIsResyncing] = useState(false);
@@ -75,7 +66,7 @@ export function SidebarHeader({
             <h1 className="text-xl font-semibold text-text-primary tracking-tight">
               eddie
             </h1>
-            {isMobile && version && (
+            {version && (
               <span className="text-xs text-text-muted font-normal">
                 v{version}
               </span>

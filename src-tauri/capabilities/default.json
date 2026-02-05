@@ -14,7 +14,6 @@
     "core:window:allow-minimize",
     "core:window:allow-maximize",
     "core:window:allow-set-size",
-    "core:window:allow-set-title",
     "core:event:default",
     "core:app:default"
   ]

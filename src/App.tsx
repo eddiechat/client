@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AccountConfigModal,
   AccountSetupWizard,
@@ -14,7 +13,6 @@ import {
   useConversationMessages,
 } from "./features/conversations";
 import {
-  getAppVersion,
   saveAccount,
   removeAccount,
   getAccountDetails,
@@ -60,22 +58,6 @@ function App() {
 
   // Get current account email for determining message direction
   const currentAccountEmail = currentAccount || undefined;
-
-  // Set window title with version on mount
-  useEffect(() => {
-    const updateTitle = async () => {
-      try {
-        const version = await getAppVersion();
-        const devSuffix = import.meta.env.DEV ? " (dev)" : "";
-        const window = getCurrentWindow();
-        await window.setTitle(`eddie.chat v${version}${devSuffix}`);
-      } catch (err) {
-        console.error("Failed to set window title:", err);
-      }
-    };
-
-    updateTitle();
-  }, []);
 
   // Fetch account details (including aliases) when current account changes
   useEffect(() => {
