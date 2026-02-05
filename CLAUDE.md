@@ -59,6 +59,22 @@ import { listAccounts } from '../tauri';
 const data = await listAccounts();
 ```
 
+**Exception: Tauri UI Plugins**
+
+Direct usage of Tauri UI plugins (dialog, shell, clipboard, etc.) is acceptable in components as they don't involve backend business logic:
+
+```typescript
+// ACCEPTABLE - UI plugin for file dialogs
+import { open } from '@tauri-apps/plugin-dialog';
+const file = await open({ multiple: false });
+
+// ACCEPTABLE - Shell plugin for opening URLs
+import { open as openUrl } from '@tauri-apps/plugin-shell';
+await openUrl('https://example.com');
+```
+
+These plugins provide UI/OS integration and don't need abstraction through the tauri layer.
+
 **Adding new Tauri commands:**
 
 1. Add the type-safe wrapper in `src/tauri/commands.ts`
