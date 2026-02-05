@@ -250,18 +250,29 @@ function App() {
       if (replyTarget) {
         // This is a reply - use "Re:" subject and include quoted text
         const originalSubject = replyTarget.subject || "";
+
         // Avoid double "Re:" prefix
         subject = originalSubject.toLowerCase().startsWith("re:")
           ? originalSubject
           : `Re: ${originalSubject}`;
+
+        console.log('Reply subject generation:', {
+          originalSubject: replyTarget.subject,
+          finalSubject: subject,
+        });
 
         // Add quoted text at the end of the body
         const quotedText = `\n\n> ${replyTarget.snippet.split('\n').join('\n> ')}`;
         body = text + quotedText;
         inReplyTo = replyTarget.messageId;
       } else {
-        // This is a new message in the conversation - use generic subject
-        subject = `${getSenderDisplayName()} via Eddie`;
+        // This is a new message in the conversation
+        // If there are already messages in this conversation, use "Re:" to maintain threading
+        const baseSubject = `${getSenderDisplayName()} via Eddie`;
+        const hasExistingMessages = selectedConversation?.message_ids &&
+                                   selectedConversation.message_ids.length > 0;
+
+        subject = hasExistingMessages ? `Re: ${baseSubject}` : baseSubject;
         body = text;
         inReplyTo = undefined;
       }
@@ -282,8 +293,10 @@ function App() {
       if (result?.sent_folder) {
         await syncFolder(result.sent_folder, currentAccount || undefined);
       }
-      refreshConversations();
-      refreshMessages();
+
+      // Refresh conversations and messages to show the sent message
+      await refreshConversations();
+      await refreshMessages();
     },
     [selectedConversation, currentAccount, refreshConversations, refreshMessages, getSenderDisplayName]
   );

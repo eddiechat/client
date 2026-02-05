@@ -102,6 +102,7 @@ export interface Conversation {
   is_outgoing: boolean;
   user_name: string;
   user_in_conversation: boolean;
+  canonical_subject?: string | null; // Meaningful subject for the conversation (stripped of "via Eddie")
   /** Internal: cached conversation ID for database operations */
   _cached_id?: number;
 }
@@ -131,6 +132,7 @@ export interface CachedConversation {
   message_count: number;
   unread_count: number;
   is_outgoing: boolean;
+  canonical_subject: string | null; // Meaningful subject for the conversation (stripped of "via Eddie")
 }
 
 export interface CachedChatMessage {
@@ -180,7 +182,8 @@ export interface ComposeMessageData {
 }
 
 export interface SendMessageResult {
-  message_id: string;
+  uid: string;           // IMAP UID of the saved message
+  message_id: string;    // Message-ID email header (for deduplication)
   sent_folder: string;
 }
 

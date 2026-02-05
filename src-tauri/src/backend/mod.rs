@@ -30,10 +30,11 @@ use crate::sync::db::{get_active_connection_config, get_connection_config, init_
 use crate::types::error::EddieError;
 use crate::types::{Attachment, Envelope, Folder, ChatMessage};
 
-/// Result of sending a message - contains the message ID and sent folder name
+/// Result of sending a message - contains the UID, Message-ID header, and sent folder name
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SendMessageResult {
-    pub message_id: String,
+    pub uid: String,           // IMAP UID of the saved message
+    pub message_id: String,    // Message-ID email header (for deduplication)
     pub sent_folder: String,
 }
 
@@ -218,7 +219,6 @@ impl EmailBackend {
                     )));
                 }
 
-                debug!("Successfully retrieved and decrypted password for {} (length: {})", email, password.len());
                 Ok((user.clone(), ImapAuthConfig::Password(PasswordConfig(Secret::new_raw(password)))))
             }
         }
@@ -1021,12 +1021,43 @@ impl EmailBackend {
             .map_err(|e| EddieError::Backend(e.to_string()))
     }
 
+    /// Extract Message-ID header from raw message bytes
+    /// Used for deduplication tracking
+    fn extract_message_id(raw_message: &[u8]) -> Option<String> {
+        let message_str = String::from_utf8_lossy(raw_message);
+
+        // Find the Message-ID header (case-insensitive)
+        for line in message_str.lines() {
+            if line.is_empty() {
+                // Reached end of headers
+                break;
+            }
+            if line.to_lowercase().starts_with("message-id:") {
+                // Extract the Message-ID value (after "Message-ID: ")
+                let msg_id = line[11..].trim().to_string();
+                debug!("Extracted Message-ID from raw message: {}", msg_id);
+                return Some(msg_id);
+            }
+        }
+
+        warn!("Could not extract Message-ID from raw message");
+        None
+    }
+
     /// Send a message via SMTP and save to Sent folder
-    /// Returns the message ID and sent folder name, or None if no Sent folder was found
+    /// Returns the UID, Message-ID header, and sent folder name, or None if no Sent folder was found
     pub async fn send_message(
         &self,
         raw_message: &[u8],
     ) -> Result<Option<SendMessageResult>, EddieError> {
+        // Extract Message-ID before sending for deduplication tracking
+        let message_id = Self::extract_message_id(raw_message)
+            .unwrap_or_else(|| "<unknown>".to_string());
+
+        info!("=== SEND MESSAGE START ===");
+        info!("Message-ID: {}", message_id);
+        debug!("Raw message size: {} bytes", raw_message.len());
+
         // First, send via SMTP
         let smtp_config = self.build_smtp_config().await?;
 
@@ -1052,14 +1083,17 @@ impl EmailBackend {
 
         if let Some(folder) = sent_folder {
             info!("Saving sent message to folder: {}", folder);
-            let id = self.save_message(Some(&folder), raw_message).await?;
-            info!("Message saved to Sent folder with id: {}", id);
+            let uid = self.save_message(Some(&folder), raw_message).await?;
+            info!("Message saved to Sent folder with UID: {}", uid);
+            info!("=== SEND MESSAGE END ===");
             Ok(Some(SendMessageResult {
-                message_id: id,
+                uid,
+                message_id,
                 sent_folder: folder,
             }))
         } else {
             info!("No Sent folder found, message not saved to IMAP");
+            info!("=== SEND MESSAGE END ===");
             Ok(None)
         }
     }

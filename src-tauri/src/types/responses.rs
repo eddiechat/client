@@ -96,6 +96,7 @@ pub struct ConversationResponse {
     pub message_count: u32,
     pub unread_count: u32,
     pub is_outgoing: bool,
+    pub canonical_subject: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +120,7 @@ impl From<CachedConversation> for ConversationResponse {
             message_count: c.message_count,
             unread_count: c.unread_count,
             is_outgoing: c.is_outgoing,
+            canonical_subject: c.canonical_subject,
         }
     }
 }

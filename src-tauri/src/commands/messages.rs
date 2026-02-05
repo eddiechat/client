@@ -141,6 +141,7 @@ pub async fn move_messages(
 pub async fn send_message(
     account: Option<String>,
     message: String,
+    sync_manager: State<'_, SyncManager>,
 ) -> Result<Option<SendMessageResult>, EddieError> {
     info!("Sending message, length: {}", message.len());
 
@@ -148,10 +149,25 @@ pub async fn send_message(
         .await
         .map_err(|e| EddieError::Backend(e.to_string()))?;
 
-    backend
+    let result = backend
         .send_message(message.as_bytes())
         .await
-        .map_err(|e| EddieError::Backend(e.to_string()))
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+    // Record sent message in deduplication cache to prevent duplicates during immediate sync
+    if let Some(ref send_result) = result {
+        let account_id = resolve_account_id(account.as_deref())?;
+        if let Ok(engine) = sync_manager.get_or_create(&account_id).await {
+            let engine_lock = engine.read().await;
+            engine_lock.record_sent_message(send_result.message_id.clone()).await;
+            info!(
+                "Message sent successfully. UID: {}, Message-ID: {}",
+                send_result.uid, send_result.message_id
+            );
+        }
+    }
+
+    Ok(result)
 }
 
 /// Save a message to a folder (drafts)
@@ -184,6 +200,7 @@ pub async fn send_message_with_attachments(
     body: String,
     attachments: Vec<ComposeAttachment>,
     in_reply_to: Option<String>,
+    sync_manager: State<'_, SyncManager>,
 ) -> Result<Option<SendMessageResult>, EddieError> {
     info!(
         "Sending message with {} attachments, in_reply_to: {:?}",
@@ -206,10 +223,25 @@ pub async fn send_message_with_attachments(
         in_reply_to,
     })?;
 
-    backend
+    let result = backend
         .send_message(&raw_message)
         .await
-        .map_err(|e| EddieError::Backend(e.to_string()))
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+    // Record sent message in deduplication cache to prevent duplicates during immediate sync
+    if let Some(ref send_result) = result {
+        let account_id = resolve_account_id(account.as_deref())?;
+        if let Ok(engine) = sync_manager.get_or_create(&account_id).await {
+            let engine_lock = engine.read().await;
+            engine_lock.record_sent_message(send_result.message_id.clone()).await;
+            info!(
+                "Message sent successfully. UID: {}, Message-ID: {}",
+                send_result.uid, send_result.message_id
+            );
+        }
+    }
+
+    Ok(result)
 }
 
 /// Get attachment information for a message (without downloading content)

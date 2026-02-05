@@ -9,9 +9,33 @@ use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
+use tracing::debug;
 
 use crate::sync::db::{CachedConversation, CachedChatMessage, SyncDatabase};
 use crate::types::error::EddieError;
+
+/// Check if a subject line ends with "via Eddie"
+fn is_via_eddie_subject(subject: &str) -> bool {
+    subject.trim().ends_with("via Eddie") || subject.trim().ends_with("via eddie")
+}
+
+/// Strip "Re:", "Fwd:", etc. prefixes from subject line recursively
+fn strip_subject_prefixes(subject: &str) -> String {
+    let s = subject.trim();
+    let lower = s.to_lowercase();
+
+    if lower.starts_with("re:") {
+        return strip_subject_prefixes(&s[3..].trim());
+    }
+    if lower.starts_with("fwd:") || lower.starts_with("fw:") {
+        return strip_subject_prefixes(&s[4..].trim());
+    }
+    if lower.starts_with("fwd:") {
+        return strip_subject_prefixes(&s[4..].trim());
+    }
+
+    s.to_string()
+}
 
 /// Participant information
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -278,6 +302,7 @@ impl ConversationGrouper {
             unread_count: 0,  // Will be incremented atomically
             is_outgoing,
             classification: None, // Will be set when a chat message is found
+            canonical_subject: None, // Will be set when a non-"via Eddie" message is found
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -299,6 +324,23 @@ impl ConversationGrouper {
 
         // Step 3: Link message to conversation
         self.db.link_message_to_conversation(conv_id, message.id)?;
+
+        // Step 4: Track canonical subject for the conversation
+        // Set the subject if it's meaningful (not "via Eddie") and conversation doesn't have one yet
+        if let Some(ref subject) = message.subject {
+            if !subject.is_empty() && !is_via_eddie_subject(subject) {
+                // Strip prefixes like "Re:", "Fwd:" to get the base subject
+                let canonical = strip_subject_prefixes(subject);
+                if !canonical.is_empty() && canonical.len() > 1 {
+                    // Only set if conversation doesn't have a canonical subject yet
+                    let _ = self.db.set_conversation_canonical_subject(conv_id, &canonical);
+                    debug!(
+                        "Set canonical subject for conversation {}: {}",
+                        conv_id, canonical
+                    );
+                }
+            }
+        }
 
         Ok(conv_id)
     }
@@ -470,7 +512,7 @@ impl ConversationGrouper {
         let existing: Option<CachedConversation> = {
             let mut stmt = tx.prepare(
                 "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                        last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
+                        last_message_from, message_count, unread_count, is_outgoing, classification, canonical_subject, created_at, updated_at
                  FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
             ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
@@ -490,14 +532,15 @@ impl ConversationGrouper {
                     unread_count: row.get(8)?,
                     is_outgoing: row.get::<_, i32>(9)? != 0,
                     classification: row.get(10)?,
+                    canonical_subject: row.get(11)?,
                     created_at: row
-                        .get::<_, String>(11)
+                        .get::<_, String>(12)
                         .ok()
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(Utc::now),
                     updated_at: row
-                        .get::<_, String>(12)
+                        .get::<_, String>(13)
                         .ok()
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc))
@@ -569,6 +612,7 @@ impl ConversationGrouper {
                 unread_count: if !is_seen && !is_outgoing { 1 } else { 0 },
                 is_outgoing,
                 classification: None, // Will be set when a chat message is found
+                canonical_subject: None, // Will be set when a non-"via Eddie" message is found
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }
