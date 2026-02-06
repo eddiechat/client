@@ -2,3 +2,9 @@
 - Read-only mode (enabled by default)
 - Notification when attempting to send messages in read-only mode
 - Onboarding messages during initial email ingestion
+
+### Changed
+- Documentation updates
+
+### Fixed
+- Build error in iOS
