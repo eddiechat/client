@@ -543,7 +543,7 @@ jobs:
           fi
 
           # Install dependencies
-          pip3 install PyJWT cryptography requests
+          pip3 install --break-system-packages PyJWT cryptography requests
 
           # Create Python script to set release notes via App Store Connect API
           cat > set_testflight_notes.py << 'PYTHON_SCRIPT'
