@@ -259,8 +259,14 @@ impl SyncEngine {
     pub async fn full_sync(&self) -> Result<SyncResult, EddieError> {
         info!("Starting full sync for account: {}", self.account_id);
 
+        // Check if this is an initial sync (no last sync time)
+        let is_initial_sync = {
+            let status = self.status.read().await;
+            status.last_sync.is_none()
+        };
+
         self.update_status(|s| {
-            s.state = SyncState::Syncing;
+            s.state = if is_initial_sync { SyncState::InitialSync } else { SyncState::Syncing };
             s.error = None;
         })
         .await;
@@ -303,18 +309,39 @@ impl SyncEngine {
 
     /// Internal full sync implementation
     async fn do_full_sync(&self) -> Result<SyncResult, EddieError> {
+        // Check if this is initial sync for user-friendly messages
+        let is_initial_sync = {
+            let status = self.status.read().await;
+            status.last_sync.is_none()
+        };
+
+        // Show "Connecting to mail server" for initial sync
+        if is_initial_sync {
+            self.update_status(|s| {
+                s.progress = Some(SyncProgressInfo {
+                    phase: "connecting".to_string(),
+                    current: 0,
+                    total: None,
+                    message: "Connecting to mail server".to_string(),
+                });
+            })
+            .await;
+        }
+
         let backend = self.create_backend().await?;
 
-        // Replay any pending offline actions first
-        self.update_status(|s| {
-            s.progress = Some(SyncProgressInfo {
-                phase: "replaying".to_string(),
-                current: 0,
-                total: None,
-                message: "Replaying pending actions...".to_string(),
-            });
-        })
-        .await;
+        // Replay any pending offline actions first (skip message for initial sync)
+        if !is_initial_sync {
+            self.update_status(|s| {
+                s.progress = Some(SyncProgressInfo {
+                    phase: "replaying".to_string(),
+                    current: 0,
+                    total: None,
+                    message: "Replaying pending actions...".to_string(),
+                });
+            })
+            .await;
+        }
 
         match self.action_queue.replay_pending(&self.account_id, &backend).await {
             Ok(results) => {
@@ -341,13 +368,19 @@ impl SyncEngine {
 
         // Sync each folder
         for (idx, folder) in folders_to_sync.iter().enumerate() {
+            let message = if is_initial_sync {
+                "Fetching messages".to_string()
+            } else {
+                format!("Syncing {}...", folder)
+            };
+
             self.update_status(|s| {
                 s.current_folder = Some(folder.clone());
                 s.progress = Some(SyncProgressInfo {
                     phase: "syncing".to_string(),
                     current: idx as u32,
                     total: Some(folders_to_sync.len() as u32),
-                    message: format!("Syncing {}...", folder),
+                    message,
                 });
             })
             .await;
@@ -363,13 +396,32 @@ impl SyncEngine {
             }
         }
 
+        // Show "Building trust network" for initial sync (entity/connection processing)
+        if is_initial_sync {
+            self.update_status(|s| {
+                s.progress = Some(SyncProgressInfo {
+                    phase: "trust_network".to_string(),
+                    current: 0,
+                    total: None,
+                    message: "Building trust network".to_string(),
+                });
+            })
+            .await;
+        }
+
         // Rebuild conversations from all cached messages
+        let conversation_message = if is_initial_sync {
+            "Organising messages into conversations".to_string()
+        } else {
+            "Building conversations...".to_string()
+        };
+
         self.update_status(|s| {
             s.progress = Some(SyncProgressInfo {
                 phase: "conversations".to_string(),
                 current: 0,
                 total: None,
-                message: "Building conversations...".to_string(),
+                message: conversation_message,
             });
         })
         .await;
@@ -382,6 +434,19 @@ impl SyncEngine {
 
         // Update conversation classifications based on existing message classifications
         self.db.update_conversation_classifications(&self.account_id)?;
+
+        // Show "Almost there" for initial sync before completion
+        if is_initial_sync {
+            self.update_status(|s| {
+                s.progress = Some(SyncProgressInfo {
+                    phase: "finalizing".to_string(),
+                    current: 0,
+                    total: None,
+                    message: "Almost there".to_string(),
+                });
+            })
+            .await;
+        }
 
         // Get affected conversation IDs (all conversations)
         let conversations = self.db.get_conversations(&self.account_id, None)?;

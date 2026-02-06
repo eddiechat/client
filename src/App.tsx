@@ -9,6 +9,7 @@ import {
 import {
   ChatMessages,
   ConversationView,
+  InitialSyncLoader,
   useConversations,
   useConversationMessages,
 } from "./features/conversations";
@@ -87,8 +88,17 @@ function App() {
   const {
     conversations,
     loading: conversationsLoading,
+    syncing,
+    syncStatus,
     refresh: refreshConversations,
   } = useConversations(currentAccount || undefined, activeFilter);
+
+  // Show initial loader when: we have an account, no conversations, and either
+  // in initial sync, loading, syncing, or never synced before
+  const isInitialSync = syncStatus?.state === "initial_sync";
+  const neverSynced = !!currentAccount && !syncStatus?.last_sync;
+  const noConversations = conversations.length === 0;
+  const showInitialLoader = noConversations && (isInitialSync || conversationsLoading || syncing || neverSynced);
 
   // Messages for selected conversation
   const {
@@ -353,35 +363,43 @@ function App() {
           onCompose={handleCompose}
         />
 
-        <ChatMessages
-          conversations={conversations}
-          selectedId={selectedConversation?.id || null}
-          onSelect={handleConversationSelect}
-          loading={conversationsLoading}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          currentAccountEmail={currentAccountEmail}
-          activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
-        />
+        {showInitialLoader ? (
+          <InitialSyncLoader syncStatus={syncStatus} />
+        ) : (
+          <ChatMessages
+            conversations={conversations}
+            selectedId={selectedConversation?.id || null}
+            onSelect={handleConversationSelect}
+            loading={conversationsLoading}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            currentAccountEmail={currentAccountEmail}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+          />
+        )}
       </aside>
 
       {/* Main conversation view */}
       <section className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full min-h-0">
-        <ConversationView
-          conversation={selectedConversation}
-          messages={messages}
-          loading={messagesLoading}
-          error={messagesError}
-          currentAccountEmail={currentAccountEmail}
-          currentAccountAliases={currentAccountAliases}
-          onSendMessage={handleSendFromConversation}
-          onBack={handleBack}
-          isComposing={isComposing}
-          composeParticipants={composeParticipants}
-          onComposeParticipantsConfirm={handleComposeParticipantsConfirm}
-          onSendNewMessage={handleSendNewMessage}
-        />
+        {showInitialLoader ? (
+          <InitialSyncLoader syncStatus={syncStatus} />
+        ) : (
+          <ConversationView
+            conversation={selectedConversation}
+            messages={messages}
+            loading={messagesLoading}
+            error={messagesError}
+            currentAccountEmail={currentAccountEmail}
+            currentAccountAliases={currentAccountAliases}
+            onSendMessage={handleSendFromConversation}
+            onBack={handleBack}
+            isComposing={isComposing}
+            composeParticipants={composeParticipants}
+            onComposeParticipantsConfirm={handleComposeParticipantsConfirm}
+            onSendNewMessage={handleSendNewMessage}
+          />
+        )}
       </section>
 
       {/* Account Setup Wizard */}
