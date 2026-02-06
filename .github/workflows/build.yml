@@ -529,6 +529,169 @@ jobs:
             --apiKey "$APPLE_API_KEY_ID" \
             --apiIssuer "$APPLE_API_ISSUER"
 
+      - name: Set TestFlight release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          # Check if RELEASE_NOTES.txt exists
+          if [ ! -f "RELEASE_NOTES.txt" ]; then
+            echo "RELEASE_NOTES.txt not found, skipping TestFlight notes"
+            exit 0
+          fi
+
+          # Install dependencies
+          pip3 install PyJWT cryptography requests
+
+          # Create Python script to set release notes via App Store Connect API
+          cat > set_testflight_notes.py << 'PYTHON_SCRIPT'
+          import jwt
+          import time
+          import requests
+          import json
+          import os
+          import sys
+
+          # Read release notes
+          with open('RELEASE_NOTES.txt', 'r') as f:
+              release_notes = f.read().strip()
+
+          # Generate JWT token
+          key_id = os.environ['APPLE_API_KEY_ID']
+          issuer_id = os.environ['APPLE_API_ISSUER']
+          key_path = os.path.expanduser(f'~/private_keys/AuthKey_{key_id}.p8')
+
+          with open(key_path, 'r') as f:
+              private_key = f.read()
+
+          token = jwt.encode(
+              {
+                  'iss': issuer_id,
+                  'exp': int(time.time()) + 1200,
+                  'aud': 'appstoreconnect-v1'
+              },
+              private_key,
+              algorithm='ES256',
+              headers={'kid': key_id}
+          )
+
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Content-Type': 'application/json'
+          }
+
+          # Get app ID (bundle identifier: chat.eddie)
+          print("Finding app...")
+          response = requests.get(
+              'https://api.appstoreconnect.apple.com/v1/apps?filter[bundleId]=chat.eddie',
+              headers=headers
+          )
+          response.raise_for_status()
+          apps = response.json()['data']
+          if not apps:
+              print("App not found")
+              sys.exit(1)
+
+          app_id = apps[0]['id']
+          print(f"App ID: {app_id}")
+
+          # Get latest pre-release version (wait up to 5 minutes for build to appear)
+          print("Waiting for build to appear in App Store Connect...")
+          build_id = None
+          for attempt in range(30):
+              response = requests.get(
+                  f'https://api.appstoreconnect.apple.com/v1/apps/{app_id}/preReleaseVersions',
+                  headers=headers
+              )
+              response.raise_for_status()
+              versions = response.json()['data']
+
+              if versions:
+                  version_id = versions[0]['id']
+
+                  # Get builds for this version
+                  response = requests.get(
+                      f'https://api.appstoreconnect.apple.com/v1/preReleaseVersions/{version_id}/builds',
+                      headers=headers
+                  )
+                  response.raise_for_status()
+                  builds = response.json()['data']
+
+                  if builds:
+                      build_id = builds[0]['id']
+                      print(f"Found build: {build_id}")
+                      break
+
+              if attempt < 29:
+                  print(f"Build not yet available, waiting... (attempt {attempt + 1}/30)")
+                  time.sleep(10)
+
+          if not build_id:
+              print("Build not found after waiting, skipping release notes")
+              sys.exit(0)
+
+          # Get or create beta build localization
+          response = requests.get(
+              f'https://api.appstoreconnect.apple.com/v1/builds/{build_id}/betaBuildLocalizations',
+              headers=headers
+          )
+          response.raise_for_status()
+          localizations = response.json()['data']
+
+          if localizations:
+              # Update existing localization
+              localization_id = localizations[0]['id']
+              print(f"Updating existing localization: {localization_id}")
+
+              response = requests.patch(
+                  f'https://api.appstoreconnect.apple.com/v1/betaBuildLocalizations/{localization_id}',
+                  headers=headers,
+                  json={
+                      'data': {
+                          'type': 'betaBuildLocalizations',
+                          'id': localization_id,
+                          'attributes': {
+                              'whatsNew': release_notes
+                          }
+                      }
+                  }
+              )
+              response.raise_for_status()
+          else:
+              # Create new localization
+              print("Creating new localization")
+
+              response = requests.post(
+                  'https://api.appstoreconnect.apple.com/v1/betaBuildLocalizations',
+                  headers=headers,
+                  json={
+                      'data': {
+                          'type': 'betaBuildLocalizations',
+                          'attributes': {
+                              'locale': 'en-US',
+                              'whatsNew': release_notes
+                          },
+                          'relationships': {
+                              'build': {
+                                  'data': {
+                                      'type': 'builds',
+                                      'id': build_id
+                                  }
+                              }
+                          }
+                      }
+                  }
+              )
+              response.raise_for_status()
+
+          print("✅ TestFlight release notes updated successfully")
+          PYTHON_SCRIPT
+
+          # Run the script
+          python3 set_testflight_notes.py
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:

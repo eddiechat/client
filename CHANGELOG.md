@@ -1,0 +1,59 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.5] - 2026-02-04
+
+### Fixed
+- Fix version header on mobile
+- Add missing macOS application identifier
+
+## [0.1.4] - 2026-02-04
+
+### Changed
+- Show version in title
+- Clear verbose logging
+
+## [0.1.3] - 2026-02-04
+
+### Fixed
+- Add mobile fallback for missing hardware device id
+- Fix loading of conversation when using compose button
+
+## [0.1.2] - 2026-02-04
+
+### Fixed
+- Fix aliased sender bubbles
+- Fix gravatars
+- Fix build script
+- Remove background from gravatars
+
+### Added
+- Add support for aliases
+- Filter connections/others on is_connection
+- Add entities table for participant tracking and recipient autocomplete
+
+## [0.1.1] - 2026-02-03
+
+### Fixed
+- Fix Android build
+- Fix sync start after onboarding
+- Fix initial poll
+- Fix header and title rendering
+- Fix iOS TestFlight build
+
+### Added
+- Conversation classification and filtering
+- Participant rendering improvements
+- Improve fetching mechanism
+- Simplify avatar filtering and increase limit
+
+### Changed
+- Re-enable disabled jobs in CI
+- Update iOS initialize and build jobs
+- Update app name
+- Truncate chat message content to a max of 20 lines
+- Use default xcode runner in CI

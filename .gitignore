@@ -53,7 +53,7 @@ fabric.properties
 
 dist
 node_modules
-.claude
+settings.local.json
 .vscode
 
 .env.appstore
