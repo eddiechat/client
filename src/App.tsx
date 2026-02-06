@@ -403,24 +403,20 @@ function App() {
 
       {/* Main conversation view */}
       <section className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full min-h-0">
-        {showInitialLoader ? (
-          <InitialSyncLoader syncStatus={syncStatus} />
-        ) : (
-          <ConversationView
-            conversation={selectedConversation}
-            messages={messages}
-            loading={messagesLoading}
-            error={messagesError}
-            currentAccountEmail={currentAccountEmail}
-            currentAccountAliases={currentAccountAliases}
-            onSendMessage={handleSendFromConversation}
-            onBack={handleBack}
-            isComposing={isComposing}
-            composeParticipants={composeParticipants}
-            onComposeParticipantsConfirm={handleComposeParticipantsConfirm}
-            onSendNewMessage={handleSendNewMessage}
-          />
-        )}
+        <ConversationView
+          conversation={selectedConversation}
+          messages={messages}
+          loading={messagesLoading}
+          error={messagesError}
+          currentAccountEmail={currentAccountEmail}
+          currentAccountAliases={currentAccountAliases}
+          onSendMessage={handleSendFromConversation}
+          onBack={handleBack}
+          isComposing={isComposing}
+          composeParticipants={composeParticipants}
+          onComposeParticipantsConfirm={handleComposeParticipantsConfirm}
+          onSendNewMessage={handleSendNewMessage}
+        />
       </section>
 
       {/* Account Setup Wizard */}
