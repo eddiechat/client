@@ -12,6 +12,83 @@ Eddie Chat is a cross-platform email client built with:
 
 ---
 
+## Feature Documentation Maintenance
+
+**CRITICAL: Always read and update [FEATURES.md](./FEATURES.md) when making changes.**
+
+### When to Consult FEATURES.md
+
+**Before making changes:**
+- Read FEATURES.md to understand existing functionality
+- Identify which features your changes will affect
+- Understand the user-facing behavior you're modifying
+
+**Examples:**
+- Adding a new Tauri command? Check if it extends an existing feature
+- Modifying sync logic? Review the "Email Synchronization" section
+- Changing UI components? Review the relevant feature sections
+
+### When to Update FEATURES.md
+
+**You MUST update FEATURES.md when:**
+- ✅ Adding new user-facing functionality
+- ✅ Modifying existing feature behavior
+- ✅ Adding new commands, events, or capabilities
+- ✅ Changing what the application can do
+- ✅ Adding new UI features or interactions
+- ✅ Modifying data storage or privacy behavior
+
+**You DON'T need to update FEATURES.md for:**
+- ❌ Refactoring code without behavior changes
+- ❌ Bug fixes that restore intended behavior (unless fixing adds new capability)
+- ❌ Internal implementation changes that don't affect functionality
+- ❌ Performance optimizations without new features
+- ❌ Code organization or style changes
+
+### How to Update FEATURES.md
+
+**Focus on WHAT, not HOW:**
+- Document what users can do, not how it's implemented
+- Use user-centric language (e.g., "Automatically saves to Sent folder", not "Calls save_message command")
+- Describe capabilities and behavior, not code structure
+
+**Update Location:**
+- Find the relevant section (e.g., "Message Composition" for compose features)
+- Add new features under the appropriate heading
+- Create new sections only for major new feature areas
+- Keep the hierarchy logical: High-level → Feature Area → Specific Capabilities
+
+**Update Format:**
+```markdown
+**Feature Name**
+- List what the feature does
+- Include key capabilities
+- Note any important limitations or future enhancements
+```
+
+**Example - Adding a new message action:**
+```markdown
+### Message Actions (in FEATURES.md)
+
+**Archive Messages** (newly added)
+- Archive individual messages
+- Archive entire conversations
+- Moves to Archive folder (provider-specific)
+- Keyboard shortcut support
+- Undo archive action
+```
+
+### Verification Checklist
+
+After making changes, verify:
+- [ ] FEATURES.md accurately reflects the new/changed functionality
+- [ ] Documentation describes WHAT users can do, not HOW it works
+- [ ] Related features are updated if affected
+- [ ] New capabilities are in the appropriate section
+- [ ] User-facing language is clear and concise
+
+---
+
 ## Frontend Architecture
 
 The frontend uses a **feature-based architecture**. Follow these rules strictly:
