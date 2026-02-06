@@ -24,7 +24,7 @@ import {
   getReadOnlyMode,
 } from "./tauri";
 import type { Conversation, SaveEmailAccountRequest, ComposeAttachment } from "./tauri";
-import { extractEmail } from "./shared";
+import { extractEmail, useResizableSidebar, ResizeHandle } from "./shared";
 import "./App.css";
 
 function App() {
@@ -57,6 +57,8 @@ function App() {
     loading: accountsLoading,
     refresh: refreshAccounts,
   } = useAccounts();
+
+  const { sidebarWidth, isDesktop, isDragging, handleMouseDown: handleResizeMouseDown } = useResizableSidebar();
 
   // Get current account email for determining message direction
   const currentAccountEmail = currentAccount || undefined;
@@ -369,13 +371,14 @@ function App() {
       {/* Sidebar with chat list */}
       <aside
         className={`
-          w-full md:w-80 md:min-w-80 bg-bg-secondary border-r border-divider
+          w-full bg-bg-secondary
           flex flex-col overflow-hidden
           absolute md:relative inset-0 z-50 md:z-auto
-          transition-transform duration-250 ease-out
+          ${isDragging ? "" : "transition-transform duration-250 ease-out"}
           h-full min-h-0
           ${sidebarHidden ? "-translate-x-full md:translate-x-0" : "translate-x-0"}
         `}
+        style={isDesktop ? { width: sidebarWidth, minWidth: sidebarWidth } : undefined}
       >
         <SidebarHeader
           accounts={accounts}
@@ -400,6 +403,8 @@ function App() {
           />
         )}
       </aside>
+
+      <ResizeHandle onMouseDown={handleResizeMouseDown} isDragging={isDragging} />
 
       {/* Main conversation view */}
       <section className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full min-h-0">

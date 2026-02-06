@@ -27,7 +27,12 @@
 
 ## Overview
 
-**Eddie Chat** is a cross-platform email client that reimagines email as conversations. It automatically groups messages by participants, classifies content types, and provides offline-first functionality with intelligent synchronization.
+**Eddie Chat** is an open source messaging client similar to Signal, Messenger or WhatsApp, but without the fragmentation, without the lock-in.
+
+By building on open, decentralized email protocols, Eddie include rather than divide. The backwards-compatible approach means everyone can join the conversation, even those who don't use Eddie.
+
+Eddie aim for feature parity with modern messaging platforms, while keeping privacy at the core. Your data lives only on your device and your chosen email server. Eddie upgrades email into the rich, collaborative, real-time experience of modern messaging, through a lightweight peer-to-peer layer and on-device processing.
+
 
 ### Core Capabilities
 
@@ -36,12 +41,13 @@
 - **Intelligent Classification**: Automatically identifies chat, newsletters, automated messages, and transactional emails
 - **Multi-Account Support**: Manage multiple email accounts in one interface
 - **Local-First Privacy**: All data stored locally with encryption
-- **Cross-Platform**: Works on macOS, Windows, and Linux
+- **Cross-Platform**: Works on iOS, Android, macOS, Windows, and Linux
 
 ### Technology Stack
 
+- **App Wrapper**: Tauri 2
 - **Frontend**: React 19 with TypeScript
-- **Backend**: Rust + Tauri 2
+- **Backend**: Rust
 - **Database**: SQLite (local cache)
 - **Protocols**: IMAP (receiving) + SMTP (sending)
 
@@ -52,7 +58,7 @@
 ### Account Setup
 
 **Automated Configuration Discovery**
-- Automatically configures email accounts from email address alone
+- Automatically configures email accounts from email address alone, using a clunky autoconfig semi-standard
 - Supports major providers: Gmail, Outlook, iCloud, Yahoo, ProtonMail, Fastmail, and more
 - Uses multiple discovery methods:
   - Built-in provider database
