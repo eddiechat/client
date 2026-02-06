@@ -485,9 +485,6 @@ impl SyncEngine {
         let epoch = chrono::DateTime::from_timestamp(0, 0).unwrap().with_timezone(&Utc);
         let mut message_ids: Vec<i64> = Vec::new();
 
-        // Get recently sent message IDs for deduplication
-        let recently_sent = self.recently_sent_message_ids.read().await;
-
         for envelope in envelopes {
             // Parse date and filter
             let msg_date = chrono::DateTime::parse_from_rfc3339(&envelope.date)
