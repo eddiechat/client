@@ -1,3 +1,8 @@
+---
+name: release
+description: Create a new release by bumping the version, generating a changelog, and pushing a version tag
+---
+
 # Release Skill
 
 Create a new release by bumping the version, generating a changelog, and pushing a version tag.
