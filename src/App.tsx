@@ -21,6 +21,7 @@ import {
   sendMessageWithAttachments,
   syncFolder,
   initSyncEngine,
+  getReadOnlyMode,
 } from "./tauri";
 import type { Conversation, SaveEmailAccountRequest, ComposeAttachment } from "./tauri";
 import { extractEmail } from "./shared";
@@ -185,6 +186,16 @@ function App() {
       )
         return;
 
+      // Check if readonly mode is enabled
+      const isReadOnly = await getReadOnlyMode();
+      if (isReadOnly) {
+        alert(
+          "Cannot send message: Eddie is currently in read-only mode.\n\n" +
+          "To send messages, disable read-only mode in account settings."
+        );
+        return;
+      }
+
       // Extract first line as subject
       const lines = text.split("\n");
       const subject = lines[0].trim() || "(No subject)";
@@ -241,6 +252,16 @@ function App() {
         (!text.trim() && (!attachments || attachments.length === 0))
       )
         return;
+
+      // Check if readonly mode is enabled
+      const isReadOnly = await getReadOnlyMode();
+      if (isReadOnly) {
+        alert(
+          "Cannot send message: Eddie is currently in read-only mode.\n\n" +
+          "To send messages, disable read-only mode in account settings."
+        );
+        return;
+      }
 
       // Get all participants as recipients
       const to = selectedConversation.participants;
