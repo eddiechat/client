@@ -198,8 +198,14 @@ fn parse_autoconfig_xml(
         domain,
     );
 
+    // Apply placeholders to provider name
+    let provider_name = provider
+        .display_name
+        .or(provider.display_short_name)
+        .map(|name| apply_placeholders(&name, email, domain));
+
     Ok(EmailDiscoveryConfig {
-        provider: provider.display_name.or(provider.display_short_name),
+        provider: provider_name,
         provider_id: provider.id,
         imap: ServerConfig {
             hostname: imap_hostname,

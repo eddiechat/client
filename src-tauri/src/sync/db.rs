@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::types::error::EddieError;
 
@@ -73,6 +73,7 @@ pub struct CachedConversation {
     pub unread_count: u32,
     pub is_outgoing: bool, // Last message direction
     pub classification: Option<String>, // NULL until a 'chat' message is found, then 'chat'
+    pub canonical_subject: Option<String>, // Meaningful subject line for the conversation (stripped of "via Eddie")
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -686,6 +687,13 @@ impl SyncDatabase {
             CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
             CREATE INDEX IF NOT EXISTS idx_messages_from ON messages(from_address);
 
+            -- Partial UNIQUE index to prevent duplicate messages with same Message-ID header
+            -- Only enforces uniqueness when message_id is NOT NULL and not empty
+            -- This prevents duplicate sent messages while allowing null message_ids for edge cases
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_unique_message_id
+            ON messages(account_id, message_id)
+            WHERE message_id IS NOT NULL AND message_id != '';
+
             -- Conversations table
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -709,6 +717,32 @@ impl SyncDatabase {
             CREATE INDEX IF NOT EXISTS idx_conversations_last_date ON conversations(last_message_date DESC);
             CREATE INDEX IF NOT EXISTS idx_conversations_participant_key ON conversations(participant_key);
             CREATE INDEX IF NOT EXISTS idx_conversations_classification ON conversations(classification);
+
+            -- Migration: Add canonical_subject column if it doesn't exist
+            -- This stores the meaningful subject line for the conversation (stripped of "via Eddie")
+        "#).map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        // Check if canonical_subject column exists
+        let column_exists = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('conversations') WHERE name='canonical_subject'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+
+        if !column_exists {
+            info!("Adding canonical_subject column to conversations table");
+            conn.execute("ALTER TABLE conversations ADD COLUMN canonical_subject TEXT", [])
+                .map_err(|e| EddieError::Backend(e.to_string()))?;
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_conversations_canonical_subject ON conversations(canonical_subject)",
+                [],
+            ).map_err(|e| EddieError::Backend(e.to_string()))?;
+        }
+
+        conn.execute_batch(r#"
 
             -- Message to conversation mapping
             CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -941,6 +975,25 @@ impl SyncDatabase {
 
     /// Insert or update a message
     pub fn upsert_message(&self, msg: &CachedChatMessage) -> Result<i64, EddieError> {
+        // Check for duplicate message_id before inserting
+        // This prevents duplicate sent messages from appearing in conversations
+        if let Some(ref message_id) = msg.message_id {
+            if !message_id.is_empty() {
+                if let Some(existing_id) = self.find_message_by_message_id(&msg.account_id, message_id)? {
+                    debug!(
+                        "🔍 Duplicate message_id detected: {} (existing row: {}), skipping insert",
+                        message_id, existing_id
+                    );
+                    return Ok(existing_id);
+                }
+            }
+        }
+
+        debug!(
+            "💾 Inserting/updating message: message_id={:?}, uid={}, folder={}",
+            msg.message_id, msg.uid, msg.folder_name
+        );
+
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO messages (account_id, folder_name, uid, message_id, in_reply_to, references_header,
@@ -1036,6 +1089,26 @@ impl SyncDatabase {
 
         let result = stmt
             .query_row(params![id], Self::row_to_cached_message)
+            .optional()
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Find a message by Message-ID header (for deduplication)
+    /// Returns the database row ID if a message with this Message-ID already exists
+    pub fn find_message_by_message_id(
+        &self,
+        account_id: &str,
+        message_id: &str,
+    ) -> Result<Option<i64>, EddieError> {
+        let conn = self.connection()?;
+        let result = conn
+            .query_row(
+                "SELECT id FROM messages WHERE account_id = ?1 AND message_id = ?2 LIMIT 1",
+                params![account_id, message_id],
+                |row| row.get(0),
+            )
             .optional()
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
@@ -1365,7 +1438,7 @@ impl SyncDatabase {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                    last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
+                    last_message_from, message_count, unread_count, is_outgoing, classification, canonical_subject, created_at, updated_at
              FROM conversations WHERE account_id = ?1 AND participant_key = ?2"
         ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
@@ -1446,7 +1519,7 @@ impl SyncDatabase {
         let where_clause = where_clauses.join(" AND ");
         let sql = format!(
             "SELECT id, account_id, participant_key, participants, last_message_date, last_message_preview,
-                    last_message_from, message_count, unread_count, is_outgoing, classification, created_at, updated_at
+                    last_message_from, message_count, unread_count, is_outgoing, classification, canonical_subject, created_at, updated_at
              FROM conversations
              WHERE {}
              ORDER BY last_message_date DESC",
@@ -1638,6 +1711,43 @@ impl SyncDatabase {
         Ok(deleted as u64)
     }
 
+    /// Get canonical subject for a conversation
+    pub fn get_conversation_canonical_subject(
+        &self,
+        conversation_id: i64,
+    ) -> Result<Option<String>, EddieError> {
+        let conn = self.connection()?;
+        let result = conn
+            .query_row(
+                "SELECT canonical_subject FROM conversations WHERE id = ?1",
+                params![conversation_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Set canonical subject for a conversation (if not already set)
+    /// Only sets the subject if canonical_subject is currently NULL
+    /// This ensures we don't overwrite an existing meaningful subject
+    pub fn set_conversation_canonical_subject(
+        &self,
+        conversation_id: i64,
+        subject: &str,
+    ) -> Result<(), EddieError> {
+        let conn = self.connection()?;
+        conn.execute(
+            "UPDATE conversations SET canonical_subject = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND canonical_subject IS NULL",
+            params![subject, conversation_id],
+        )
+        .map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
     fn row_to_conversation(row: &Row) -> Result<CachedConversation, rusqlite::Error> {
         Ok(CachedConversation {
             id: row.get(0)?,
@@ -1654,14 +1764,15 @@ impl SyncDatabase {
             unread_count: row.get(8)?,
             is_outgoing: row.get::<_, i32>(9)? != 0,
             classification: row.get(10)?,
+            canonical_subject: row.get(11)?,
             created_at: row
-                .get::<_, String>(11)
+                .get::<_, String>(12)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now),
             updated_at: row
-                .get::<_, String>(12)
+                .get::<_, String>(13)
                 .ok()
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc))

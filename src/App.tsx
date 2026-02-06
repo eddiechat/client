@@ -21,7 +21,7 @@ import {
   syncFolder,
   initSyncEngine,
 } from "./tauri";
-import type { Conversation, SaveEmailAccountRequest, ComposeAttachment } from "./tauri";
+import type { Conversation, SaveEmailAccountRequest, ComposeAttachment, ReplyTarget } from "./tauri";
 import { extractEmail } from "./shared";
 import "./App.css";
 
@@ -162,6 +162,15 @@ function App() {
     [conversations, currentAccount]
   );
 
+  // Get sender display name for generic subjects
+  const getSenderDisplayName = useCallback(() => {
+    if (!currentAccount) return "Someone";
+    // Extract name from email (part before @)
+    const emailPart = currentAccount.split("@")[0];
+    // Capitalize first letter
+    return emailPart.charAt(0).toUpperCase() + emailPart.slice(1);
+  }, [currentAccount]);
+
   // Handle sending a new message in compose mode (no existing conversation)
   const handleSendNewMessage = useCallback(
     async (
@@ -175,11 +184,9 @@ function App() {
       )
         return;
 
-      // Extract first line as subject
-      const lines = text.split("\n");
-      const subject = lines[0].trim() || "(No subject)";
-      const body =
-        lines.length > 1 ? lines.slice(1).join("\n").trim() || lines[0] : text;
+      // Use generic subject for new messages: "[Sender Name] via Eddie"
+      const subject = `${getSenderDisplayName()} via Eddie`;
+      const body = text;
 
       // Use the new API if we have attachments, otherwise use the legacy API for compatibility
       const result = await sendMessageWithAttachments(
@@ -189,7 +196,8 @@ function App() {
         body,
         attachments || [],
         undefined,
-        currentAccount || undefined
+        currentAccount || undefined,
+        undefined // no in_reply_to for new messages
       );
 
       // Sync the sent folder to pull the message into local database
@@ -221,11 +229,11 @@ function App() {
         }
       }, 500);
     },
-    [currentAccount, refreshConversations, conversations]
+    [currentAccount, refreshConversations, conversations, getSenderDisplayName]
   );
 
   const handleSendFromConversation = useCallback(
-    async (text: string, attachments?: ComposeAttachment[]) => {
+    async (text: string, attachments?: ComposeAttachment[], replyTarget?: ReplyTarget) => {
       if (
         !selectedConversation ||
         (!text.trim() && (!attachments || attachments.length === 0))
@@ -235,13 +243,39 @@ function App() {
       // Get all participants as recipients
       const to = selectedConversation.participants;
 
-      // Extract first line as subject for new message style
-      const lines = text.split("\n");
-      const firstLine = lines[0].trim();
-      const subject =
-        firstLine || `Re: ${selectedConversation.last_message_preview}`;
-      const body =
-        lines.length > 1 ? lines.slice(1).join("\n").trim() || text : text;
+      let subject: string;
+      let body: string;
+      let inReplyTo: string | undefined;
+
+      if (replyTarget) {
+        // This is a reply - use "Re:" subject and include quoted text
+        const originalSubject = replyTarget.subject || "";
+
+        // Avoid double "Re:" prefix
+        subject = originalSubject.toLowerCase().startsWith("re:")
+          ? originalSubject
+          : `Re: ${originalSubject}`;
+
+        console.log('Reply subject generation:', {
+          originalSubject: replyTarget.subject,
+          finalSubject: subject,
+        });
+
+        // Add quoted text at the end of the body
+        const quotedText = `\n\n> ${replyTarget.snippet.split('\n').join('\n> ')}`;
+        body = text + quotedText;
+        inReplyTo = replyTarget.messageId;
+      } else {
+        // This is a new message in the conversation
+        // If there are already messages in this conversation, use "Re:" to maintain threading
+        const baseSubject = `${getSenderDisplayName()} via Eddie`;
+        const hasExistingMessages = selectedConversation?.message_ids &&
+                                   selectedConversation.message_ids.length > 0;
+
+        subject = hasExistingMessages ? `Re: ${baseSubject}` : baseSubject;
+        body = text;
+        inReplyTo = undefined;
+      }
 
       // Use the new API with attachments support
       const result = await sendMessageWithAttachments(
@@ -251,17 +285,20 @@ function App() {
         body,
         attachments || [],
         undefined,
-        currentAccount || undefined
+        currentAccount || undefined,
+        inReplyTo
       );
 
       // Sync the sent folder to pull the message into local database
       if (result?.sent_folder) {
         await syncFolder(result.sent_folder, currentAccount || undefined);
       }
-      refreshConversations();
-      refreshMessages();
+
+      // Refresh conversations and messages to show the sent message
+      await refreshConversations();
+      await refreshMessages();
     },
-    [selectedConversation, currentAccount, refreshConversations, refreshMessages]
+    [selectedConversation, currentAccount, refreshConversations, refreshMessages, getSenderDisplayName]
   );
 
   const handleEditAccount = useCallback(async () => {

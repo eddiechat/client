@@ -11,10 +11,11 @@
 use chrono::{DateTime, Duration, Utc};
 use flume::Receiver;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::Emitter;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
@@ -145,6 +146,9 @@ pub struct SyncEngine {
     monitor: Option<Arc<MailboxMonitor>>,
     /// Receiver for monitor notifications
     monitor_rx: Option<Receiver<ChangeNotification>>,
+    /// Cache of recently sent message IDs to prevent duplicate insertion during immediate sync
+    /// Maps Message-ID to timestamp when it was sent
+    recently_sent_message_ids: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl SyncEngine {
@@ -196,6 +200,7 @@ impl SyncEngine {
             shutdown: Arc::new(AtomicBool::new(false)),
             monitor: None,
             monitor_rx: None,
+            recently_sent_message_ids: Arc::new(RwLock::new(HashMap::new())),
         };
 
         Ok(engine)
@@ -229,6 +234,23 @@ impl SyncEngine {
     /// Get the conversation grouper
     pub fn conversation_grouper(&self) -> Arc<ConversationGrouper> {
         self.conversation_grouper.clone()
+    }
+
+    /// Record a recently sent message to prevent duplicate insertion during immediate sync
+    /// The message_id will be cached for 60 seconds
+    pub async fn record_sent_message(&self, message_id: String) {
+        let mut cache = self.recently_sent_message_ids.write().await;
+        cache.insert(message_id.clone(), Instant::now());
+        debug!("📝 Recorded sent message in deduplication cache: {}", message_id);
+
+        // Cleanup expired entries (> 60 seconds old) to prevent memory leak
+        cache.retain(|id, instant| {
+            let is_fresh = instant.elapsed().as_secs() < 60;
+            if !is_fresh {
+                debug!("🧹 Removing expired message_id from cache: {}", id);
+            }
+            is_fresh
+        });
     }
 
     /// Update and broadcast status
@@ -455,6 +477,7 @@ impl SyncEngine {
             .await?;
 
         info!("Fetched {} envelopes from {}", envelopes.len(), folder);
+        debug!("Syncing folder: {}, fetched {} envelopes", folder, envelopes.len());
 
         // Filter by date
         let cutoff = Utc::now() - Duration::days(self.config.initial_sync_days as i64);
@@ -478,7 +501,12 @@ impl SyncEngine {
             // Convert envelope to cached message
             let cached_msg = self.envelope_to_cached_message(folder, &envelope)?;
 
-            // Upsert into database
+            // Note: We used to skip recently sent messages here, but that prevented
+            // sent messages from showing up immediately. Instead, we rely on the
+            // database-level deduplication in upsert_message which checks if the
+            // message_id already exists before inserting.
+
+            // Upsert into database (this handles deduplication internally)
             let msg_id = self.db.upsert_message(&cached_msg)?;
             message_ids.push(msg_id);
 

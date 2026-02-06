@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { Conversation, ChatMessage, ComposeAttachment } from "../../../tauri";
+import type { Conversation, ChatMessage, ComposeAttachment, ReplyTarget } from "../../../tauri";
 import { searchEntities, type EntitySuggestion } from "../../../tauri/commands";
 import {
   extractEmail,
@@ -30,7 +30,7 @@ interface ConversationViewProps {
   error?: string | null;
   currentAccountEmail?: string;
   currentAccountAliases?: string[];
-  onSendMessage: (text: string, attachments?: ComposeAttachment[]) => void;
+  onSendMessage: (text: string, attachments?: ComposeAttachment[], replyTarget?: ReplyTarget) => void;
   onBack?: () => void;
   isComposing?: boolean;
   composeParticipants?: string[];
@@ -65,6 +65,7 @@ export function ConversationView({
   } | null>(null);
   const [fullViewMessage, setFullViewMessage] = useState<ChatMessage | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiSuggestion, setEmojiSuggestion] = useState<{
     query: string;
@@ -81,10 +82,11 @@ export function ConversationView({
   const prevConversationRef = useRef<Conversation | null>(null);
   const wasComposingRef = useRef(false);
 
-  // Reset modals when conversation changes
+  // Reset modals and reply target when conversation changes
   useEffect(() => {
     setGravatarModalData(null);
     setFullViewMessage(null);
+    setReplyTarget(null);
   }, [conversation?.id]);
 
   // Scroll to bottom when messages change
@@ -383,10 +385,12 @@ export function ConversationView({
       } else if (conversation) {
         onSendMessage(
           inputValue.trim(),
-          attachments.length > 0 ? attachments : undefined
+          attachments.length > 0 ? attachments : undefined,
+          replyTarget || undefined
         );
         setInputValue("");
         setAttachments([]);
+        setReplyTarget(null);
       }
       inputRef.current?.focus();
     }
@@ -555,6 +559,15 @@ export function ConversationView({
                         setGravatarModalData({ email, name })
                       }
                       onExpandClick={() => setFullViewMessage(message)}
+                      onReply={() => {
+                        setReplyTarget({
+                          messageId: message.envelope.message_id || message.id,
+                          subject: message.envelope.subject,
+                          snippet: message.text_body?.substring(0, 100) || message.envelope.subject || "message",
+                          from: message.envelope.from,
+                        });
+                        inputRef.current?.focus();
+                      }}
                     />
                   );
                 })}
@@ -564,6 +577,33 @@ export function ConversationView({
           </div>
 
           {/* Input */}
+          {replyTarget && (
+            <div className="px-4 py-2 bg-bg-secondary border-t border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <svg className="w-4 h-4 text-accent-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 17l-5-5 5-5M4 12h16" />
+                </svg>
+                <span className="text-text-muted">
+                  Replying to{" "}
+                  <span className="text-text-primary font-medium">
+                    {replyTarget.from ? extractEmail(replyTarget.from) : "message"}
+                  </span>
+                </span>
+                <span className="text-text-muted text-xs max-w-xs truncate">
+                  - {replyTarget.snippet}
+                </span>
+              </div>
+              <button
+                onClick={() => setReplyTarget(null)}
+                className="p-1 hover:bg-bg-hover rounded transition-colors"
+                title="Cancel reply"
+              >
+                <svg className="w-4 h-4 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
           <MessageInput
             inputValue={inputValue}
             inputRef={inputRef}
@@ -846,6 +886,7 @@ interface MessageBubbleProps {
   showSender: boolean;
   onAvatarClick: (email: string, name: string) => void;
   onExpandClick: () => void;
+  onReply?: () => void;
 }
 
 function MessageBubble({
@@ -855,11 +896,15 @@ function MessageBubble({
   showSender,
   onAvatarClick,
   onExpandClick,
+  onReply,
 }: MessageBubbleProps) {
   const isExpandable = hasExpandableContent(
     message.text_body,
     message.html_body
   );
+
+  // Check if this message was sent as a reply from this client
+  const isReply = isOutgoing && message.envelope.in_reply_to;
 
   return (
     <div>
@@ -910,6 +955,16 @@ function MessageBubble({
             onClick={isExpandable ? onExpandClick : undefined}
             title={isExpandable ? "Click to view full message" : undefined}
           >
+            {isReply && (
+              <div className="mb-2 pb-2 border-b border-white/20">
+                <div className="flex items-center gap-1.5 text-[11px] opacity-75">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 17l-5-5 5-5M4 12h16" />
+                  </svg>
+                  <span>Replied</span>
+                </div>
+              </div>
+            )}
             <div className="text-[15px] leading-snug whitespace-pre-wrap break-words">
               {parseEmailContent(message.text_body) ||
                 message.envelope.subject ||
@@ -919,14 +974,33 @@ function MessageBubble({
               messageId={message.id}
               hasAttachment={message.envelope.has_attachment}
             />
-            <span className="flex items-center gap-1 text-[11px] opacity-70 mt-1 justify-end">
-              {formatMessageTime(message.envelope.date)}
-              {isOutgoing && (
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
-                </svg>
-              )}
-            </span>
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <div className="flex items-center gap-2">
+                {onReply && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReply();
+                    }}
+                    className="flex items-center gap-1 text-[11px] opacity-70 hover:opacity-100 transition-opacity"
+                    title="Reply to this message"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 17l-5-5 5-5M4 12h16" />
+                    </svg>
+                    <span>Reply</span>
+                  </button>
+                )}
+              </div>
+              <span className="flex items-center gap-1 text-[11px] opacity-70">
+                {formatMessageTime(message.envelope.date)}
+                {isOutgoing && (
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18 7l-8.5 8.5-4-4L4 13l5.5 5.5L19.5 8.5z" />
+                  </svg>
+                )}
+              </span>
+            </div>
           </div>
         </div>
       </div>

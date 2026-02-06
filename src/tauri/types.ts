@@ -102,6 +102,7 @@ export interface Conversation {
   is_outgoing: boolean;
   user_name: string;
   user_in_conversation: boolean;
+  canonical_subject?: string | null; // Meaningful subject for the conversation (stripped of "via Eddie")
   /** Internal: cached conversation ID for database operations */
   _cached_id?: number;
 }
@@ -131,6 +132,7 @@ export interface CachedConversation {
   message_count: number;
   unread_count: number;
   is_outgoing: boolean;
+  canonical_subject: string | null; // Meaningful subject for the conversation (stripped of "via Eddie")
 }
 
 export interface CachedChatMessage {
@@ -138,6 +140,7 @@ export interface CachedChatMessage {
   folder: string;
   uid: number;
   message_id: string | null;
+  in_reply_to: string | null;
   from_address: string;
   from_name: string | null;
   to_addresses: string[];
@@ -152,6 +155,14 @@ export interface CachedChatMessage {
 }
 
 // ========== Message Compose Types ==========
+
+/** Reply target for the hybrid subject strategy */
+export interface ReplyTarget {
+  messageId: string; // The message_id header (for In-Reply-To)
+  subject: string; // Original subject (for Re: prefix)
+  snippet: string; // Preview text to show in UI
+  from: string; // Who sent the message
+}
 
 export interface ComposeAttachment {
   path: string;
@@ -171,7 +182,8 @@ export interface ComposeMessageData {
 }
 
 export interface SendMessageResult {
-  message_id: string;
+  uid: string;           // IMAP UID of the saved message
+  message_id: string;    // Message-ID email header (for deduplication)
   sent_folder: string;
 }
 

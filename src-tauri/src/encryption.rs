@@ -56,7 +56,6 @@ impl DeviceEncryption {
     pub fn new() -> Result<Self, EncryptionError> {
         let key = Self::derive_device_key()?;
         let cipher = Aes256Gcm::new(&key.into());
-        debug!("Initialized device-specific encryption");
         Ok(Self { cipher })
     }
 
@@ -75,13 +74,6 @@ impl DeviceEncryption {
         key_material.extend_from_slice(machine_id.as_bytes());
         key_material.extend_from_slice(username.as_bytes());
         key_material.extend_from_slice(APP_SALT);
-
-        debug!(
-            "Deriving encryption key from machine_id (len: {}), username: {}, salt (len: {})",
-            machine_id.len(),
-            username,
-            APP_SALT.len()
-        );
 
         // Use Argon2 to derive a secure key
         // Argon2 is designed for password hashing and key derivation
@@ -109,7 +101,6 @@ impl DeviceEncryption {
                 EncryptionError::KeyDerivation(format!("Argon2 key derivation failed: {}", e))
             })?;
 
-        debug!("Successfully derived device-specific encryption key");
         Ok(output_key)
     }
 
@@ -243,7 +234,6 @@ impl DeviceEncryption {
             EncryptionError::Decryption(format!("Decrypted data is not valid UTF-8: {}", e))
         })?;
 
-        debug!("Successfully decrypted data (length: {})", plaintext.len());
         Ok(plaintext)
     }
 }

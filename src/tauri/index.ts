@@ -38,6 +38,7 @@ export type {
   ComposeAttachment,
   ComposeMessageData,
   SendMessageResult,
+  ReplyTarget,
 
   // Attachment types
   AttachmentInfo,
