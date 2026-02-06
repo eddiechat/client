@@ -242,3 +242,21 @@ export async function searchEntities(
 ): Promise<EntitySuggestion[]> {
   return invoke("search_entities", { account, query, limit });
 }
+
+// ========== Read-Only Mode Commands ==========
+
+/**
+ * Get the read-only mode setting.
+ * When enabled, all operations that modify data on the server are blocked.
+ */
+export async function getReadOnlyMode(): Promise<boolean> {
+  return invoke("get_read_only_mode");
+}
+
+/**
+ * Set the read-only mode setting.
+ * When enabled, all operations that modify data on the server are blocked.
+ */
+export async function setReadOnlyMode(enabled: boolean): Promise<void> {
+  return invoke("set_read_only_mode", { enabled });
+}

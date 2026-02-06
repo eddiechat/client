@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 
 use crate::backend::EmailBackend;
-use crate::sync::db::{QueuedActionRecord, SyncDatabase};
+use crate::sync::db::{is_read_only_mode, QueuedActionRecord, SyncDatabase};
 use crate::types::error::EddieError;
 
 /// Types of actions that can be queued
@@ -208,6 +208,16 @@ impl ActionQueue {
 
     /// Queue a new action
     pub fn queue(&self, account_id: &str, action: ActionType) -> Result<i64, EddieError> {
+        // Check read-only mode
+        if is_read_only_mode()? {
+            info!(
+                "Read-only mode: Blocked queuing {:?} action for account {}",
+                action.type_str(),
+                account_id
+            );
+            return Err(EddieError::ReadOnlyMode);
+        }
+
         let payload = serde_json::to_string(&action)
             .map_err(|e| EddieError::Backend(format!("Failed to serialize action: {}", e)))?;
 
@@ -300,6 +310,17 @@ impl ActionQueue {
         account_id: &str,
         backend: &EmailBackend,
     ) -> Result<Vec<ReplayResult>, EddieError> {
+        // Check read-only mode
+        if is_read_only_mode()? {
+            let pending = self.get_pending(account_id)?;
+            info!(
+                "Read-only mode: Skipping replay of {} pending actions for account {}",
+                pending.len(),
+                account_id
+            );
+            return Ok(vec![]);
+        }
+
         let pending = self.get_pending(account_id)?;
 
         if pending.is_empty() {

@@ -8,6 +8,7 @@ use tracing::{info, warn};
 use crate::backend;
 use crate::services::resolve_account_id;
 use crate::state::SyncManager;
+use crate::sync::db::is_read_only_mode;
 use crate::types::{EddieError, FlagRequest};
 
 /// Add flags to messages
@@ -16,6 +17,15 @@ pub async fn add_flags(
     request: FlagRequest,
     sync_manager: State<'_, SyncManager>,
 ) -> Result<(), EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked add_flags - account: {:?}, folder: {:?}, flags: {:?}, ids: {} items",
+            request.account, request.folder, request.flags, request.ids.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Adding flags: {:?}", request.flags);
 
     let backend = backend::get_backend(request.account.as_deref())
@@ -43,6 +53,15 @@ pub async fn remove_flags(
     request: FlagRequest,
     sync_manager: State<'_, SyncManager>,
 ) -> Result<(), EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked remove_flags - account: {:?}, folder: {:?}, flags: {:?}, ids: {} items",
+            request.account, request.folder, request.flags, request.ids.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Removing flags: {:?}", request.flags);
 
     let backend = backend::get_backend(request.account.as_deref())
@@ -70,6 +89,15 @@ pub async fn set_flags(
     request: FlagRequest,
     sync_manager: State<'_, SyncManager>,
 ) -> Result<(), EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked set_flags - account: {:?}, folder: {:?}, flags: {:?}, ids: {} items",
+            request.account, request.folder, request.flags, request.ids.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Setting flags: {:?}", request.flags);
 
     let backend = backend::get_backend(request.account.as_deref())

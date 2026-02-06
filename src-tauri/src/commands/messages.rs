@@ -10,6 +10,7 @@ use tracing::{info, warn};
 use crate::backend::{self, SendMessageResult};
 use crate::services::{build_message, resolve_account_id, ComposeParams};
 use crate::state::SyncManager;
+use crate::sync::db::is_read_only_mode;
 use crate::types::responses::AttachmentInfo;
 use crate::types::{ComposeAttachment, EddieError, ChatMessage, ReadChatMessageRequest};
 
@@ -40,6 +41,15 @@ pub async fn delete_messages(
     ids: Vec<String>,
     sync_manager: State<'_, SyncManager>,
 ) -> Result<(), EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked delete_messages - account: {:?}, folder: {:?}, ids: {} items",
+            account, folder, ids.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Deleting messages: {:?}", ids);
 
     let backend = backend::get_backend(account.as_deref())
@@ -93,6 +103,15 @@ pub async fn copy_messages(
     target_folder: String,
     ids: Vec<String>,
 ) -> Result<(), EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked copy_messages - account: {:?}, source: {:?}, target: {}, ids: {} items",
+            account, source_folder, target_folder, ids.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Copying messages to {}: {:?}", target_folder, ids);
 
     let backend = backend::get_backend(account.as_deref())
@@ -115,6 +134,15 @@ pub async fn move_messages(
     ids: Vec<String>,
     sync_manager: State<'_, SyncManager>,
 ) -> Result<(), EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked move_messages - account: {:?}, source: {:?}, target: {}, ids: {} items",
+            account, source_folder, target_folder, ids.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Moving messages to {}: {:?}", target_folder, ids);
 
     let backend = backend::get_backend(account.as_deref())
@@ -142,6 +170,15 @@ pub async fn send_message(
     account: Option<String>,
     message: String,
 ) -> Result<Option<SendMessageResult>, EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked send_message - account: {:?}, message length: {} bytes",
+            account, message.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Sending message, length: {}", message.len());
 
     let backend = backend::get_backend(account.as_deref())
@@ -161,6 +198,15 @@ pub async fn save_message(
     folder: Option<String>,
     message: String,
 ) -> Result<String, EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked save_message - account: {:?}, folder: {:?}, message length: {} bytes",
+            account, folder, message.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Saving message to folder: {:?}", folder);
 
     let backend = backend::get_backend(account.as_deref())
@@ -184,6 +230,15 @@ pub async fn send_message_with_attachments(
     body: String,
     attachments: Vec<ComposeAttachment>,
 ) -> Result<Option<SendMessageResult>, EddieError> {
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked send_message_with_attachments - account: {:?}, subject: {:?}, attachments: {}",
+            account, subject, attachments.len()
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
+
     info!("Sending message with {} attachments", attachments.len());
 
     let backend = backend::get_backend(account.as_deref())

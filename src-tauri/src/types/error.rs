@@ -57,6 +57,9 @@ pub enum EddieError {
     #[error("Operation not supported: {0}")]
     NotSupported(String),
 
+    #[error("Operation blocked: Eddie is in read-only mode. Enable write access in Settings to perform this action.")]
+    ReadOnlyMode,
+
     #[error("{0}")]
     Other(String),
 }

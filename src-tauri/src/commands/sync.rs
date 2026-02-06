@@ -11,6 +11,7 @@ use tracing::{debug, error, info};
 use crate::services::resolve_account_id_string;
 use crate::state::SyncManager;
 use crate::sync::action_queue::ActionType;
+use crate::sync::db::is_read_only_mode;
 use crate::sync::engine::SyncEvent;
 use crate::types::responses::{CachedChatMessageResponse, ConversationResponse, EntityResponse, SyncStatusResponse};
 use crate::types::EddieError;
@@ -440,6 +441,15 @@ pub async fn mark_conversation_read(
     conversation_id: i64,
 ) -> Result<(), EddieError> {
     use tauri::Emitter;
+
+    // Check read-only mode
+    if is_read_only_mode()? {
+        info!(
+            "Read-only mode: Blocked mark_conversation_read - account: {:?}, conversation_id: {}",
+            account, conversation_id
+        );
+        return Err(EddieError::ReadOnlyMode);
+    }
 
     let account_id = resolve_account_id_string(account)?;
     debug!(

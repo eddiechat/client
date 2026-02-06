@@ -250,6 +250,13 @@ impl ConfigDatabase {
 
             -- Index for quickly finding the active account
             CREATE INDEX IF NOT EXISTS idx_connection_configs_active ON connection_configs(active);
+
+            -- Application settings (global settings)
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         "#,
         )
         .map_err(|e| {
@@ -508,6 +515,33 @@ impl ConfigDatabase {
                 .unwrap_or_else(Utc::now),
         })
     }
+
+    /// Get an application setting by key
+    pub fn get_app_setting(&self, key: &str) -> Result<Option<String>, EddieError> {
+        let conn = self.connection()?;
+        conn.query_row(
+            "SELECT value FROM app_settings WHERE key = ?1",
+            params![key],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| EddieError::Database(e.to_string()))
+    }
+
+    /// Set an application setting
+    pub fn set_app_setting(&self, key: &str, value: &str) -> Result<(), EddieError> {
+        let conn = self.connection()?;
+        conn.execute(
+            "INSERT INTO app_settings (key, value, updated_at)
+             VALUES (?1, ?2, datetime('now'))
+             ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = datetime('now')",
+            params![key, value],
+        )
+        .map_err(|e| EddieError::Database(e.to_string()))?;
+        Ok(())
+    }
 }
 
 // ========== Global Config Database Functions ==========
@@ -592,6 +626,35 @@ pub fn set_active_account(account_id: &str) -> Result<(), EddieError> {
 pub fn delete_connection_config(account_id: &str) -> Result<(), EddieError> {
     let db = get_config_db()?;
     db.delete_connection_config(account_id)
+}
+
+/// Get an application setting from the global database
+pub fn get_app_setting(key: &str) -> Result<String, EddieError> {
+    let db = get_config_db()?;
+    match db.get_app_setting(key)? {
+        Some(value) => Ok(value),
+        None => {
+            // Default to "true" for read_only_mode if not set
+            if key == "read_only_mode" {
+                info!("Read-only mode not set, defaulting to true");
+                db.set_app_setting(key, "true")?;
+                Ok("true".to_string())
+            } else {
+                Err(EddieError::Config(format!("Setting not found: {}", key)))
+            }
+        }
+    }
+}
+
+/// Set an application setting in the global database
+pub fn set_app_setting(key: &str, value: &str) -> Result<(), EddieError> {
+    let db = get_config_db()?;
+    db.set_app_setting(key, value)
+}
+
+/// Check if read-only mode is enabled
+pub fn is_read_only_mode() -> Result<bool, EddieError> {
+    get_app_setting("read_only_mode").map(|s| s == "true")
 }
 
 /// SQLite database for sync cache

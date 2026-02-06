@@ -82,7 +82,7 @@ export function SidebarHeader({
           </span>
         )}
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         {/* <button
           className="w-9 h-9 rounded-full bg-bg-tertiary flex items-center justify-center hover:bg-bg-hover transition-colors disabled:opacity-50 text-lg"
           onClick={handleResync}

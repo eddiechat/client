@@ -88,6 +88,8 @@ pub fn run() {
             commands::is_config_initialized,
             commands::get_config_paths,
             commands::save_account,
+            commands::get_read_only_mode,
+            commands::set_read_only_mode,
             // Account database commands
             commands::init_config_database,
             commands::get_accounts,

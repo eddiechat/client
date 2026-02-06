@@ -12,8 +12,8 @@ use crate::encryption::DeviceEncryption;
 use crate::services::delete_account_data;
 use crate::state::SyncManager;
 use crate::sync::db::{
-    get_active_connection_config, get_all_connection_configs, get_connection_config, init_config_db,
-    save_connection_config, set_active_account, EmailConnectionConfig,
+    get_active_connection_config, get_all_connection_configs, get_app_setting, get_connection_config,
+    init_config_db, save_connection_config, set_active_account, set_app_setting, EmailConnectionConfig,
 };
 use crate::types::responses::EmailAccountInfo;
 use crate::types::EddieError;
@@ -252,4 +252,18 @@ pub async fn delete_account(
 
     // Delete account data (database file and config)
     delete_account_data(&account_id, sync_manager.db_directory())
+}
+
+/// Get the read-only mode setting
+#[tauri::command]
+pub async fn get_read_only_mode() -> Result<bool, EddieError> {
+    info!("Getting read-only mode setting");
+    get_app_setting("read_only_mode").map(|s| s == "true")
+}
+
+/// Set the read-only mode setting
+#[tauri::command]
+pub async fn set_read_only_mode(enabled: bool) -> Result<(), EddieError> {
+    info!("Setting read-only mode to: {}", enabled);
+    set_app_setting("read_only_mode", if enabled { "true" } else { "false" })
 }
