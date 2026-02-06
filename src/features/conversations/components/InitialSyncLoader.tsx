@@ -7,7 +7,7 @@ interface InitialSyncLoaderProps {
 
 export function InitialSyncLoader({ syncStatus }: InitialSyncLoaderProps) {
   // Get the current progress message, or show a default
-  const message = syncStatus?.progress?.message || "Connecting to mail server";
+  const message = syncStatus?.progress_message || "Connecting to mail server";
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 bg-bg-secondary">
