@@ -54,7 +54,157 @@ The system is composed of five major subsystems:
 
 ## 2. Data Model (SQLite)
 
-### 2.1 Core Tables
+### 2.1 Database Schema Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          EDDIE SYNC ENGINE DATABASE                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────┐
+│       accounts           │
+│──────────────────────────│
+│ PK  id (TEXT)            │──┐
+│     email                │  │
+│     display_name         │  │
+│     imap_host            │  │
+│     imap_port            │  │
+│     smtp_host            │  │
+│     smtp_port            │  │
+│     carddav_url          │  │
+│     created_at           │  │
+│     last_full_sync       │  │
+└──────────────────────────┘  │
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        │ 1                   │ 1                   │ 1
+        │                     │                     │
+        │ N                   │ N                   │ 1
+┌───────▼──────────┐  ┌───────▼────────────┐  ┌─────▼─────────────┐
+│     aliases      │  │     messages       │  │    sync_state     │
+│──────────────────│  │────────────────────│  │───────────────────│
+│ PK  id           │  │ PK  id             │  │ PK  account_id    │
+│ FK  account_id   │  │ FK  account_id     │  │     draft_uid     │
+│     email        │  │     message_id     │  │     draft_version │
+└──────────────────┘  │     imap_uid       │  │     last_pushed   │
+                      │     imap_folder    │  │     last_pulled   │
+                      │     date           │  └───────────────────┘
+                      │     from_address   │
+                      │     from_name      │
+                      │     to_addresses   │──┐
+                      │     cc_addresses   │  │
+                      │     bcc_addresses  │  │ Computed from
+                      │     subject        │  │ participant set
+                      │     body_text      │  │
+                      │     body_html      │  │
+                      │     size_bytes     │  │
+                      │     has_attachments│  │
+                      │     in_reply_to    │──┼─┐ Self-reference
+                      │     references_ids │  │ │ (0:1)
+                      │     imap_flags     │  │ │
+                      │     fetched_at     │  │ │
+                      │     classification │  │ │
+                      │     is_important   │  │ │
+                      │     distilled_text │  │ │
+                      │     processed_at   │  │ │
+                      │     participant_key│  │ │
+                      │ FK  conversation_id│──┼─┼──┐
+                      └────────────────────┘  │ │  │
+                              ▲               │ │  │
+                              │               │ │  │ N
+                              │               │ │  │
+                              └───────────────┘ │  │ 1
+                                                │  │
+        ┌───────────────────────────────────────┘  │
+        │                                          │
+        │ N                                        │
+        │                                          │
+        │ 1                              ┌─────────▼──────────┐
+┌───────▼──────────┐                     │   conversations    │
+│    entities      │                     │────────────────────│
+│──────────────────│                     │ PK  id             │
+│ PK  id           │                     │ FK  account_id     │
+│ FK  account_id   │                     │     participant_key│
+│     email        │◄────────────────────┤     participant_   │
+│     display_name │  Referenced for     │     names (JSON)   │
+│     trust_level  │  trust network      │     classification │
+│     source       │  classification     │     last_message_  │
+│     first_seen   │                     │     date           │
+│     last_seen    │                     │     last_message_  │
+│     metadata     │                     │     preview        │
+└──────────────────┘                     │     unread_count   │
+                                         │     is_muted       │
+        ┌────────────────────────────────┤     is_pinned      │
+        │                                │     updated_at     │
+        │ 1                              └────────────────────┘
+        │
+        │ N
+┌───────▼──────────┐
+│  action_queue    │
+│──────────────────│
+│ PK  id           │
+│ FK  account_id   │
+│     action_type  │
+│     payload      │
+│     status       │
+│     retry_count  │
+│     max_retries  │
+│     created_at   │
+│     completed_at │
+│     error        │
+└──────────────────┘
+
+        ┌────────────────────────────────┐
+        │                                │
+        │ 1                              │
+        │                                │
+        │ N                              │
+┌───────▼──────────┐                     │
+│   folder_sync    │                     │
+│──────────────────│                     │
+│ PK  account_id   │─────────────────────┘
+│ PK  folder       │  (Composite PK)
+│     uid_validity │
+│     highest_uid  │
+│     last_sync    │
+└──────────────────┘
+
+
+LEGEND:
+━━━━━━
+PK  = Primary Key
+FK  = Foreign Key
+1:N = One-to-Many Relationship
+1:1 = One-to-One Relationship
+0:1 = Optional/Nullable Relationship
+```
+
+**Cardinality Summary:**
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| accounts → aliases | 1:N | One account can have multiple email aliases |
+| accounts → messages | 1:N | One account can have many messages |
+| accounts → conversations | 1:N | One account can have many conversations |
+| accounts → entities | 1:N | One account can have many trusted entities |
+| accounts → action_queue | 1:N | One account can have many queued actions |
+| accounts → sync_state | 1:1 | One account has exactly one sync state record |
+| accounts → folder_sync | 1:N | One account can have multiple folder sync cursors |
+| conversations → messages | 1:N | One conversation contains many messages (via conversation_id) |
+| messages → messages | 0:1 | One message can optionally reference a parent message (in_reply_to) |
+| entities ↔ messages | N:M | Implicit relationship: entities are referenced by messages for trust classification |
+
+**Key Constraints:**
+
+- All tables except `accounts` have a foreign key to `accounts(id)`
+- `folder_sync` has a composite primary key on `(account_id, folder)`
+- `sync_state` has a 1:1 relationship via `account_id` as primary key
+- `messages.conversation_id` groups messages into conversations
+- `messages.participant_key` is used to compute `conversation_id` via SHA-256 hash
+- Unique constraints enforce data integrity (e.g., `accounts.email`, `aliases.email`)
+
+### 2.2 Core Tables
 
 ```sql
 -- Accounts & identity
@@ -193,7 +343,7 @@ CREATE TABLE folder_sync (
 );
 ```
 
-### 2.2 Key Design Decisions
+### 2.3 Key Design Decisions
 
 - **`participant_key`** is computed as: take all addresses from `from`, `to`, `cc`; remove the user's own email and any aliases; lowercase and trim each; sort lexicographically; join with `\n`. This deterministically groups messages by their participant set.
 - **`conversation_id`** is `SHA-256(participant_key)`, truncated to 16 hex characters for compactness.
