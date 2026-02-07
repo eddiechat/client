@@ -7,38 +7,38 @@
 │                        Client App                           │
 │                                                             │
 │  ┌───────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │    UI      │  │  ViewModel   │  │   Action Queue       │  │
-│  │  Layer     │◄─┤  / Store     │◄─┤  (Optimistic Writes) │  │
+│  │    UI     │  │  ViewModel   │  │   Action Queue       │  │
+│  │  Layer    │◄─┤  / Store     │◄─┤  (Optimistic Writes) │  │
 │  └───────────┘  └──────┬───────┘  └──────────┬───────────┘  │
-│                        │                      │              │
-│                 ┌──────▼──────────────────────▼───────┐      │
-│                 │          Sync Engine                │      │
-│                 │                                     │      │
-│                 │  ┌────────────┐  ┌───────────────┐  │      │
-│                 │  │  Ingestion │  │  Processor    │  │      │
-│                 │  │  Pipeline  │  │  Pipeline     │  │      │
-│                 │  └─────┬──────┘  └──────┬────────┘  │      │
-│                 │        │                │           │      │
-│                 │  ┌─────▼────────────────▼────────┐  │      │
-│                 │  │       SQLite Database         │  │      │
-│                 │  │         (Cache)               │  │      │
-│                 │  └──────────────────────────────-┘  │      │
-│                 └────────────────┬────────────────────┘      │
-│                                  │                           │
-└──────────────────────────────────┼───────────────────────────┘
+│                        │                     │              │
+│                 ┌──────▼─────────────────────▼────────┐     │
+│                 │          Sync Engine                │     │
+│                 │                                     │     │
+│                 │  ┌────────────┐  ┌───────────────┐  │     │
+│                 │  │  Ingestion │  │  Processor    │  │     │
+│                 │  │  Pipeline  │  │  Pipeline     │  │     │
+│                 │  └─────┬──────┘  └──────┬────────┘  │     │
+│                 │        │                │           │     │
+│                 │  ┌─────▼────────────────▼────────┐  │     │
+│                 │  │       SQLite Database         │  │     │
+│                 │  │         (Cache)               │  │     │
+│                 │  └──────────────────────────────-┘  │     │
+│                 └────────────────┬────────────────────┘     │
+│                                  │                          │
+└──────────────────────────────────┼──────────────────────────┘
                                    │
-                    ┌──────────────▼──────────────┐
+                    ┌──────────────▼───────────────┐
                     │     IMAP / SMTP Server       │
-                    │   (Single Source of Truth)    │
+                    │   (Single Source of Truth)   │
                     │                              │
                     │  ┌────────┐  ┌────────────┐  │
-                    │  │ Mail   │  │  Drafts     │  │
-                    │  │ Boxes  │  │  (Sync Obj) │  │
+                    │  │ Mail   │  │  Drafts    │  │
+                    │  │ Boxes  │  │  (Sync Obj)│  │
                     │  └────────┘  └────────────┘  │
                     │                              │
-                    │  ┌────────────────────────┐   │
-                    │  │  CardDAV (Contacts)    │   │
-                    │  └────────────────────────┘   │
+                    │  ┌────────────────────────┐  │
+                    │  │  CardDAV (Contacts)    │  │
+                    │  └────────────────────────┘  │
                     └──────────────────────────────┘
 ```
 
@@ -207,15 +207,15 @@ CREATE TABLE folder_sync (
 ### 3.1 Connection Management
 
 ```
-┌──────────────────────────────────────────────┐
+┌───────────────────────────────────────────────┐
 │             IMAP Connection Pool              │
 │                                               │
 │  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │  Primary     │  │  Background             │ │
-│  │  Connection  │  │  Connection(s)          │ │
-│  │  (IDLE)      │  │  (FETCH / STORE / etc.) │ │
+│  │  Primary    │  │  Background             │ │
+│  │  Connection │  │  Connection(s)          │ │
+│  │  (IDLE)     │  │  (FETCH / STORE / etc.) │ │
 │  └─────────────┘  └─────────────────────────┘ │
-└──────────────────────────────────────────────┘
+└───────────────────────────────────────────────┘
 ```
 
 - Maintain **one persistent IDLE connection** on INBOX for real-time push. Cycle IDLE every 25 minutes (RFC 2177 recommends < 29 min).
@@ -268,22 +268,22 @@ Servers that do not support custom keywords fall back to the sync-object approac
   IMAP FETCH
       │
       ▼
-┌─────────────┐    ┌────────────────┐    ┌──────────────────┐
-│  Parse       │───►│  Normalise     │───►│  Compute         │
-│  Envelope &  │    │  Addresses     │    │  participant_key  │
-│  Body        │    │  & Names       │    │  & conversation_id│
-└─────────────┘    └────────────────┘    └────────┬─────────┘
+┌─────────────┐    ┌────────────────┐    ┌───────────────────┐
+│  Parse      │───►│  Normalise     │───►│  Compute          │
+│  Envelope & │    │  Addresses     │    │  participant_key  │
+│  Body       │    │  & Names       │    │  & conversation_id│
+└─────────────┘    └────────────────┘    └─────────┬─────────┘
                                                    │
                                                    ▼
                                          ┌──────────────────┐
                                          │  Upsert into     │
-                                         │  messages table   │
-                                         └────────┬─────────┘
+                                         │  messages table  │
+                                         └─────────┬────────┘
                                                    │
                                                    ▼
                                          ┌──────────────────┐
-                                         │  Enqueue for      │
-                                         │  Processing       │
+                                         │  Enqueue for     │
+                                         │  Processing      │
                                          └──────────────────┘
 ```
 
@@ -340,7 +340,7 @@ Processing is divided into three stages, each of which can run independently:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                    Processor Pipeline                     │
+│                    Processor Pipeline                    │
 │                                                          │
 │  ┌────────────┐   ┌────────────────┐   ┌──────────────┐  │
 │  │  Stage 1   │   │   Stage 2      │   │   Stage 3    │  │
@@ -621,25 +621,25 @@ LIMIT 30;
 User Action
     │
     ▼
-┌────────────────────┐
+┌─────────────────────┐
 │  1. Create action   │
 │     in action_queue │
 │     (status=pending)│
-└─────────┬──────────┘
+└─────────┬───────────┘
           │
           ▼
-┌─────────────────────────┐
+┌──────────────────────────┐
 │  2. Apply optimistic     │
 │     update to local DB   │
 │     (immediate UI change)│
-└─────────┬───────────────┘
+└─────────┬────────────────┘
           │
           ▼
-┌─────────────────────────┐
+┌──────────────────────────┐
 │  3. Execute against IMAP │
 │     (background thread)  │
 │     status → in_progress │
-└─────────┬───────────────┘
+└─────────┬────────────────┘
           │
     ┌─────┴──────┐
     │            │
