@@ -1,4 +1,4 @@
-# Sync Engine Specification
+# Sync Engine Requirements
 
 ## Context
 The sync engine is at the heart of a messaging app similar to FB Messenger, WhatsApp, Signal etc., but running on top of email protocols.
