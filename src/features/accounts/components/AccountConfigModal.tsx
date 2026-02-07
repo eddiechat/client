@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import type { SaveEmailAccountRequest } from "../../../tauri";
-import { ReadOnlyToggle } from "../../../shared/components";
 
 export interface AccountEditData {
   name: string;
@@ -251,13 +250,6 @@ export function AccountConfigModal({
           {error && (
             <div className="px-4 py-3 bg-accent-red/15 border border-accent-red/30 rounded-lg text-sm text-accent-red">
               {error}
-            </div>
-          )}
-
-          {/* Read-Only Mode Toggle - Only show in edit mode */}
-          {isEditMode && (
-            <div className="pb-2 px-4">
-              <ReadOnlyToggle />
             </div>
           )}
 

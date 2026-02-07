@@ -107,6 +107,8 @@ pub struct MessageClassification {
     pub confidence: f32,
     pub is_hidden_from_chat: bool,
     pub classified_at: DateTime<Utc>,
+    /// NULL = rule-based classifier, hash string = model+prompt hash (Ollama)
+    pub classified_by: Option<String>,
 }
 
 /// Sync progress tracking
@@ -856,6 +858,30 @@ impl SyncDatabase {
             CREATE INDEX IF NOT EXISTS idx_entities_connection ON entities(account_id, is_connection);
             CREATE INDEX IF NOT EXISTS idx_entities_latest_contact ON entities(account_id, latest_contact DESC);
         "#).map_err(|e| EddieError::Backend(format!("Failed to initialize schema: {}", e)))?;
+
+        // Run schema migrations
+        self.migrate_sync_schema(&conn)?;
+
+        Ok(())
+    }
+
+    /// Run schema migrations for the sync database
+    fn migrate_sync_schema(&self, conn: &DbConnection) -> Result<(), EddieError> {
+        // Migration: Add classified_by column to message_classifications
+        let has_classified_by: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('message_classifications') WHERE name = 'classified_by'",
+                [],
+                |row| row.get::<_, i32>(0).map(|count| count > 0),
+            )
+            .unwrap_or(false);
+
+        if !has_classified_by {
+            info!("Migrating message_classifications: adding 'classified_by' column");
+            conn.execute_batch(
+                "ALTER TABLE message_classifications ADD COLUMN classified_by TEXT"
+            ).map_err(|e| EddieError::Backend(format!("Failed to add classified_by column: {}", e)))?;
+        }
 
         Ok(())
     }
@@ -1851,19 +1877,21 @@ impl SyncDatabase {
     ) -> Result<(), EddieError> {
         let conn = self.connection()?;
         conn.execute(
-            "INSERT INTO message_classifications (message_id, classification, confidence, is_hidden_from_chat, classified_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO message_classifications (message_id, classification, confidence, is_hidden_from_chat, classified_at, classified_by)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(message_id) DO UPDATE SET
                 classification = excluded.classification,
                 confidence = excluded.confidence,
                 is_hidden_from_chat = excluded.is_hidden_from_chat,
-                classified_at = excluded.classified_at",
+                classified_at = excluded.classified_at,
+                classified_by = excluded.classified_by",
             params![
                 classification.message_id,
                 classification.classification,
                 classification.confidence,
                 classification.is_hidden_from_chat as i32,
                 classification.classified_at.to_rfc3339(),
+                classification.classified_by,
             ],
         ).map_err(|e| EddieError::Backend(e.to_string()))?;
 
@@ -1925,7 +1953,7 @@ impl SyncDatabase {
         let conn = self.connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT message_id, classification, confidence, is_hidden_from_chat, classified_at
+                "SELECT message_id, classification, confidence, is_hidden_from_chat, classified_at, classified_by
              FROM message_classifications WHERE message_id = ?1",
             )
             .map_err(|e| EddieError::Backend(e.to_string()))?;
@@ -1943,12 +1971,36 @@ impl SyncDatabase {
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(Utc::now),
+                    classified_by: row.get(5)?,
                 })
             })
             .optional()
             .map_err(|e| EddieError::Backend(e.to_string()))?;
 
         Ok(result)
+    }
+
+    /// Get message IDs whose classified_by doesn't match the given hash.
+    /// Used to find messages that need re-classification when the Ollama model/prompt changes.
+    pub fn get_messages_needing_reclassification(
+        &self,
+        account_id: &str,
+        current_hash: &str,
+    ) -> Result<Vec<i64>, EddieError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT mc.message_id FROM message_classifications mc
+             JOIN messages m ON mc.message_id = m.id
+             WHERE m.account_id = ?1
+             AND (mc.classified_by IS NULL OR mc.classified_by != ?2)"
+        ).map_err(|e| EddieError::Backend(e.to_string()))?;
+
+        let ids = stmt.query_map(params![account_id, current_hash], |row| row.get(0))
+            .map_err(|e| EddieError::Backend(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(ids)
     }
 
     // ========== Sync Progress Operations ==========

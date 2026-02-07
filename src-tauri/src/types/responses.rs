@@ -202,6 +202,18 @@ impl From<CachedChatMessage> for CachedChatMessageResponse {
 }
 
 // ============================================================================
+// Ollama / Settings Response Types
+// ============================================================================
+
+/// Ollama configuration response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaSettingsResponse {
+    pub url: String,
+    pub model: String,
+    pub enabled: bool,
+}
+
+// ============================================================================
 // Account Response Types
 // ============================================================================
 

@@ -8,6 +8,7 @@ interface SidebarHeaderProps {
   currentAccount: string | null;
   onEditAccount: () => void;
   onCompose: () => void;
+  onOpenSettings: () => void;
 }
 
 export function SidebarHeader({
@@ -15,6 +16,7 @@ export function SidebarHeader({
   currentAccount,
   onEditAccount,
   onCompose,
+  onOpenSettings,
 }: SidebarHeaderProps) {
   const [version, setVersion] = useState<string | null>(null);
 
@@ -83,14 +85,24 @@ export function SidebarHeader({
         )}
       </div>
       <div className="flex gap-2 items-center">
-        {/* <button
-          className="w-9 h-9 rounded-full bg-bg-tertiary flex items-center justify-center hover:bg-bg-hover transition-colors disabled:opacity-50 text-lg"
-          onClick={handleResync}
-          disabled={isResyncing}
-          title="Drop database and re-sync all messages"
+        <button
+          className="w-9 h-9 rounded-full bg-bg-tertiary flex items-center justify-center hover:bg-bg-hover transition-colors"
+          onClick={onOpenSettings}
+          title="Settings"
         >
-          ☠️
-        </button> */}
+          <svg
+            className="w-5 h-5 text-text-primary"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
         <button
           className="w-9 h-9 rounded-full bg-bg-tertiary flex items-center justify-center hover:bg-bg-hover transition-colors"
           onClick={onCompose}

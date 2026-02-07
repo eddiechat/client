@@ -201,6 +201,14 @@ export interface DiscoveryResult {
   source: string;
 }
 
+// ========== Ollama / Settings Types ==========
+
+export interface OllamaSettings {
+  url: string;
+  model: string;
+  enabled: boolean;
+}
+
 // ========== Sync Event Types ==========
 
 export type SyncActionType = "add_flags" | "remove_flags" | "delete" | "move" | "copy";

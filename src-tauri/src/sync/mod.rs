@@ -18,3 +18,4 @@ pub mod conversation;
 pub mod db;
 pub mod engine;
 pub mod idle;
+pub mod ollama_classifier;

@@ -100,7 +100,39 @@ impl SyncManager {
             engines.insert(account_id.to_string(), engine.clone());
         }
 
+        // Configure Ollama classifier if enabled in settings
+        self.configure_ollama_for_engine(&engine).await;
+
         Ok(engine)
+    }
+
+    /// Configure Ollama classifier on an engine based on app_settings
+    async fn configure_ollama_for_engine(&self, engine: &Arc<RwLock<SyncEngine>>) {
+        use crate::sync::db::get_app_setting;
+        use crate::sync::ollama_classifier::{OllamaClassifier, OllamaConfig};
+
+        let enabled = get_app_setting("ollama_enabled")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+
+        if enabled {
+            let url = get_app_setting("ollama_url")
+                .unwrap_or_else(|_| "http://localhost:11434".to_string());
+            let model = get_app_setting("ollama_model")
+                .unwrap_or_else(|_| "mistral:latest".to_string());
+
+            let config = OllamaConfig {
+                url,
+                model,
+                enabled: true,
+            };
+            let engine_guard = engine.read().await;
+            engine_guard
+                .classifier()
+                .set_ollama(Some(OllamaClassifier::new(config)))
+                .await;
+            info!("Ollama classifier configured for engine");
+        }
     }
 
     /// Create a new sync engine for an account
@@ -191,6 +223,12 @@ impl SyncManager {
     pub async fn get_account_ids(&self) -> Vec<String> {
         let engines = self.engines.read().await;
         engines.keys().cloned().collect()
+    }
+
+    /// Get all active engines
+    pub async fn get_all_engines(&self) -> Vec<Arc<RwLock<SyncEngine>>> {
+        let engines = self.engines.read().await;
+        engines.values().cloned().collect()
     }
 }
 

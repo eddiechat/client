@@ -1090,11 +1090,13 @@ impl EnhancedMessageClassifier {
 }
 
 /// Message classifier wrapper that runs legacy classifier first,
-/// then enhanced classifier on messages classified as "chat"
+/// then enhanced classifier on messages classified as "chat".
+/// Optionally delegates to an Ollama-based LLM classifier when configured.
 pub struct MessageClassifier {
     db: Arc<SyncDatabase>,
     legacy: LegacyMessageClassifier,
     enhanced: EnhancedMessageClassifier,
+    ollama: tokio::sync::RwLock<Option<crate::sync::ollama_classifier::OllamaClassifier>>,
 }
 
 impl MessageClassifier {
@@ -1104,7 +1106,58 @@ impl MessageClassifier {
             db,
             legacy: LegacyMessageClassifier::new(),
             enhanced: EnhancedMessageClassifier::new(),
+            ollama: tokio::sync::RwLock::new(None),
         }
+    }
+
+    /// Set or clear the Ollama classifier
+    pub async fn set_ollama(
+        &self,
+        classifier: Option<crate::sync::ollama_classifier::OllamaClassifier>,
+    ) {
+        let mut ollama = self.ollama.write().await;
+        *ollama = classifier;
+    }
+
+    /// Get the current Ollama config hash (if configured)
+    pub async fn ollama_config_hash(&self) -> Option<String> {
+        let ollama = self.ollama.read().await;
+        ollama.as_ref().map(|o| o.config_hash().to_string())
+    }
+
+    /// Classify using Ollama if available, falling back to rule-based.
+    /// Stores the result in the database with the appropriate `classified_by` value.
+    pub async fn classify_and_store_async(
+        &self,
+        message: &CachedChatMessage,
+    ) -> Result<ClassificationResult, EddieError> {
+        let ollama = self.ollama.read().await;
+        let (result, classified_by) = if let Some(ollama_classifier) = ollama.as_ref() {
+            match ollama_classifier.classify(message).await {
+                Ok(result) => (result, Some(ollama_classifier.config_hash().to_string())),
+                Err(e) => {
+                    tracing::warn!(
+                        "Ollama classification failed, falling back to rule-based: {}",
+                        e
+                    );
+                    (self.classify(message), None)
+                }
+            }
+        } else {
+            (self.classify(message), None)
+        };
+
+        let classification = MessageClassification {
+            message_id: message.id,
+            classification: result.classification.as_str().to_string(),
+            confidence: result.confidence,
+            is_hidden_from_chat: result.classification.is_hidden_by_default(),
+            classified_at: Utc::now(),
+            classified_by,
+        };
+
+        self.db.set_message_classification(&classification)?;
+        Ok(result)
     }
 
     /// Classify a message using the sequential approach:
@@ -1137,6 +1190,7 @@ impl MessageClassifier {
             confidence: result.confidence,
             is_hidden_from_chat: result.classification.is_hidden_by_default(),
             classified_at: Utc::now(),
+            classified_by: None,
         };
 
         self.db.set_message_classification(&classification)?;

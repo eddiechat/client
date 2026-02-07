@@ -90,6 +90,10 @@ pub fn run() {
             commands::save_account,
             commands::get_read_only_mode,
             commands::set_read_only_mode,
+            commands::get_ollama_config,
+            commands::save_ollama_config,
+            commands::test_ollama_connection,
+            commands::reclassify_with_ollama,
             // Account database commands
             commands::init_config_database,
             commands::get_accounts,

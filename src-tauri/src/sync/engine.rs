@@ -221,6 +221,11 @@ impl SyncEngine {
         self.db.clone()
     }
 
+    /// Get the classifier (for Ollama configuration)
+    pub fn classifier(&self) -> &Arc<MessageClassifier> {
+        &self.classifier
+    }
+
     /// Get the action queue
     pub fn action_queue(&self) -> Arc<ActionQueue> {
         self.action_queue.clone()
@@ -550,10 +555,10 @@ impl SyncEngine {
             // Extract entities (participants) from the message
             extract_entities_from_message(&self.db, &self.account_id, &self.user_email, &self.user_aliases, &cached_msg);
 
-            // Classify if enabled
+            // Classify if enabled (uses Ollama if configured, otherwise rule-based)
             if self.config.auto_classify {
                 if let Ok(Some(msg)) = self.db.get_message_by_id(msg_id) {
-                    let _ = self.classifier.classify_and_store(&msg);
+                    let _ = self.classifier.classify_and_store_async(&msg).await;
                 }
             }
         }
@@ -875,6 +880,51 @@ impl SyncEngine {
         info!("Updated conversation classifications for account: {}", self.account_id);
 
         Ok(reclassified_count)
+    }
+
+    /// Reclassify messages that don't match the current Ollama config hash.
+    /// Only re-runs classification on messages whose `classified_by` value
+    /// differs from the current Ollama model+prompt hash.
+    pub async fn reclassify_with_ollama(&self) -> Result<u32, EddieError> {
+        let hash = self
+            .classifier
+            .ollama_config_hash()
+            .await
+            .ok_or_else(|| EddieError::Config("Ollama not configured".to_string()))?;
+
+        let message_ids = self
+            .db
+            .get_messages_needing_reclassification(&self.account_id, &hash)?;
+        info!(
+            "Found {} messages needing Ollama reclassification for account: {}",
+            message_ids.len(),
+            self.account_id
+        );
+
+        let mut count = 0u32;
+        for message_id in &message_ids {
+            if let Ok(Some(message)) = self.db.get_message_by_id(*message_id) {
+                match self.classifier.classify_and_store_async(&message).await {
+                    Ok(_) => count += 1,
+                    Err(e) => warn!("Failed to reclassify message {}: {}", message_id, e),
+                }
+            }
+        }
+
+        // Update conversation classifications
+        self.db
+            .update_conversation_classifications(&self.account_id)?;
+
+        // Emit event so frontend refreshes
+        self.emit_event(SyncEvent::ConversationsUpdated {
+            conversation_ids: vec![],
+        });
+
+        info!(
+            "Reclassified {} messages with Ollama for account: {}",
+            count, self.account_id
+        );
+        Ok(count)
     }
 
     /// Replay pending actions from the action queue

@@ -267,3 +267,103 @@ pub async fn set_read_only_mode(enabled: bool) -> Result<(), EddieError> {
     info!("Setting read-only mode to: {}", enabled);
     set_app_setting("read_only_mode", if enabled { "true" } else { "false" })
 }
+
+// ========== Ollama Settings Commands ==========
+
+/// Get Ollama configuration
+#[tauri::command]
+pub async fn get_ollama_config() -> Result<crate::types::responses::OllamaSettingsResponse, EddieError> {
+    let url = get_app_setting("ollama_url").unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let model = get_app_setting("ollama_model").unwrap_or_else(|_| "ministral-3:3b".to_string());
+    let enabled = get_app_setting("ollama_enabled")
+        .map(|s| s == "true")
+        .unwrap_or(false);
+
+    Ok(crate::types::responses::OllamaSettingsResponse {
+        url,
+        model,
+        enabled,
+    })
+}
+
+/// Save Ollama configuration and update active classifiers
+#[tauri::command]
+pub async fn save_ollama_config(
+    url: String,
+    model: String,
+    enabled: bool,
+    sync_manager: State<'_, SyncManager>,
+) -> Result<(), EddieError> {
+    info!("Saving Ollama config: url={}, model={}, enabled={}", url, model, enabled);
+
+    set_app_setting("ollama_url", &url)?;
+    set_app_setting("ollama_model", &model)?;
+    set_app_setting("ollama_enabled", if enabled { "true" } else { "false" })?;
+
+    // Update classifiers in all active engines
+    let engines = sync_manager.get_all_engines().await;
+    for engine_arc in &engines {
+        let engine = engine_arc.read().await;
+        if enabled {
+            let config = crate::sync::ollama_classifier::OllamaConfig {
+                url: url.clone(),
+                model: model.clone(),
+                enabled,
+            };
+            engine
+                .classifier()
+                .set_ollama(Some(crate::sync::ollama_classifier::OllamaClassifier::new(config)))
+                .await;
+        } else {
+            engine.classifier().set_ollama(None).await;
+        }
+    }
+
+    Ok(())
+}
+
+/// Test Ollama connection
+#[tauri::command]
+pub async fn test_ollama_connection(url: String, model: String) -> Result<bool, EddieError> {
+    info!("Testing Ollama connection: url={}, model={}", url, model);
+    let config = crate::sync::ollama_classifier::OllamaConfig {
+        url,
+        model,
+        enabled: true,
+    };
+    let classifier = crate::sync::ollama_classifier::OllamaClassifier::new(config);
+    classifier.test_connection().await
+}
+
+/// Trigger re-classification of messages using Ollama
+#[tauri::command]
+pub async fn reclassify_with_ollama(
+    account: Option<String>,
+    sync_manager: State<'_, SyncManager>,
+) -> Result<u32, EddieError> {
+    info!("Reclassifying messages with Ollama");
+
+    let mut total = 0u32;
+
+    if let Some(acct) = account {
+        // Reclassify for a specific account
+        let engine_arc = sync_manager
+            .get_or_create(&acct)
+            .await?;
+        let engine = engine_arc.read().await;
+        total += engine.reclassify_with_ollama().await?;
+    } else {
+        // Reclassify for all accounts
+        let engines = sync_manager.get_all_engines().await;
+        for engine_arc in &engines {
+            let engine = engine_arc.read().await;
+            match engine.reclassify_with_ollama().await {
+                Ok(count) => total += count,
+                Err(e) => tracing::warn!("Failed to reclassify for an account: {}", e),
+            }
+        }
+    }
+
+    info!("Reclassified {} total messages with Ollama", total);
+    Ok(total)
+}

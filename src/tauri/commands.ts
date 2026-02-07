@@ -260,3 +260,36 @@ export async function getReadOnlyMode(): Promise<boolean> {
 export async function setReadOnlyMode(enabled: boolean): Promise<void> {
   return invoke("set_read_only_mode", { enabled });
 }
+
+// ========== Ollama Settings Commands ==========
+
+import type { OllamaSettings } from "./types";
+
+/** Get Ollama configuration */
+export async function getOllamaConfig(): Promise<OllamaSettings> {
+  return invoke<OllamaSettings>("get_ollama_config");
+}
+
+/** Save Ollama configuration and update active classifiers */
+export async function saveOllamaConfig(
+  url: string,
+  model: string,
+  enabled: boolean
+): Promise<void> {
+  return invoke("save_ollama_config", { url, model, enabled });
+}
+
+/** Test Ollama connection */
+export async function testOllamaConnection(
+  url: string,
+  model: string
+): Promise<boolean> {
+  return invoke<boolean>("test_ollama_connection", { url, model });
+}
+
+/** Trigger re-classification of messages using Ollama */
+export async function reclassifyWithOllama(
+  account?: string
+): Promise<number> {
+  return invoke<number>("reclassify_with_ollama", { account });
+}

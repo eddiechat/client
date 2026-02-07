@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import {
   AccountConfigModal,
   AccountSetupWizard,
+  SettingsDialog,
   SidebarHeader,
   useAccounts,
   type AccountEditData,
@@ -45,6 +46,9 @@ function App() {
 
   // Account setup wizard state
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
+
+  // Settings dialog state
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Current account aliases state
   const [currentAccountAliases, setCurrentAccountAliases] = useState<string[]>([]);
@@ -135,6 +139,10 @@ function App() {
     setSelectedConversation(null);
     setIsComposing(true);
     setComposeParticipants([]);
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    setSettingsOpen(true);
   }, []);
 
   // Handle when participants are confirmed in compose mode
@@ -385,6 +393,7 @@ function App() {
           currentAccount={currentAccount}
           onEditAccount={handleEditAccount}
           onCompose={handleCompose}
+          onOpenSettings={handleOpenSettings}
         />
 
         {showInitialLoader ? (
@@ -438,6 +447,13 @@ function App() {
         onSave={handleSaveAccount}
         onDelete={handleDeleteAccount}
         editData={accountEditData}
+      />
+
+      {/* Settings Dialog */}
+      <SettingsDialog
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        currentAccount={currentAccount}
       />
     </main>
   );

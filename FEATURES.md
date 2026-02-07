@@ -528,13 +528,26 @@ Eddie aim for feature parity with modern messaging platforms, while keeping priv
 - Payment and receipt keywords
 - Shipping and tracking notifications
 
+### AI-Powered Classification (Ollama)
+
+**Local LLM Classification**
+- Optional classification using a local Ollama instance
+- Uses configurable model (default: Mistral 3B)
+- Structured prompt sends From, Subject, and body preview to the model
+- Falls back to rule-based classification if Ollama is unavailable
+- Each classification is tagged with a model+prompt hash for tracking
+
+**Automatic Re-classification**
+- When Ollama is enabled or the model changes, messages are re-classified
+- Only messages that don't match the current model+prompt hash are re-run
+- Conversation classifications are rebuilt after re-classification
+
 ### Classification Features
 
 **User Controls**
 - Filter conversations by classification
 - Show/hide non-chat messages
-- Manual reclassification (future)
-- Custom classification rules (future)
+- Configure AI classification via Settings dialog
 
 **Classification Confidence**
 - Confidence scores (0.0-1.0)
@@ -546,7 +559,9 @@ Eddie aim for feature parity with modern messaging platforms, while keeping priv
 
 ## 11. Settings & Configuration
 
-### Application Settings
+### Settings Dialog
+
+**Accessible from the sidebar gear icon**, the Settings dialog provides:
 
 **Read-Only Mode**
 - Protected mode to prevent accidental changes
@@ -558,6 +573,13 @@ Eddie aim for feature parity with modern messaging platforms, while keeping priv
   - Marking as read/unread
 - Visual indicator when enabled
 - Toggle on/off easily
+
+**AI Classification (Ollama)**
+- Enable/disable LLM-based message classification
+- Configure Ollama server URL (default: http://localhost:11434)
+- Configure model name (default: mistral:latest)
+- Test connection button to verify Ollama is reachable
+- Saving with Ollama enabled triggers re-classification of existing messages
 
 ### Account Settings
 

@@ -44,4 +44,7 @@ export type {
 
   // Discovery types
   DiscoveryResult,
+
+  // Ollama / Settings types
+  OllamaSettings,
 } from "./types";

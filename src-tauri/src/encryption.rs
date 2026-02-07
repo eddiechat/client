@@ -306,7 +306,7 @@ mod tests {
         assert!(encryption.decrypt("not_base64!@#$%").is_err());
 
         // Valid base64 but too short
-        assert!(encryption.decrypt(BASE64.encode("short")).is_err());
+        assert!(encryption.decrypt(&BASE64.encode("short")).is_err());
 
         // Valid base64 but wrong data
         let wrong_data = BASE64.encode(&[0u8; 32]);
