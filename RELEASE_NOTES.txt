@@ -1,10 +1,7 @@
 ### Added
-- Read-only mode (enabled by default)
-- Notification when attempting to send messages in read-only mode
-- Onboarding messages during initial email ingestion
-
-### Changed
-- Documentation updates
+- Resizable sidebar on desktop
+- Database diagram documentation
+- Sync engine specification and requirements
 
 ### Fixed
-- Build error in iOS
+- Duplicated ingestion spinner
