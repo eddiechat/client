@@ -476,13 +476,13 @@ export function ConversationView({
   const headerTooltip = getHeaderAvatarTooltip(conversation);
   const participantData = conversation.participants.map((p, idx) => ({
     email: extractEmail(p),
-    name: conversation.participant_names[idx] || extractEmail(p),
+    name: conversation.participant_display_names[idx] || extractEmail(p),
   }));
   // Show all participants in header (including user)
   const headerAvatarsToShow = participantData;
 
   // Header should show all participant names (including user), not filtered
-  const conversationName = conversation.participant_names
+  const conversationName = conversation.participant_display_names
     .map((name) => name.split(" ")[0]) // Get first names
     .join(", ");
 
@@ -494,7 +494,7 @@ export function ConversationView({
         conversationName={conversationName}
         headerTooltip={headerTooltip}
         headerAvatarsToShow={headerAvatarsToShow}
-        participantCount={conversation.participant_names.length}
+        participantCount={conversation.participant_display_names.length}
       />
 
       {/* Content area */}
@@ -542,7 +542,7 @@ export function ConversationView({
                       message.envelope.date
                     );
                   const showSender =
-                    !isOut && conversation.participant_names.length > 2;
+                    !isOut && conversation.participant_display_names.length > 2;
 
                   return (
                     <MessageBubble
@@ -662,7 +662,7 @@ function ComposeHeader({
                 {entitySuggestions.map((suggestion, index) => (
                   <div
                     key={suggestion.id}
-                    className={`suggestion-item ${index === entitySuggestionIndex ? "selected" : ""} ${suggestion.is_connection ? "is-connection" : ""}`}
+                    className={`suggestion-item ${index === entitySuggestionIndex ? "selected" : ""} ${suggestion.trust_level === "connection" ? "is-connection" : ""}`}
                     onMouseDown={() => onSelectEntitySuggestion(suggestion)}
                     onMouseEnter={() => onEntitySuggestionHover(index)}
                   >
@@ -670,7 +670,7 @@ function ComposeHeader({
                     {suggestion.name && (
                       <span className="suggestion-name">{suggestion.name}</span>
                     )}
-                    {suggestion.is_connection && (
+                    {suggestion.trust_level === "connection" && (
                       <span className="suggestion-badge" title="You've emailed this person">
                         <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
                           <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>

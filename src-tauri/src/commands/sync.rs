@@ -1,452 +1,276 @@
 //! Sync engine Tauri commands
 //!
-//! Thin command wrappers that delegate to the sync engine.
-//! Business logic is handled by the SyncEngine itself.
+//! Thin command wrappers that delegate to the sync/adapter layer.
+//! The background worker handles actual IMAP synchronization.
 
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use tauri::State;
-use tokio::sync::RwLock;
-use tracing::{debug, error, info};
+use tokio::sync::mpsc;
+use tracing::{debug, info};
 
+use crate::adapters::sqlite::{self, DbPool};
+use crate::engine;
 use crate::services::resolve_account_id_string;
-use crate::state::SyncManager;
-use crate::sync::action_queue::ActionType;
 use crate::sync::db::is_read_only_mode;
-use crate::sync::engine::SyncEvent;
-use crate::types::responses::{CachedChatMessageResponse, ConversationResponse, EntityResponse, SyncStatusResponse};
 use crate::types::EddieError;
 
 // ========== Tauri Commands ==========
 
-/// Initialize sync engine for an account and start syncing
+/// Initialize sync engine for an account and start syncing.
+/// Seeds onboarding tasks and wakes the background worker.
 #[tauri::command]
 pub async fn init_sync_engine(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
+    wake_tx: State<'_, mpsc::Sender<()>>,
     account: Option<String>,
 ) -> Result<SyncStatusResponse, EddieError> {
     let account_id = resolve_account_id_string(account)?;
-    info!("Initializing sync engine for: {}", account_id);
+    info!("Initializing sync for: {}", account_id);
 
-    let engine = manager.get_or_create(&account_id).await?;
+    // Ensure account exists in sync DB
+    sqlite::accounts::ensure_account(&pool, &account_id)?;
 
-    // Start full sync and monitoring in background
-    let engine_clone = engine.clone();
-    tokio::spawn(async move {
-        // Perform initial sync
-        {
-            let engine_guard = engine_clone.read().await;
-            if let Err(e) = engine_guard.full_sync().await {
-                error!("Background sync failed: {}", e);
-                return;
-            }
-        }
+    // Seed onboarding tasks (idempotent - INSERT OR IGNORE)
+    sqlite::onboarding_tasks::seed_tasks(&pool, &account_id)?;
 
-        // Start monitoring after successful sync
-        info!("Initial sync complete, starting monitoring...");
-        {
-            let mut engine_guard = engine_clone.write().await;
-            if let Err(e) = engine_guard.start_monitoring().await {
-                error!("Failed to start monitoring: {}", e);
-            }
-        }
+    // Register user entity
+    sqlite::entities::insert_entity(&pool, &account_id, &account_id, "account", "user")?;
 
-        // Run the notification processing loop
-        run_monitor_loop(engine_clone).await;
-    });
+    // Wake the background worker
+    let _ = wake_tx.send(()).await;
 
-    let status = engine.read().await.status().await;
-    Ok(status.into())
+    // Return current status
+    get_sync_status_inner(&pool, &account_id)
 }
 
-/// Run the monitoring notification loop
-async fn run_monitor_loop(engine: std::sync::Arc<RwLock<crate::sync::engine::SyncEngine>>) {
-    info!("Starting notification processing loop...");
-    loop {
-        let engine_guard = engine.read().await;
-        if !engine_guard.is_monitoring() {
-            debug!("Monitoring stopped, exiting notification loop");
-            break;
-        }
-
-        // Process any pending notifications
-        if !engine_guard.process_monitor_notification().await {
-            // No notification, sleep briefly
-            drop(engine_guard);
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        }
-    }
-}
-
-/// Get sync status
+/// Get sync status for an account
 #[tauri::command]
 pub async fn get_sync_status(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
     account: Option<String>,
 ) -> Result<SyncStatusResponse, EddieError> {
     let account_id = resolve_account_id_string(account)?;
+    get_sync_status_inner(&pool, &account_id)
+}
 
-    if let Some(engine) = manager.get(&account_id).await {
-        let status = engine.read().await.status().await;
-        Ok(status.into())
+fn get_sync_status_inner(
+    pool: &DbPool,
+    account_id: &str,
+) -> Result<SyncStatusResponse, EddieError> {
+    let tasks = sqlite::onboarding_tasks::get_tasks(pool, account_id)?;
+
+    let state = if tasks.is_empty() {
+        "idle".to_string()
+    } else if tasks.iter().all(|t| t.status == "done") {
+        "synced".to_string()
+    } else if tasks.iter().any(|t| t.status == "in_progress") {
+        "syncing".to_string()
     } else {
-        Ok(SyncStatusResponse::idle(account_id))
-    }
+        "pending".to_string()
+    };
+
+    let current_task = tasks
+        .iter()
+        .find(|t| t.status != "done")
+        .map(|t| t.name.clone());
+    let done_count = tasks.iter().filter(|t| t.status == "done").count() as u32;
+    let total_count = tasks.len() as u32;
+
+    Ok(SyncStatusResponse {
+        state,
+        account_id: account_id.to_string(),
+        current_folder: current_task,
+        progress_current: Some(done_count),
+        progress_total: Some(total_count),
+        progress_message: None,
+        last_sync: None,
+        error: None,
+        is_online: true,
+        pending_actions: 0,
+        monitor_mode: None,
+    })
 }
 
-/// Trigger a sync for a folder
+/// Trigger a manual sync cycle
 #[tauri::command]
-pub async fn sync_folder(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-    folder: Option<String>,
-) -> Result<(), EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-    let folder = folder.unwrap_or_else(|| "INBOX".to_string());
-
-    let engine = manager.get_or_create(&account_id).await?;
-    engine
-        .read()
-        .await
-        .sync_folder(&folder)
-        .await
-        .map_err(|e| EddieError::Backend(e.to_string()))?;
-
-    Ok(())
-}
-
-/// Perform full sync for an account
-#[tauri::command]
-pub async fn initial_sync(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-) -> Result<(), EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-    info!("Starting initial sync for: {}", account_id);
-
-    let engine = manager.get_or_create(&account_id).await?;
-    engine
-        .read()
-        .await
-        .full_sync()
-        .await
-        .map_err(|e| EddieError::Backend(e.to_string()))?;
-
-    Ok(())
+pub async fn sync_now(
+    wake_tx: State<'_, mpsc::Sender<()>>,
+) -> Result<String, EddieError> {
+    info!("Manual sync triggered");
+    let _ = wake_tx.send(()).await;
+    Ok("Sync triggered".to_string())
 }
 
 /// Get cached conversations from SQLite
-///
-/// Tab parameter:
-/// - "connections": Only show conversations classified as 'chat' where at least one participant is a connection
-/// - "all": Show all conversations regardless of classification
-/// - "others": Only show conversations classified as 'chat' where NO participants are connections
 #[tauri::command]
 pub async fn get_cached_conversations(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
     account: Option<String>,
     tab: Option<String>,
-) -> Result<Vec<ConversationResponse>, EddieError> {
+) -> Result<Vec<sqlite::conversations::Conversation>, EddieError> {
     let account_id = resolve_account_id_string(account)?;
     let tab = tab.as_deref().unwrap_or("connections");
 
-    // Determine classification and connection filters based on tab
-    let (classification_filter, connection_filter) = match tab {
-        "connections" => (Some("chat"), Some("connections")),
-        "all" => (None, None),
-        "others" => (Some("chat"), Some("others")),
-        _ => (Some("chat"), Some("connections")), // Default to connections
-    };
+    let mut conversations = sqlite::conversations::fetch_conversations(&pool, &account_id)?;
 
-    let engine = manager.get_or_create(&account_id).await?;
-    let conversations = engine
-        .read()
-        .await
-        .get_conversations_with_connection_filter(classification_filter, connection_filter)
-        .map_err(|e| EddieError::Database(e.to_string()))?;
+    // Filter by tab/classification
+    match tab {
+        "connections" => {
+            conversations.retain(|c| c.classification == "connections");
+        }
+        "others" => {
+            conversations.retain(|c| c.classification == "others");
+        }
+        "all" => {} // No filter
+        _ => {
+            conversations.retain(|c| c.classification == "connections");
+        }
+    }
 
-    tracing::info!(
-        "get_cached_conversations: tab={}, classification={:?}, connection={:?}, found {} conversations",
+    info!(
+        "get_cached_conversations: tab={}, found {} conversations",
         tab,
-        classification_filter,
-        connection_filter,
         conversations.len()
     );
 
-    Ok(conversations.into_iter().map(|c| c.into()).collect())
+    Ok(conversations)
 }
 
 /// Get messages for a cached conversation
 #[tauri::command]
 pub async fn get_cached_conversation_messages(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
     account: Option<String>,
-    conversation_id: i64,
-) -> Result<Vec<CachedChatMessageResponse>, EddieError> {
+    conversation_id: String,
+) -> Result<Vec<sqlite::messages::Message>, EddieError> {
     let account_id = resolve_account_id_string(account)?;
-
-    let engine = manager.get_or_create(&account_id).await?;
-    let messages = engine
-        .read()
-        .await
-        .get_conversation_messages(conversation_id)
-        .map_err(|e| EddieError::Database(e.to_string()))?;
-
-    Ok(messages.into_iter().map(|m| m.into()).collect())
+    sqlite::messages::fetch_conversation_messages(&pool, &account_id, &conversation_id)
 }
 
-/// Fetch message body (on-demand, if not cached)
+/// Fetch message body - currently reads from cache only
 #[tauri::command]
 pub async fn fetch_message_body(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
     account: Option<String>,
-    message_id: i64,
-) -> Result<CachedChatMessageResponse, EddieError> {
+    message_id: String,
+) -> Result<Option<sqlite::messages::Message>, EddieError> {
     let account_id = resolve_account_id_string(account)?;
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, date, from_address, from_name, to_addresses, cc_addresses,
+                subject, body_text, body_html, has_attachments, imap_flags, distilled_text
+         FROM messages
+         WHERE account_id = ?1 AND id = ?2",
+    )?;
 
-    let engine = manager.get_or_create(&account_id).await?;
-    let message = engine
-        .read()
-        .await
-        .fetch_message_body(message_id)
-        .await
-        .map_err(|e| EddieError::Backend(e.to_string()))?;
+    let message = stmt
+        .query_row(rusqlite::params![account_id, message_id], |row| {
+            Ok(sqlite::messages::Message {
+                id: row.get(0)?,
+                date: row.get(1)?,
+                from_address: row.get(2)?,
+                from_name: row.get(3)?,
+                to_addresses: row.get(4)?,
+                cc_addresses: row.get(5)?,
+                subject: row.get(6)?,
+                body_text: row.get(7)?,
+                body_html: row.get(8)?,
+                has_attachments: row.get::<_, i32>(9)? != 0,
+                imap_flags: row.get(10)?,
+                distilled_text: row.get(11)?,
+            })
+        })
+        .ok();
 
-    Ok(message.into())
+    Ok(message)
 }
 
 /// Rebuild all conversations from cached messages
-///
-/// This regenerates conversation participant keys from cached messages,
-/// which is useful after adding CC support or fixing participant grouping.
-/// Returns the number of conversations rebuilt.
 #[tauri::command]
 pub async fn rebuild_conversations(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
+    app: tauri::AppHandle,
     account: Option<String>,
-    user_email: String,
 ) -> Result<u32, EddieError> {
     let account_id = resolve_account_id_string(account)?;
     info!("Rebuilding conversations for account: {}", account_id);
 
-    let engine = manager.get_or_create(&account_id).await?;
-    let count = engine
-        .read()
-        .await
-        .rebuild_all_conversations(&account_id, &user_email)?;
+    let count = sqlite::conversations::rebuild_conversations(&pool, &account_id)? as u32;
+
+    // Also reprocess classifications
+    engine::worker::process_changes(&app, &pool, &account_id)?;
 
     info!("Rebuilt {} conversations", count);
     Ok(count)
 }
 
-/// Drop the sync database and re-fetch all messages
-///
-/// This deletes the local cache database and triggers a full re-sync.
-/// Useful for testing or recovering from database corruption.
+/// Reclassify all messages for an account
+#[tauri::command]
+pub async fn reclassify(
+    pool: State<'_, DbPool>,
+    app: tauri::AppHandle,
+    account: Option<String>,
+) -> Result<String, EddieError> {
+    let account_id = resolve_account_id_string(account)?;
+    info!("Reclassifying all messages for account: {}", account_id);
+    sqlite::messages::reset_classifications(&pool, &account_id)?;
+    engine::worker::process_changes(&app, &pool, &account_id)?;
+    info!("Reclassification complete for account: {}", account_id);
+    Ok("Reclassification complete".to_string())
+}
+
+/// Drop the sync database contents for an account and re-fetch
 #[tauri::command]
 pub async fn drop_and_resync(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
+    wake_tx: State<'_, mpsc::Sender<()>>,
     account: Option<String>,
 ) -> Result<(), EddieError> {
     let account_id = resolve_account_id_string(account)?;
-    info!("Dropping database and re-syncing for account: {}", account_id);
+    info!(
+        "Dropping sync data and re-syncing for account: {}",
+        account_id
+    );
 
-    // Shutdown the sync engine to close database connections
-    manager.remove(&account_id).await;
+    // Delete account row — ON DELETE CASCADE removes all child data
+    // (messages, conversations, entities, action_queue, sync_state, folder_sync, onboarding_tasks)
+    let conn = pool.get()?;
+    conn.execute(
+        "DELETE FROM accounts WHERE id = ?1",
+        rusqlite::params![&account_id],
+    )?;
+    drop(conn);
 
-    // Delete the database file
-    let db_path = if cfg!(debug_assertions) {
-        std::path::PathBuf::from("../.sqlite/eddie_sync.db")
-    } else {
-        std::path::PathBuf::from("eddie_sync.db")
-    };
+    // Recreate account row and re-seed for fresh sync
+    sqlite::accounts::ensure_account(&pool, &account_id)?;
+    sqlite::entities::insert_entity(&pool, &account_id, &account_id, "account", "user")?;
+    sqlite::onboarding_tasks::seed_tasks(&pool, &account_id)?;
 
-    if db_path.exists() {
-        std::fs::remove_file(&db_path)
-            .map_err(|e| EddieError::Backend(format!("Failed to delete database: {}", e)))?;
-        info!("Deleted database file: {:?}", db_path);
-    }
+    // Wake the worker
+    let _ = wake_tx.send(()).await;
 
-    // Re-initialize and trigger full sync
-    let engine = manager.get_or_create(&account_id).await?;
-    engine
-        .read()
-        .await
-        .full_sync()
-        .await
-        .map_err(|e| EddieError::Backend(e.to_string()))?;
-
-    info!("Database dropped and full sync initiated for account: {}", account_id);
+    info!(
+        "Sync data dropped and re-sync initiated for account: {}",
+        account_id
+    );
     Ok(())
 }
 
-/// Queue an action for offline support
-#[tauri::command]
-pub async fn queue_sync_action(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-    action_type: String,
-    folder: String,
-    uids: Vec<u32>,
-    flags: Option<Vec<String>>,
-    target_folder: Option<String>,
-) -> Result<i64, EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-
-    let engine = manager.get_or_create(&account_id).await?;
-    let action = parse_action_type(&action_type, folder, uids, flags, target_folder)?;
-
-    let result = engine
-        .read()
-        .await
-        .queue_action(action)
-        .map_err(|e| EddieError::Database(e.to_string()))?;
-    Ok(result)
-}
-
-/// Parse action type from string
-fn parse_action_type(
-    action_type: &str,
-    folder: String,
-    uids: Vec<u32>,
-    flags: Option<Vec<String>>,
-    target_folder: Option<String>,
-) -> Result<ActionType, EddieError> {
-    match action_type {
-        "add_flags" => Ok(ActionType::AddFlags {
-            folder,
-            uids,
-            flags: flags.unwrap_or_default(),
-        }),
-        "remove_flags" => Ok(ActionType::RemoveFlags {
-            folder,
-            uids,
-            flags: flags.unwrap_or_default(),
-        }),
-        "delete" => Ok(ActionType::Delete { folder, uids }),
-        "move" => Ok(ActionType::Move {
-            source_folder: folder,
-            target_folder: target_folder
-                .ok_or_else(|| EddieError::InvalidInput("target_folder required for move".into()))?,
-            uids,
-        }),
-        "copy" => Ok(ActionType::Copy {
-            source_folder: folder,
-            target_folder: target_folder
-                .ok_or_else(|| EddieError::InvalidInput("target_folder required for copy".into()))?,
-            uids,
-        }),
-        _ => Err(EddieError::InvalidInput(format!(
-            "Unknown action type: {}",
-            action_type
-        ))),
-    }
-}
-
-/// Set online status
-#[tauri::command]
-pub async fn set_sync_online(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-    online: bool,
-) -> Result<(), EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-
-    if let Some(engine) = manager.get(&account_id).await {
-        engine.read().await.set_online(online);
-    }
-    Ok(())
-}
-
-/// Check if there are pending sync actions
-#[tauri::command]
-pub async fn has_pending_sync_actions(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-) -> Result<bool, EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-
-    let engine = manager.get_or_create(&account_id).await?;
-    let result = engine
-        .read()
-        .await
-        .action_queue()
-        .has_pending(&account_id)
-        .map_err(|e| EddieError::Database(e.to_string()))?;
-    Ok(result)
-}
-
-/// Start monitoring for mailbox changes
-#[tauri::command]
-pub async fn start_monitoring(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-) -> Result<(), EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-    info!("Starting monitoring for: {}", account_id);
-
-    let engine = manager.get_or_create(&account_id).await?;
-
-    // Start monitoring
-    {
-        let mut engine_guard = engine.write().await;
-        engine_guard
-            .start_monitoring()
-            .await
-            .map_err(|e| EddieError::Backend(e.to_string()))?;
-    }
-
-    // Spawn the notification processing loop
-    let engine_clone = engine.clone();
-    tokio::spawn(async move {
-        run_monitor_loop(engine_clone).await;
-    });
-
-    Ok(())
-}
-
-/// Stop monitoring for mailbox changes
-#[tauri::command]
-pub async fn stop_monitoring(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-) -> Result<(), EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-    info!("Stopping monitoring for: {}", account_id);
-
-    if let Some(engine) = manager.get(&account_id).await {
-        engine.read().await.stop_monitoring();
-    }
-
-    Ok(())
-}
-
-/// Shutdown sync engine for an account
-#[tauri::command]
-pub async fn shutdown_sync_engine(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-) -> Result<(), EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-    info!("Shutting down sync engine for: {}", account_id);
-    manager.remove(&account_id).await;
-    Ok(())
-}
-
-/// Mark all unread messages in a conversation as read
+/// Mark all unread messages in a conversation as read (local cache only)
 #[tauri::command]
 pub async fn mark_conversation_read(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
     app_handle: tauri::AppHandle,
     account: Option<String>,
-    conversation_id: i64,
+    conversation_id: String,
 ) -> Result<(), EddieError> {
     use tauri::Emitter;
 
     // Check read-only mode
     if is_read_only_mode()? {
         info!(
-            "Read-only mode: Blocked mark_conversation_read - account: {:?}, conversation_id: {}",
-            account, conversation_id
+            "Read-only mode: Blocked mark_conversation_read - conversation_id: {}",
+            conversation_id
         );
         return Err(EddieError::ReadOnlyMode);
     }
@@ -457,96 +281,139 @@ pub async fn mark_conversation_read(
         conversation_id, account_id
     );
 
-    let engine = manager.get_or_create(&account_id).await?;
-    let engine_guard = engine.read().await;
-    let db = engine_guard.database();
+    let conn = pool.get()?;
 
-    // Get all messages in the conversation
-    let messages = db
-        .get_conversation_messages(conversation_id)
-        .map_err(|e| EddieError::Database(e.to_string()))?;
-
-    // Find unread messages (those without \Seen flag)
-    let mut unread_by_folder: HashMap<String, Vec<u32>> = HashMap::new();
-    let mut total_unread = 0i32;
-
-    for msg in &messages {
-        let flags: Vec<String> = serde_json::from_str(&msg.flags).unwrap_or_default();
-        if !flags.iter().any(|f| f == "\\Seen") {
-            unread_by_folder
-                .entry(msg.folder_name.clone())
-                .or_default()
-                .push(msg.uid);
-            total_unread += 1;
-        }
-    }
-
-    if unread_by_folder.is_empty() {
-        debug!("No unread messages in conversation {}", conversation_id);
-        return Ok(());
-    }
-
-    info!(
-        "Marking {} unread messages as read in conversation {}",
-        total_unread, conversation_id
-    );
-
-    // Update local database flags and queue actions for each folder
-    for (folder, uids) in &unread_by_folder {
-        // Update local database flags
-        for uid in uids {
-            db.add_message_flags(&account_id, folder, *uid, &["\\Seen".to_string()])
-                .map_err(|e| EddieError::Database(e.to_string()))?;
-        }
-
-        // Queue the action for IMAP server sync
-        let action = ActionType::AddFlags {
-            folder: folder.clone(),
-            uids: uids.clone(),
-            flags: vec!["\\Seen".to_string()],
-        };
-        engine_guard
-            .queue_action(action)
-            .map_err(|e| EddieError::Database(e.to_string()))?;
-    }
+    // Update all unseen messages in this conversation to include \Seen flag
+    conn.execute(
+        "UPDATE messages SET imap_flags =
+            CASE
+                WHEN imap_flags NOT LIKE '%Seen%' THEN
+                    CASE WHEN imap_flags = '[]' OR imap_flags = ''
+                        THEN '[\"\\\\Seen\"]'
+                        ELSE SUBSTR(imap_flags, 1, LENGTH(imap_flags)-1) || ',\"\\\\Seen\"]'
+                    END
+                ELSE imap_flags
+            END
+        WHERE account_id = ?1 AND conversation_id = ?2 AND imap_flags NOT LIKE '%Seen%'",
+        rusqlite::params![account_id, conversation_id],
+    )?;
 
     // Update conversation unread count
-    db.adjust_conversation_unread_count(conversation_id, -total_unread)
-        .map_err(|e| EddieError::Database(e.to_string()))?;
+    conn.execute(
+        "UPDATE conversations SET unread_count = 0 WHERE account_id = ?1 AND id = ?2",
+        rusqlite::params![account_id, conversation_id],
+    )?;
 
-    // Emit sync event so UI refreshes
-    let _ = app_handle.emit(
-        "sync-event",
-        SyncEvent::ConversationsUpdated {
-            conversation_ids: vec![conversation_id],
-        },
-    );
+    // Emit event so UI refreshes
+    let _ = app_handle.emit("sync:conversations-updated", &conversation_id);
 
     Ok(())
 }
 
 /// Search entities for autocomplete suggestions
-/// Returns up to 5 entities matching the query, prioritizing connections and recent contacts
 #[tauri::command]
 pub async fn search_entities(
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
     account: Option<String>,
     query: String,
     limit: Option<u32>,
-) -> Result<Vec<EntityResponse>, EddieError> {
+) -> Result<Vec<EntityResult>, EddieError> {
     let account_id = resolve_account_id_string(account)?;
-    let limit = limit.unwrap_or(5).min(10); // Default to 5, max 10
+    let limit = limit.unwrap_or(5).min(10);
 
     if query.is_empty() {
         return Ok(vec![]);
     }
 
-    let engine = manager.get_or_create(&account_id).await?;
+    let conn = pool.get()?;
+    let pattern = format!("%{}%", query);
 
-    let entities = engine
-        .read()
-        .await
-        .search_entities(&query, limit)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, email, display_name, trust_level, last_seen
+         FROM entities
+         WHERE account_id = ?1 AND (email LIKE ?2 OR display_name LIKE ?2)
+           AND trust_level NOT IN ('user', 'alias')
+         ORDER BY
+            CASE trust_level WHEN 'connection' THEN 0 ELSE 1 END,
+            COALESCE(last_seen, 0) DESC
+         LIMIT ?3",
+    )?;
 
-    Ok(entities.into_iter().map(|e| e.into()).collect())
+    let rows = stmt.query_map(rusqlite::params![account_id, pattern, limit], |row| {
+        Ok(EntityResult {
+            id: row.get(0)?,
+            email: row.get(1)?,
+            name: row.get(2)?,
+            trust_level: row.get(3)?,
+            last_seen: row.get(4)?,
+        })
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row?);
+    }
+    Ok(results)
+}
+
+/// Shutdown sync engine for an account (no-op with worker loop)
+#[tauri::command]
+pub async fn shutdown_sync_engine(_account: Option<String>) -> Result<(), EddieError> {
+    // No-op: the background worker loop handles its own lifecycle
+    Ok(())
+}
+
+// ========== Response types ==========
+
+/// Response for sync status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncStatusResponse {
+    pub state: String,
+    pub account_id: String,
+    pub current_folder: Option<String>,
+    pub progress_current: Option<u32>,
+    pub progress_total: Option<u32>,
+    pub progress_message: Option<String>,
+    pub last_sync: Option<String>,
+    pub error: Option<String>,
+    pub is_online: bool,
+    pub pending_actions: u32,
+    pub monitor_mode: Option<String>,
+}
+
+impl Default for SyncStatusResponse {
+    fn default() -> Self {
+        Self {
+            state: "idle".to_string(),
+            account_id: String::new(),
+            current_folder: None,
+            progress_current: None,
+            progress_total: None,
+            progress_message: None,
+            last_sync: None,
+            error: None,
+            is_online: false,
+            pending_actions: 0,
+            monitor_mode: None,
+        }
+    }
+}
+
+impl SyncStatusResponse {
+    pub fn idle(account_id: String) -> Self {
+        Self {
+            account_id,
+            ..Default::default()
+        }
+    }
+}
+
+/// Entity search result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityResult {
+    pub id: String,
+    pub email: String,
+    pub name: Option<String>,
+    pub trust_level: String,
+    pub last_seen: Option<i64>,
 }

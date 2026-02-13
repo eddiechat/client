@@ -11,12 +11,11 @@ import type {
   SaveDiscoveredEmailAccountRequest,
   SendMessageResult,
   SyncStatus,
-  CachedConversation,
-  CachedChatMessage,
+  Message,
+  Conversation,
   DiscoveryResult,
   AttachmentInfo,
   ComposeAttachment,
-  SyncActionType,
 } from "./types";
 
 // ========== App Commands ==========
@@ -94,14 +93,6 @@ export async function sendMessageWithAttachments(
   });
 }
 
-export async function getConversationMessages(
-  messageIds: string[],
-  account?: string
-): Promise<CachedChatMessage[]> {
-  if (messageIds.length === 0) return [];
-  return invoke("get_conversation_messages", { account, messageIds });
-}
-
 // ========== Sync Engine Commands ==========
 
 export async function initSyncEngine(account?: string): Promise<SyncStatus> {
@@ -112,81 +103,57 @@ export async function getSyncStatus(account?: string): Promise<SyncStatus> {
   return invoke("get_sync_status", { account });
 }
 
-export async function syncFolder(folder?: string, account?: string): Promise<void> {
-  return invoke("sync_folder", { account, folder });
+export async function syncNow(): Promise<string> {
+  return invoke("sync_now");
 }
 
-export async function initialSync(account?: string): Promise<void> {
-  return invoke("initial_sync", { account });
-}
-
+/** Get cached conversations, optionally filtered by tab */
 export async function getCachedConversations(
   tab?: 'connections' | 'all' | 'others',
   account?: string
-): Promise<CachedConversation[]> {
+): Promise<Conversation[]> {
   return invoke("get_cached_conversations", { account, tab });
 }
 
+/** Get messages for a conversation by conversation ID (string hash) */
 export async function getCachedConversationMessages(
-  conversationId: number,
+  conversationId: string,
   account?: string
-): Promise<CachedChatMessage[]> {
+): Promise<Message[]> {
   return invoke("get_cached_conversation_messages", { account, conversationId });
 }
 
+/** Fetch a single message by ID, returns null if not found */
 export async function fetchMessageBody(
-  messageId: number,
+  messageId: string,
   account?: string
-): Promise<CachedChatMessage> {
+): Promise<Message | null> {
   return invoke("fetch_message_body", { account, messageId });
 }
 
 export async function rebuildConversations(
-  userEmail: string,
   account?: string
 ): Promise<number> {
-  return invoke("rebuild_conversations", { account, userEmail });
+  return invoke("rebuild_conversations", { account });
+}
+
+export async function reclassify(account?: string): Promise<string> {
+  return invoke("reclassify", { account });
 }
 
 export async function dropAndResync(account?: string): Promise<void> {
   return invoke("drop_and_resync", { account });
 }
 
-export async function queueSyncAction(
-  actionType: SyncActionType,
-  folder: string,
-  uids: number[],
-  flags?: string[],
-  targetFolder?: string,
+export async function markConversationRead(
+  conversationId: string,
   account?: string
-): Promise<number> {
-  return invoke("queue_sync_action", {
-    account,
-    actionType,
-    folder,
-    uids,
-    flags,
-    targetFolder,
-  });
-}
-
-export async function setSyncOnline(online: boolean, account?: string): Promise<void> {
-  return invoke("set_sync_online", { account, online });
-}
-
-export async function hasPendingSyncActions(account?: string): Promise<boolean> {
-  return invoke("has_pending_sync_actions", { account });
+): Promise<void> {
+  return invoke("mark_conversation_read", { account, conversationId });
 }
 
 export async function shutdownSyncEngine(account?: string): Promise<void> {
   return invoke("shutdown_sync_engine", { account });
-}
-
-export async function markConversationRead(
-  conversationId: number,
-  account?: string
-): Promise<void> {
-  return invoke("mark_conversation_read", { account, conversationId });
 }
 
 // ========== Email Discovery Commands ==========
@@ -224,12 +191,11 @@ export async function downloadAttachment(
 // ========== Entity (Participant) Commands ==========
 
 export interface EntitySuggestion {
-  id: number;
+  id: string;
   email: string;
   name: string | null;
-  is_connection: boolean;
-  latest_contact: string;
-  contact_count: number;
+  trust_level: string;
+  last_seen: number | null;
 }
 
 /** Search entities for autocomplete suggestions

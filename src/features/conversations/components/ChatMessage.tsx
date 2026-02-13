@@ -10,8 +10,8 @@ interface ChatMessageProps {
   currentAccountEmail?: string;
 }
 
-function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
+function formatTime(dateMs: number): string {
+  const date = new Date(dateMs);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -30,7 +30,7 @@ function formatTime(dateStr: string): string {
 function getAvatarTooltip(conversation: Conversation): string {
   return conversation.participants
     .map((email, index) => {
-      const name = conversation.participant_names[index];
+      const name = conversation.participant_display_names[index];
       if (name && name !== email && !name.includes("@")) {
         return `${name} <${email}>`;
       }
@@ -51,7 +51,7 @@ export function ChatMessage({
   const participantData = conversation.participants.map((p, idx) => ({
     participant: p,
     email: extractEmail(p),
-    name: conversation.participant_names[idx] || extractEmail(p),
+    name: conversation.participant_display_names[idx] || extractEmail(p),
   }));
 
   // Filter out the current user from sidebar avatars (only by email, not by name)
@@ -136,7 +136,7 @@ export function ChatMessage({
                 : "text-text-secondary"
             }`}
           >
-            {conversation.last_message_preview}
+            {conversation.last_message_preview || ""}
           </span>
           {conversation.unread_count > 0 && (
             <span className="min-w-5 h-5 px-1.5 rounded-full bg-accent-blue text-white text-xs font-semibold flex items-center justify-center shrink-0">

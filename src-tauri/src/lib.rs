@@ -5,29 +5,137 @@
 //! ## Module Organization
 //!
 //! - `commands/`: Tauri command handlers (thin wrappers)
+//! - `adapters/`: IMAP and SQLite adapter layers
+//! - `engine/`: Background sync engine (tick-based worker)
 //! - `services/`: Business logic (Tauri-agnostic)
-//! - `state/`: Application state management
 //! - `types/`: Data structures and types
-//! - `backend/`: Email protocol implementation
-//! - `sync/`: Sync engine for offline support
+//! - `sync/`: Config database (account credentials, settings)
 //! - `config/`: Configuration management
-//! - `credentials/`: Secure credential storage
+//! - `encryption/`: Secure credential storage
 //! - `autodiscovery/`: Email provider auto-configuration
 
+mod adapters;
 mod autodiscovery;
-mod backend;
 mod commands;
 mod config;
 mod encryption;
+mod engine;
 mod services;
-mod state;
 mod sync;
 mod types;
 
-use state::SyncManager;
+use adapters::sqlite;
 use tauri::Manager;
-use tracing::info;
+use tokio::sync::mpsc;
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
+
+use std::path::{Path, PathBuf};
+
+/// Get the sync database directory path
+fn get_sync_db_dir() -> PathBuf {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        dirs::data_dir()
+            .expect("Failed to determine data directory for iOS/Android")
+            .join("eddie.chat")
+            .join("sync")
+    }
+
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        if cfg!(debug_assertions) {
+            PathBuf::from("../.sqlite")
+        } else {
+            dirs::data_local_dir()
+                .expect("Failed to determine data directory for desktop")
+                .join("eddie.chat")
+                .join("sync")
+        }
+    }
+}
+
+/// Get the sync database file path
+fn get_sync_db_path() -> PathBuf {
+    get_sync_db_dir().join("sync.db")
+}
+
+/// Remove old per-account `.db` files from the sync DB directory.
+/// These are leftover from the previous architecture where each account had its own DB file.
+fn cleanup_old_db_files(dir: &Path) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            warn!("Could not read sync DB directory for cleanup: {}", e);
+            return;
+        }
+    };
+
+    // In debug mode, config.db and sync.db share the same directory
+    let keep_stems: &[&str] = if cfg!(debug_assertions) {
+        &["sync", "config"]
+    } else {
+        &["sync"]
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        // Match .db, .db-shm, and .db-wal files (SQLite WAL mode companions)
+        let is_db_file = filename.ends_with(".db")
+            || filename.ends_with(".db-shm")
+            || filename.ends_with(".db-wal");
+
+        if is_db_file {
+            // Extract the stem (e.g., "foo" from "foo.db" or "foo.db-shm")
+            let stem = filename.strip_suffix(".db-wal")
+                .or_else(|| filename.strip_suffix(".db-shm"))
+                .or_else(|| filename.strip_suffix(".db"))
+                .unwrap_or(filename);
+
+            if !keep_stems.contains(&stem) {
+                info!("Removing old database file: {}", path.display());
+                if let Err(e) = std::fs::remove_file(&path) {
+                    warn!("Failed to remove old database file {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+}
+
+/// Seed sync DB with account rows and onboarding tasks for all accounts in Config DB.
+/// All operations are idempotent (INSERT OR IGNORE).
+fn seed_accounts_from_config(pool: &sqlite::DbPool) {
+    let configs = match sync::db::get_all_connection_configs() {
+        Ok(configs) => configs,
+        Err(e) => {
+            warn!("Could not read accounts from config DB for seeding: {}", e);
+            return;
+        }
+    };
+
+    for config in &configs {
+        let account_id = &config.account_id;
+
+        if let Err(e) = sqlite::accounts::ensure_account(pool, account_id) {
+            warn!("Failed to seed account {}: {}", account_id, e);
+            continue;
+        }
+
+        if let Err(e) = sqlite::onboarding_tasks::seed_tasks(pool, account_id) {
+            warn!("Failed to seed onboarding tasks for {}: {}", account_id, e);
+        }
+
+        if let Err(e) = sqlite::entities::insert_entity(pool, account_id, account_id, "account", "user") {
+            warn!("Failed to seed user entity for {}: {}", account_id, e);
+        }
+    }
+
+    if !configs.is_empty() {
+        info!("Seeded {} account(s) from config DB", configs.len());
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -38,14 +146,10 @@ pub fn run() {
         .expect("Failed to install rustls crypto provider");
 
     // Initialize tracing for logging
-    // In debug builds, default to debug level for our crate
-    // Can be overridden with RUST_LOG environment variable
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         if cfg!(debug_assertions) {
-            // Debug build: show debug logs for our crate, info for others
             EnvFilter::new("eddie_chat_lib=debug,info")
         } else {
-            // Release build: show info and above
             EnvFilter::new("info")
         }
     });
@@ -58,23 +162,63 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
-        .manage(SyncManager::new())
         .setup(|app| {
             // Try to initialize config on startup
             if let Err(e) = config::init_config() {
                 tracing::warn!("Could not load config on startup: {}", e);
             }
 
-            // Initialize the config database
+            // Initialize the config database (account credentials, settings)
             if let Err(e) = sync::db::init_config_db() {
                 tracing::warn!("Could not initialize config database on startup: {}", e);
             }
 
-            // Set app handle on sync manager for event emission
-            let sync_manager = app.state::<SyncManager>();
-            let handle = app.handle().clone();
-            tauri::async_runtime::block_on(async {
-                sync_manager.set_app_handle(handle).await;
+            // Initialize the sync database (email cache)
+            let db_dir = get_sync_db_dir();
+            std::fs::create_dir_all(&db_dir)?;
+            let db_path = get_sync_db_path();
+
+            let pool = sqlite::pool::create_pool(&db_path)
+                .expect("Failed to create sync database pool");
+
+            let conn = pool.get().expect("Failed to get sync database connection");
+            sqlite::schema::initialize_schema(&conn)
+                .expect("Failed to initialize sync schema");
+            drop(conn);
+
+            // Clean up old per-account .db files from previous architecture
+            cleanup_old_db_files(&db_dir);
+
+            // Seed sync DB with accounts from Config DB (idempotent)
+            seed_accounts_from_config(&pool);
+
+            // Create wake channel for triggering sync
+            let (wake_tx, mut wake_rx) = mpsc::channel::<()>(1);
+            app.manage(wake_tx);
+            app.manage(pool.clone());
+
+            // Spawn background sync worker
+            let engine_pool = pool;
+            let engine_app = app.handle().clone();
+
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    match engine::worker::tick(&engine_app, &engine_pool).await {
+                        Ok(did_work) => {
+                            if did_work {
+                                continue;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Engine error: {}", e);
+                        }
+                    }
+                    // Sleep until woken or timeout
+                    tokio::select! {
+                        _ = wake_rx.recv() => {},
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => {},
+                    }
+                }
             });
 
             Ok(())
@@ -112,53 +256,19 @@ pub fn run() {
             commands::has_credentials,
             // Combined account setup
             commands::save_discovered_account,
-            // Folder commands
-            commands::list_folders,
-            commands::create_folder,
-            commands::delete_folder,
-            commands::expunge_folder,
-            // Envelope commands
-            commands::list_envelopes,
-            commands::thread_envelopes,
-            // Message commands
-            commands::read_message,
-            commands::delete_messages,
-            commands::copy_messages,
-            commands::move_messages,
-            commands::send_message,
-            commands::send_message_with_attachments,
-            commands::save_message,
-            commands::get_message_attachments,
-            commands::download_attachment,
-            commands::download_attachments,
-            // Flag commands
-            commands::add_flags,
-            commands::remove_flags,
-            commands::set_flags,
-            commands::mark_as_read,
-            commands::mark_as_unread,
-            commands::toggle_flagged,
-            // Conversation commands
-            commands::list_conversations,
-            commands::get_conversation_messages,
             // Sync commands
             commands::init_sync_engine,
             commands::get_sync_status,
-            commands::sync_folder,
-            commands::initial_sync,
+            commands::sync_now,
             commands::get_cached_conversations,
             commands::get_cached_conversation_messages,
             commands::fetch_message_body,
             commands::rebuild_conversations,
+            commands::reclassify,
             commands::drop_and_resync,
-            commands::queue_sync_action,
-            commands::set_sync_online,
-            commands::has_pending_sync_actions,
-            commands::start_monitoring,
-            commands::stop_monitoring,
-            commands::shutdown_sync_engine,
             commands::mark_conversation_read,
             commands::search_entities,
+            commands::shutdown_sync_engine,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

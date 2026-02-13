@@ -25,10 +25,3 @@ pub fn resolve_account_id(account: Option<&str>) -> Result<String> {
 pub fn resolve_account_id_string(account: Option<String>) -> Result<String> {
     resolve_account_id(account.as_deref())
 }
-
-/// Return the email address as-is for use as a filename
-///
-/// Previously sanitized @ and . but now preserves the original account identifier.
-pub fn sanitize_email_for_filename(email: &str) -> String {
-    email.to_string()
-}

@@ -66,6 +66,18 @@ pub enum EddieError {
 
 // Implement From for common error types
 
+impl From<r2d2::Error> for EddieError {
+    fn from(err: r2d2::Error) -> Self {
+        EddieError::Database(err.to_string())
+    }
+}
+
+impl From<rusqlite::Error> for EddieError {
+    fn from(err: rusqlite::Error) -> Self {
+        EddieError::Database(err.to_string())
+    }
+}
+
 impl From<std::io::Error> for EddieError {
     fn from(err: std::io::Error) -> Self {
         EddieError::Io(err.to_string())

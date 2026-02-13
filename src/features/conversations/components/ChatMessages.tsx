@@ -32,9 +32,9 @@ export function ChatMessages({
     ? conversations.filter((conv) => {
       const searchLower = searchQuery.toLowerCase();
       return (
-        conv.participant_names.some((name) =>
+        conv.participant_display_names.some((name) =>
           name.toLowerCase().includes(searchLower)
-        ) || conv.last_message_preview.toLowerCase().includes(searchLower)
+        ) || (conv.last_message_preview || "").toLowerCase().includes(searchLower)
       );
     })
     : conversations;

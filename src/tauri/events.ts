@@ -60,15 +60,27 @@ export async function onSyncError(
 
 /**
  * Subscribe to conversation update events.
+ * The backend emits "sync:conversations-updated" with a conversation_id string.
+ * We also listen for the sync-event variant for compatibility.
  */
 export async function onConversationsUpdated(
-  callback: (conversationIds: number[]) => void
+  callback: (conversationIds: string[]) => void
 ): Promise<UnlistenFn> {
-  return listen<SyncEventPayload>("sync-event", (event) => {
+  // Listen to both the new direct event and the legacy sync-event wrapper
+  const unlisten1 = await listen<string>("sync:conversations-updated", (event) => {
+    callback([event.payload]);
+  });
+
+  const unlisten2 = await listen<SyncEventPayload>("sync-event", (event) => {
     if ("ConversationsUpdated" in event.payload && event.payload.ConversationsUpdated) {
       callback(event.payload.ConversationsUpdated.conversation_ids);
     }
   });
+
+  return () => {
+    unlisten1();
+    unlisten2();
+  };
 }
 
 /**

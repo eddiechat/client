@@ -13,7 +13,7 @@ export * from "./events";
 
 // Export all types
 export type {
-  // Core types
+  // Display types (frontend rendering)
   Envelope,
   ChatMessage,
   Attachment,
@@ -29,9 +29,7 @@ export type {
 
   // Sync types
   SyncStatus,
-  CachedConversation,
-  CachedChatMessage,
-  SyncActionType,
+  Message,
   SyncEventPayload,
 
   // Compose types

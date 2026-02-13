@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getCachedConversationMessages,
   fetchMessageBody,
-  getConversationMessages,
 } from "../../../tauri";
-import type { Conversation, ChatMessage, CachedChatMessage } from "../../../tauri";
+import type { Conversation, ChatMessage, Message } from "../../../tauri";
 
 interface UseConversationMessagesResult {
   messages: ChatMessage[];
@@ -14,40 +13,36 @@ interface UseConversationMessagesResult {
 }
 
 /**
- * Convert cached message to display format.
+ * Convert a backend Message to the frontend ChatMessage display format.
  */
-function formatMessage(cached: CachedChatMessage): ChatMessage {
-  const fromField = cached.from_name
-    ? `${cached.from_name} <${cached.from_address}>`
-    : cached.from_address;
+function formatMessage(msg: Message): ChatMessage {
+  const fromField = msg.from_name
+    ? `${msg.from_name} <${msg.from_address}>`
+    : msg.from_address;
 
-  // Debug logging
-  if (import.meta.env.DEV) {
-    console.log('[formatMessage]', {
-      from_name: cached.from_name,
-      from_address: cached.from_address,
-      formatted_from: fromField,
-      uid: cached.uid
-    });
-  }
+  // Parse JSON string arrays
+  let toAddresses: string[] = [];
+  let ccAddresses: string[] = [];
+  let flags: string[] = [];
+  try { toAddresses = JSON.parse(msg.to_addresses); } catch { /* empty */ }
+  try { ccAddresses = JSON.parse(msg.cc_addresses); } catch { /* empty */ }
+  try { flags = JSON.parse(msg.imap_flags); } catch { /* empty */ }
 
   return {
-    id: `${cached.folder}:${cached.uid}`,
+    id: msg.id,
     envelope: {
-      id: cached.uid.toString(),
-      message_id: cached.message_id || undefined,
-      in_reply_to: undefined,
+      id: msg.id,
       from: fromField,
-      to: cached.to_addresses,
-      cc: cached.cc_addresses,
-      subject: cached.subject || "",
-      date: cached.date || "",
-      flags: cached.flags,
-      has_attachment: cached.has_attachment,
+      to: toAddresses,
+      cc: ccAddresses,
+      subject: msg.subject || "",
+      date: new Date(msg.date).toISOString(),
+      flags,
+      has_attachment: msg.has_attachments,
     },
     headers: [],
-    text_body: cached.text_body || undefined,
-    html_body: cached.html_body || undefined,
+    text_body: msg.body_text || undefined,
+    html_body: msg.body_html || undefined,
     attachments: [],
   };
 }
@@ -67,9 +62,7 @@ export function useConversationMessages(
   const [error, setError] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
-    const cachedId = conversation?._cached_id;
-
-    if (!conversation && !cachedId) {
+    if (!conversation) {
       setMessages([]);
       return;
     }
@@ -78,63 +71,29 @@ export function useConversationMessages(
       setLoading(true);
       setError(null);
 
-      if (cachedId) {
-        // Fetch from cache using conversation ID
-        const cachedMessages = await getCachedConversationMessages(
-          cachedId,
-          account
-        );
+      // Fetch from cache using conversation ID (string hash)
+      const backendMessages = await getCachedConversationMessages(
+        conversation.id,
+        account
+      );
 
-        // Fetch bodies for messages that don't have them cached
-        const messagesWithBodies = await Promise.all(
-          cachedMessages.map(async (msg) => {
-            if (!msg.body_cached && !msg.text_body && !msg.html_body) {
-              try {
-                const withBody = await fetchMessageBody(msg.id, account);
-                return withBody;
-              } catch (e) {
-                console.warn("Failed to fetch body for message:", msg.id, e);
-                return msg;
-              }
+      // Fetch bodies for messages that don't have them cached
+      const messagesWithBodies = await Promise.all(
+        backendMessages.map(async (msg) => {
+          if (!msg.body_text && !msg.body_html) {
+            try {
+              const withBody = await fetchMessageBody(msg.id, account);
+              return withBody || msg;
+            } catch (e) {
+              console.warn("Failed to fetch body for message:", msg.id, e);
+              return msg;
             }
-            return msg;
-          })
-        );
+          }
+          return msg;
+        })
+      );
 
-        setMessages(messagesWithBodies.map(formatMessage));
-      } else if (conversation?.message_ids && conversation.message_ids.length > 0) {
-        // Fallback to old method if no cached ID
-        const messageList = await getConversationMessages(
-          conversation.message_ids,
-          account
-        );
-        // The getConversationMessages returns CachedMessage[], convert to Message[]
-        setMessages(
-          messageList.map((m) => ({
-            id: `${m.folder}:${m.uid}`,
-            envelope: {
-              id: m.uid.toString(),
-              message_id: m.message_id || undefined,
-              in_reply_to: undefined,
-              from: m.from_name
-                ? `${m.from_name} <${m.from_address}>`
-                : m.from_address,
-              to: m.to_addresses,
-              cc: m.cc_addresses,
-              subject: m.subject || "",
-              date: m.date || "",
-              flags: m.flags,
-              has_attachment: m.has_attachment,
-            },
-            headers: [],
-            text_body: m.text_body || undefined,
-            html_body: m.html_body || undefined,
-            attachments: [],
-          }))
-        );
-      } else {
-        setMessages([]);
-      }
+      setMessages(messagesWithBodies.map(formatMessage));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -3,15 +3,12 @@
 //! Business logic for account operations, separated from Tauri commands.
 
 use chrono::Utc;
-use std::path::PathBuf;
 use tracing::info;
 
-use crate::config::{EmailAccountConfig, AuthConfig, ImapConfig, PasswordSource, SmtpConfig};
+use crate::config::{AuthConfig, EmailAccountConfig, ImapConfig, PasswordSource, SmtpConfig};
 use crate::encryption::DeviceEncryption;
-use crate::services::helpers::sanitize_email_for_filename;
 use crate::sync::db::{
-    delete_connection_config, get_connection_config, init_config_db, save_connection_config,
-    set_active_account, EmailConnectionConfig,
+    init_config_db, save_connection_config, set_active_account, EmailConnectionConfig,
 };
 use crate::types::error::{EddieError, Result};
 
@@ -42,7 +39,11 @@ pub enum AuthMethod {
     },
 }
 
-/// Create and save a new account
+/// Create and save a new account to the Config DB.
+///
+/// Note: This only saves credentials to the Config DB. The sync DB setup
+/// (ensure_account, seed_tasks, register entities) happens when
+/// `init_sync_engine` is called from the frontend.
 pub fn create_account(params: CreateEmailAccountParams) -> Result<()> {
     info!("Creating account: {}", params.name);
 
@@ -80,17 +81,13 @@ pub fn create_account(params: CreateEmailAccountParams) -> Result<()> {
 }
 
 /// Build auth config from auth method
-/// Note: Password encryption and storage is now handled by save_account_config
 fn build_auth_config(email: &str, auth_method: &AuthMethod) -> Result<AuthConfig> {
     match auth_method {
-        AuthMethod::Password { username, password } => {
-            Ok(AuthConfig::Password {
-                user: username.clone(),
-                password: PasswordSource::Raw(password.clone()),
-            })
-        }
+        AuthMethod::Password { username, password } => Ok(AuthConfig::Password {
+            user: username.clone(),
+            password: PasswordSource::Raw(password.clone()),
+        }),
         AuthMethod::AppPassword { password: _ } => {
-            // Password will be encrypted and stored in database by save_account_config
             Ok(AuthConfig::AppPassword {
                 user: email.to_string(),
             })
@@ -128,7 +125,7 @@ fn save_account_config(
         active: true,
         email: email.to_string(),
         display_name: display_name.clone(),
-        aliases: None, // TODO: Add aliases support to account creation
+        aliases: None,
         imap_config: imap_json,
         smtp_config: smtp_json,
         encrypted_password: Some(encrypted_password),
@@ -141,34 +138,5 @@ fn save_account_config(
     set_active_account(&db_config.account_id)?;
 
     info!("Account saved successfully: {}", email);
-    Ok(())
-}
-
-/// Delete an account and its associated data
-pub fn delete_account_data(account_id: &str, db_directory: &PathBuf) -> Result<()> {
-    info!("Deleting account data for: {}", account_id);
-
-    init_config_db()?;
-
-    // Get the connection config to retrieve the account name
-    let db_config = get_connection_config(account_id)?;
-
-    // Delete the sync database file
-    if let Some(config) = db_config {
-        let safe_name = sanitize_email_for_filename(&config.account_id);
-        let db_path = db_directory.join(format!("{}.db", safe_name));
-
-        if db_path.exists() {
-            info!("Deleting sync database file: {:?}", db_path);
-            std::fs::remove_file(&db_path)?;
-        } else {
-            info!("Sync database file not found: {:?}", db_path);
-        }
-    }
-
-    // Remove connection config from database
-    delete_connection_config(account_id)?;
-
-    info!("Account deleted successfully: {}", account_id);
     Ok(())
 }

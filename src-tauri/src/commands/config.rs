@@ -5,15 +5,16 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 use tauri::State;
+use tokio::sync::mpsc;
 use tracing::info;
 
-use crate::config::{self, EmailAccountConfig, AuthConfig, ImapConfig, SmtpConfig};
+use crate::adapters::sqlite::{self, DbPool};
+use crate::config::{self, AuthConfig, EmailAccountConfig, ImapConfig, SmtpConfig};
 use crate::encryption::DeviceEncryption;
-use crate::services::delete_account_data;
-use crate::state::SyncManager;
 use crate::sync::db::{
-    get_active_connection_config, get_all_connection_configs, get_app_setting, get_connection_config,
-    init_config_db, save_connection_config, set_active_account, set_app_setting, EmailConnectionConfig,
+    delete_connection_config, get_active_connection_config, get_all_connection_configs,
+    get_app_setting, get_connection_config, init_config_db, save_connection_config,
+    set_active_account, set_app_setting, EmailConnectionConfig,
 };
 use crate::types::responses::EmailAccountInfo;
 use crate::types::EddieError;
@@ -81,7 +82,8 @@ pub struct SaveEmailAccountRequest {
 #[tauri::command]
 pub async fn save_account(
     request: SaveEmailAccountRequest,
-    manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
+    wake_tx: State<'_, mpsc::Sender<()>>,
 ) -> Result<(), EddieError> {
     info!("Saving account: {}", request.name);
 
@@ -92,27 +94,30 @@ pub async fn save_account(
         Some(new_password) if !new_password.is_empty() => {
             // New password provided - encrypt it
             info!("Encrypting new password for account: {}", request.email);
-            let encryption = DeviceEncryption::new()
-                .map_err(|e| EddieError::Config(format!("Failed to initialize encryption: {}", e)))?;
-            Some(encryption
-                .encrypt(new_password)
-                .map_err(|e| EddieError::Config(format!("Failed to encrypt password: {}", e)))?)
+            let encryption = DeviceEncryption::new().map_err(|e| {
+                EddieError::Config(format!("Failed to initialize encryption: {}", e))
+            })?;
+            Some(encryption.encrypt(new_password).map_err(|e| {
+                EddieError::Config(format!("Failed to encrypt password: {}", e))
+            })?)
         }
         _ => {
             // No password provided - check if we're updating an existing account
             if let Some(existing_config) = get_connection_config(&request.email)? {
-                info!("Reusing existing encrypted password for account: {}", request.email);
+                info!(
+                    "Reusing existing encrypted password for account: {}",
+                    request.email
+                );
                 existing_config.encrypted_password
             } else {
                 // New account but no password provided
                 return Err(EddieError::InvalidInput(
-                    "Password is required when creating a new account".to_string()
+                    "Password is required when creating a new account".to_string(),
                 ));
             }
         }
     };
 
-    // Use a placeholder password for the AuthConfig (actual password comes from database)
     let imap_auth = AuthConfig::AppPassword {
         user: request.username.clone(),
     };
@@ -142,7 +147,7 @@ pub async fn save_account(
         }),
     };
 
-    // Save to database
+    // Save to Config DB
     let imap_json = account
         .imap
         .as_ref()
@@ -154,7 +159,6 @@ pub async fn save_account(
         .map(|c| serde_json::to_string(c))
         .transpose()?;
 
-    let has_aliases = request.aliases.is_some();
     let account_id = request.email.clone();
 
     let db_config = EmailConnectionConfig {
@@ -162,7 +166,7 @@ pub async fn save_account(
         active: true,
         email: request.email,
         display_name: request.display_name,
-        aliases: request.aliases,
+        aliases: request.aliases.clone(),
         imap_config: imap_json,
         smtp_config: smtp_json,
         encrypted_password,
@@ -173,25 +177,29 @@ pub async fn save_account(
     save_connection_config(&db_config)?;
     set_active_account(&db_config.account_id)?;
 
-    // If aliases were provided, reprocess entities to mark recipients as connections
-    if has_aliases {
-        info!("Aliases provided, reprocessing entities for account: {}", account_id);
+    // Ensure account exists in sync DB
+    sqlite::accounts::ensure_account(&pool, &account_id)?;
 
-        // Remove existing engine so it gets recreated with the new aliases
-        manager.remove(&account_id).await;
+    // Register user entity
+    sqlite::entities::insert_entity(&pool, &account_id, &account_id, "account", "user")?;
 
-        // Create new sync engine with updated aliases from database
-        if let Ok(engine) = manager.get_or_create(&account_id).await {
-            let engine_guard = engine.read().await;
-
-            // Update entities to mark recipients as connections when sender is user or alias
-            match engine_guard.reprocess_entities_for_aliases() {
-                Ok(count) => info!("Reprocessed {} entity connections for account: {}", count, account_id),
-                Err(e) => tracing::warn!("Failed to reprocess entities: {}", e),
+    // Register alias entities
+    if let Some(ref alias_str) = request.aliases {
+        for alias in alias_str.split(&[',', ' '][..]) {
+            let trimmed = alias.trim();
+            if !trimmed.is_empty() {
+                sqlite::entities::insert_entity(&pool, &account_id, trimmed, "account", "alias")?;
             }
         }
     }
 
+    // Seed onboarding tasks
+    sqlite::onboarding_tasks::seed_tasks(&pool, &account_id)?;
+
+    // Wake the background worker to start syncing
+    let _ = wake_tx.send(()).await;
+
+    info!("Account saved and sync initiated for: {}", account_id);
     Ok(())
 }
 
@@ -243,15 +251,25 @@ pub async fn switch_account(account_id: String) -> Result<(), EddieError> {
 #[tauri::command]
 pub async fn delete_account(
     account_id: String,
-    sync_manager: State<'_, SyncManager>,
+    pool: State<'_, DbPool>,
 ) -> Result<(), EddieError> {
     info!("Deleting account: {}", account_id);
 
-    // Shutdown the sync engine if it's running
-    sync_manager.remove(&account_id).await;
+    // Delete account from sync DB — ON DELETE CASCADE removes all child data
+    // (messages, conversations, entities, action_queue, sync_state, folder_sync, onboarding_tasks)
+    let conn = pool.get()?;
+    conn.execute(
+        "DELETE FROM accounts WHERE id = ?1",
+        rusqlite::params![&account_id],
+    )?;
+    drop(conn);
 
-    // Delete account data (database file and config)
-    delete_account_data(&account_id, sync_manager.db_directory())
+    // Delete from Config DB
+    init_config_db()?;
+    delete_connection_config(&account_id)?;
+
+    info!("Account deleted: {}", account_id);
+    Ok(())
 }
 
 /// Get the read-only mode setting
@@ -265,5 +283,8 @@ pub async fn get_read_only_mode() -> Result<bool, EddieError> {
 #[tauri::command]
 pub async fn set_read_only_mode(enabled: bool) -> Result<(), EddieError> {
     info!("Setting read-only mode to: {}", enabled);
-    set_app_setting("read_only_mode", if enabled { "true" } else { "false" })
+    set_app_setting(
+        "read_only_mode",
+        if enabled { "true" } else { "false" },
+    )
 }

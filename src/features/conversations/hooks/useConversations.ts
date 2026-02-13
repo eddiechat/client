@@ -3,10 +3,10 @@ import {
   initSyncEngine,
   getSyncStatus,
   getCachedConversations,
-  initialSync,
+  syncNow,
   onSyncEvent,
 } from "../../../tauri";
-import type { Conversation, SyncStatus, CachedConversation } from "../../../tauri";
+import type { Conversation, SyncStatus } from "../../../tauri";
 
 interface UseConversationsResult {
   conversations: Conversation[];
@@ -19,22 +19,32 @@ interface UseConversationsResult {
 }
 
 /**
- * Convert cached conversation to display format.
+ * Hydrate a backend Conversation with frontend display helpers.
+ * Parses participant_key (newline-separated emails) and
+ * participant_names (JSON Record<email, name>) into arrays.
  */
-function formatConversation(cached: CachedConversation): Conversation {
+function hydrateConversation(conv: Conversation): Conversation {
+  // Parse participant emails from participant_key
+  const emails = conv.participant_key
+    ? conv.participant_key.split("\n").filter((e) => e.length > 0)
+    : [];
+
+  // Parse names from JSON string: { "email": "Display Name", ... }
+  let namesMap: Record<string, string> = {};
+  if (conv.participant_names) {
+    try {
+      namesMap = JSON.parse(conv.participant_names);
+    } catch {
+      // Fallback: treat as empty
+    }
+  }
+
+  const displayNames = emails.map((email) => namesMap[email] || email);
+
   return {
-    id: cached.participant_key,
-    participants: cached.participants.map((p) => p.email),
-    participant_names: cached.participants.map((p) => p.name || p.email),
-    last_message_date: cached.last_message_date || "",
-    last_message_preview: cached.last_message_preview || "",
-    last_message_from: cached.last_message_from || "",
-    unread_count: cached.unread_count,
-    message_ids: [],
-    is_outgoing: cached.is_outgoing,
-    user_name: "",
-    user_in_conversation: true,
-    _cached_id: cached.id,
+    ...conv,
+    participants: emails,
+    participant_display_names: displayNames,
   };
 }
 
@@ -42,9 +52,9 @@ function formatConversation(cached: CachedConversation): Conversation {
  * Hook for managing conversations using the sync engine.
  *
  * On first load, initializes the sync engine which:
- * 1. Creates a SQLite database for the account
- * 2. Fetches all messages from IMAP
- * 3. Builds conversations from cached data
+ * 1. Seeds onboarding tasks for the account
+ * 2. Wakes the background worker to start syncing
+ * 3. Returns current sync status
  *
  * Subsequent loads read directly from the local cache.
  *
@@ -52,7 +62,7 @@ function formatConversation(cached: CachedConversation): Conversation {
  * @param tab - The active tab filter: 'connections' | 'all' | 'others'
  */
 export function useConversations(account?: string, tab: 'connections' | 'all' | 'others' = 'connections'): UseConversationsResult {
-  const [conversations, setConversations] = useState<CachedConversation[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +73,8 @@ export function useConversations(account?: string, tab: 'connections' | 'all' | 
   // Refresh conversations from cache
   const refreshConversations = useCallback(async () => {
     try {
-      const cachedConvs = await getCachedConversations(tab, account);
-      setConversations(cachedConvs);
+      const rawConvs = await getCachedConversations(tab, account);
+      setConversations(rawConvs.map(hydrateConversation));
     } catch (e) {
       console.error("Failed to refresh conversations:", e);
     }
@@ -81,10 +91,10 @@ export function useConversations(account?: string, tab: 'connections' | 'all' | 
       setSyncStatus(status);
 
       // Immediately try to load cached conversations
-      const cachedConvs = await getCachedConversations(tab, account);
-      console.log(`[useConversations] Initial load: ${cachedConvs.length} conversations for tab="${tab}"`, cachedConvs);
-      if (cachedConvs.length > 0) {
-        setConversations(cachedConvs);
+      const rawConvs = await getCachedConversations(tab, account);
+      console.log(`[useConversations] Initial load: ${rawConvs.length} conversations for tab="${tab}"`, rawConvs);
+      if (rawConvs.length > 0) {
+        setConversations(rawConvs.map(hydrateConversation));
         setLoading(false);
       }
     } catch (e) {
@@ -100,12 +110,12 @@ export function useConversations(account?: string, tab: 'connections' | 'all' | 
       setSyncStatus(status);
 
       const isSyncing =
-        status.state === "syncing" || status.state === "initial_sync";
+        status.state === "syncing" || status.state === "pending";
       setSyncing(isSyncing);
 
       if (status.is_online || status.last_sync) {
-        const cachedConvs = await getCachedConversations(tab, account);
-        setConversations(cachedConvs);
+        const rawConvs = await getCachedConversations(tab, account);
+        setConversations(rawConvs.map(hydrateConversation));
         setLoading(false);
       }
 
@@ -121,14 +131,14 @@ export function useConversations(account?: string, tab: 'connections' | 'all' | 
   const triggerSync = useCallback(async () => {
     try {
       setSyncing(true);
-      await initialSync(account);
+      await syncNow();
       await refreshConversations();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSyncing(false);
     }
-  }, [account, refreshConversations]);
+  }, [refreshConversations]);
 
   // Initialize on mount
   useEffect(() => {
@@ -156,7 +166,7 @@ export function useConversations(account?: string, tab: 'connections' | 'all' | 
           setSyncStatus(status);
 
           const isSyncing =
-            status.state === "syncing" || status.state === "initial_sync";
+            status.state === "syncing" || status.state === "pending";
           setSyncing(isSyncing);
 
           if (status.error) {
@@ -201,11 +211,8 @@ export function useConversations(account?: string, tab: 'connections' | 'all' | 
     };
   }, [pollSyncStatus]);
 
-  // Format conversations for display
-  const formattedConversations = conversations.map(formatConversation);
-
   return {
-    conversations: formattedConversations,
+    conversations,
     loading,
     syncing,
     error,

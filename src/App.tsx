@@ -19,7 +19,7 @@ import {
   getAccountDetails,
   markConversationRead,
   sendMessageWithAttachments,
-  syncFolder,
+  syncNow,
   initSyncEngine,
   getReadOnlyMode,
 } from "./tauri";
@@ -98,7 +98,7 @@ function App() {
 
   // Show initial loader when: we have an account, no conversations, and either
   // in initial sync, loading, syncing, or never synced before
-  const isInitialSync = syncStatus?.state === "initial_sync";
+  const isInitialSync = syncStatus?.state === "syncing" || syncStatus?.state === "pending";
   const neverSynced = !!currentAccount && !syncStatus?.last_sync;
   const noConversations = conversations.length === 0;
   const showInitialLoader = noConversations && (isInitialSync || conversationsLoading || syncing || neverSynced);
@@ -119,9 +119,8 @@ function App() {
       setComposeParticipants([]);
 
       // Mark messages as read when opening conversation
-      const cachedId = conversation._cached_id;
-      if (cachedId !== undefined && conversation.unread_count > 0) {
-        markConversationRead(cachedId, currentAccount || undefined).catch(
+      if (conversation.unread_count > 0) {
+        markConversationRead(conversation.id, currentAccount || undefined).catch(
           (err) => {
             console.error("Failed to mark conversation as read:", err);
           }
@@ -215,9 +214,9 @@ function App() {
         currentAccount || undefined
       );
 
-      // Sync the sent folder to pull the message into local database
+      // Trigger sync to pull the sent message into local database
       if (result?.sent_folder) {
-        await syncFolder(result.sent_folder, currentAccount || undefined);
+        await syncNow();
       }
 
       // Exit compose mode and refresh
@@ -272,7 +271,7 @@ function App() {
       const lines = text.split("\n");
       const firstLine = lines[0].trim();
       const subject =
-        firstLine || `Re: ${selectedConversation.last_message_preview}`;
+        firstLine || `Re: ${selectedConversation.last_message_preview || ""}`;
       const body =
         lines.length > 1 ? lines.slice(1).join("\n").trim() || text : text;
 
@@ -287,9 +286,9 @@ function App() {
         currentAccount || undefined
       );
 
-      // Sync the sent folder to pull the message into local database
+      // Trigger sync to pull the sent message into local database
       if (result?.sent_folder) {
-        await syncFolder(result.sent_folder, currentAccount || undefined);
+        await syncNow();
       }
       refreshConversations();
       refreshMessages();

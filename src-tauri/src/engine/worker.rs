@@ -1,0 +1,93 @@
+use crate::adapters::sqlite;
+use crate::adapters::sqlite::{accounts, onboarding_tasks, DbPool};
+use crate::adapters::imap::connection;
+use crate::engine::{helpers, tasks};
+use crate::types::error::EddieError;
+
+use tracing::{debug, warn};
+
+/// Run one unit of work. Returns true if work was done.
+pub async fn tick(
+    app: &tauri::AppHandle,
+    pool: &DbPool,
+) -> Result<bool, EddieError> {
+    debug!("Engine tick");
+
+    // Step 1: Find an account that needs work
+    let account_id = match accounts::find_account_for_onboarding(pool)? {
+        Some(id) => id,
+        None => {
+            // No accounts needing onboarding — run incremental sync
+            return tasks::run_incremental_sync_all(app, pool).await;
+        }
+    };
+
+    // Step 2: Get tasks for this account, seed if missing
+    let tasks = onboarding_tasks::get_tasks(pool, &account_id)?;
+    if tasks.is_empty() {
+        onboarding_tasks::seed_tasks(pool, &account_id)?;
+        return Ok(true);
+    }
+
+    // Step 3: Find first non-done task
+    let next = tasks.iter().find(|t| t.status != "done");
+    let task = match next {
+        Some(t) => t,
+        None => {
+            // This account is done — run incremental sync for it
+            return tasks::run_incremental_sync(app, pool, &account_id).await;
+        }
+    };
+
+    // Step 4: Run it
+    match task.name.as_str() {
+        "trust_network" => tasks::run_trust_network(app, pool, &account_id, &task).await?,
+        "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task).await?,
+        "connection_history" => tasks::run_connection_history(app, pool, &account_id, &task).await?,
+        _ => {
+            warn!("Unknown task: {}", task.name);
+            onboarding_tasks::mark_task_done(pool, &account_id, &task.name)?;
+        }
+    }
+
+    Ok(true)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn connect_account(
+    pool: &DbPool,
+    account_id: &str,
+) -> Result<(accounts::Credentials, Vec<String>, connection::ImapConnection), EddieError> {
+    let creds = sqlite::accounts::get_credentials(pool, account_id)?
+        .ok_or(EddieError::AccountNotFound(account_id.to_string()))?;
+
+    let conn = connection::connect(&creds.host, creds.port, &creds.email, &creds.password).await?;
+
+    let self_emails = sqlite::entities::get_self_emails(pool, account_id)?;
+
+    Ok((creds, self_emails, conn))
+}
+
+pub fn process_changes(
+    app: &tauri::AppHandle,
+    pool: &DbPool,
+    account_id: &str,
+) -> Result<(), EddieError> {
+    let start = std::time::Instant::now();
+    let classified = helpers::message_classification::classify_messages(pool, account_id)?;
+    debug!("Classified {} messages in {:?}", classified, start.elapsed());
+
+    let start = std::time::Instant::now();
+    let distilled = helpers::message_distillation::distill_messages(pool, account_id)?;
+    debug!("Distilled {} messages in {:?}", distilled, start.elapsed());
+
+    let start = std::time::Instant::now();
+    let conv_count = sqlite::conversations::rebuild_conversations(pool, account_id)?;
+    debug!("Rebuilt {} conversations in {:?}", conv_count, start.elapsed());
+
+    helpers::status_emit::emit_conversations_updated(app, account_id, conv_count);
+    Ok(())
+}
