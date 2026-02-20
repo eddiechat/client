@@ -1,7 +1,7 @@
-### Added
-- Resizable sidebar on desktop
-- Database diagram documentation
-- Sync engine specification and requirements
+### Changed
+- Migrate to v0.2 architecture
+- Swap async-native-tls with tokio-rustls for TLS connections
+- Safe area support
 
 ### Fixed
-- Duplicated ingestion spinner
+- Fix bottom margin in chat view
