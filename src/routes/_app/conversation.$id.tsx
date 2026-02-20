@@ -158,7 +158,7 @@ function ConversationView() {
       </div>
 
       {/* Compose */}
-      <div className="flex items-center gap-2.5 px-4 py-2.5 pb-3.5 border-t border-divider shrink-0 bg-bg-secondary">
+      <div className="flex items-center gap-2.5 px-4 pt-2.5 border-t border-divider shrink-0 bg-bg-secondary" style={{ paddingBottom: 'calc(0.875rem + env(safe-area-inset-bottom, 0px))' }}>
         <button className="w-9 h-9 rounded-xl border border-divider bg-transparent text-xl text-text-dim cursor-pointer flex items-center justify-center shrink-0 leading-none hover:border-accent-green hover:text-accent-green">+</button>
         <input
           className="flex-1 py-2 px-3.5 border border-divider rounded-xl text-[15px] outline-none bg-bg-primary text-text-primary placeholder:text-text-dim focus:border-accent-green"
