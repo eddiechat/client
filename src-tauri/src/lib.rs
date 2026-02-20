@@ -1,164 +1,102 @@
-//! Eddie Chat - Email client application
-//!
-//! This module provides the main Tauri application setup and configuration.
-//!
-//! ## Module Organization
-//!
-//! - `commands/`: Tauri command handlers (thin wrappers)
-//! - `services/`: Business logic (Tauri-agnostic)
-//! - `state/`: Application state management
-//! - `types/`: Data structures and types
-//! - `backend/`: Email protocol implementation
-//! - `sync/`: Sync engine for offline support
-//! - `config/`: Configuration management
-//! - `credentials/`: Secure credential storage
-//! - `autodiscovery/`: Email provider auto-configuration
-
+mod adapters;
 mod autodiscovery;
-mod backend;
-mod commands;
-mod config;
-mod encryption;
 mod services;
-mod state;
-mod sync;
-mod types;
+mod commands;
+pub mod error;
 
-use state::SyncManager;
+use adapters::sqlite::{sync};
+use services::ollama::OllamaState;
 use tauri::Manager;
-use tracing::info;
-use tracing_subscriber::EnvFilter;
+use tokio::sync::mpsc;
+use tracing::error;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+const SYNC_WORKER_TICK_FREQ: u64 = 15; // seconds
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize rustls crypto provider before any TLS operations
-    // This is required for rustls 0.23+ which doesn't auto-select a provider
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .expect("Failed to install rustls crypto provider");
-
-    // Initialize tracing for logging
-    // In debug builds, default to debug level for our crate
-    // Can be overridden with RUST_LOG environment variable
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        if cfg!(debug_assertions) {
-            // Debug build: show debug logs for our crate, info for others
-            EnvFilter::new("eddie_chat_lib=debug,info")
-        } else {
-            // Release build: show info and above
-            EnvFilter::new("info")
-        }
-    });
-
-    tracing_subscriber::fmt().with_env_filter(filter).init();
-
-    info!("Starting eddie ...");
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "eddie_chat_lib=debug".into()),
+        )
+        .init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
-        .manage(SyncManager::new())
         .setup(|app| {
-            // Try to initialize config on startup
-            if let Err(e) = config::init_config() {
-                tracing::warn!("Could not load config on startup: {}", e);
-            }
+            let pool = sync::db::initialize()
+                .expect("Failed to initialize sync database");
 
-            // Initialize the config database
-            if let Err(e) = sync::db::init_config_db() {
-                tracing::warn!("Could not initialize config database on startup: {}", e);
-            }
+            let engine_pool = pool.clone();
+            let engine_app = app.handle().clone();
 
-            // Set app handle on sync manager for event emission
-            let sync_manager = app.state::<SyncManager>();
-            let handle = app.handle().clone();
-            tauri::async_runtime::block_on(async {
-                sync_manager.set_app_handle(handle).await;
+            let (wake_tx, mut wake_rx) = mpsc::channel::<()>(1);
+            app.manage(wake_tx);
+
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    match services::sync::worker::tick(&engine_app, &engine_pool).await {
+                        Ok(did_work) => {
+                            if did_work {
+                                continue;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Engine error: {}", e);
+                        }
+                    }
+                    // Sleep until woken or timeout
+                    tokio::select! {
+                        _ = wake_rx.recv() => {},
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(SYNC_WORKER_TICK_FREQ)) => {},
+                    }
+                }
             });
+
+            // Ollama model discovery (non-blocking)
+            let ollama_state: OllamaState = Arc::new(RwLock::new(HashMap::new()));
+            app.manage(ollama_state.clone());
+            let ollama_pool = pool.clone();
+            tauri::async_runtime::spawn(async move {
+                services::ollama::populate(&ollama_pool, &ollama_state).await;
+            });
+
+            // Make the pool available to all Tauri commands via State
+            app.manage(pool);
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // App commands
-            commands::get_app_version,
-            // Config commands
-            commands::init_config,
-            commands::init_config_from_paths,
-            commands::is_config_initialized,
-            commands::get_config_paths,
-            commands::save_account,
-            commands::get_read_only_mode,
-            commands::set_read_only_mode,
-            // Account database commands
-            commands::init_config_database,
-            commands::get_accounts,
-            commands::get_active_account,
-            commands::switch_account,
-            commands::delete_account,
-            // Account commands
-            commands::list_accounts,
-            commands::get_default_account,
-            commands::account_exists,
-            commands::remove_account,
-            commands::get_account_details,
-            // Autodiscovery commands
-            commands::discover_email_config,
-            commands::test_email_connection,
-            // Credential commands
-            commands::store_password,
-            commands::store_app_password,
-            commands::delete_credentials,
-            commands::has_credentials,
-            // Combined account setup
-            commands::save_discovered_account,
-            // Folder commands
-            commands::list_folders,
-            commands::create_folder,
-            commands::delete_folder,
-            commands::expunge_folder,
-            // Envelope commands
-            commands::list_envelopes,
-            commands::thread_envelopes,
-            // Message commands
-            commands::read_message,
-            commands::delete_messages,
-            commands::copy_messages,
-            commands::move_messages,
-            commands::send_message,
-            commands::send_message_with_attachments,
-            commands::save_message,
-            commands::get_message_attachments,
-            commands::download_attachment,
-            commands::download_attachments,
-            // Flag commands
-            commands::add_flags,
-            commands::remove_flags,
-            commands::set_flags,
-            commands::mark_as_read,
-            commands::mark_as_unread,
-            commands::toggle_flagged,
-            // Conversation commands
-            commands::list_conversations,
-            commands::get_conversation_messages,
-            // Sync commands
-            commands::init_sync_engine,
-            commands::get_sync_status,
-            commands::sync_folder,
-            commands::initial_sync,
-            commands::get_cached_conversations,
-            commands::get_cached_conversation_messages,
-            commands::fetch_message_body,
-            commands::rebuild_conversations,
-            commands::drop_and_resync,
-            commands::queue_sync_action,
-            commands::set_sync_online,
-            commands::has_pending_sync_actions,
-            commands::start_monitoring,
-            commands::stop_monitoring,
-            commands::shutdown_sync_engine,
-            commands::mark_conversation_read,
-            commands::search_entities,
+            commands::account::connect_account,
+            commands::account::get_existing_account,
+            commands::conversations::fetch_conversations,
+            commands::conversations::fetch_conversation_messages,
+            commands::conversations::fetch_clusters,
+            commands::conversations::fetch_cluster_messages,
+            commands::conversations::fetch_cluster_threads,
+            commands::conversations::fetch_thread_messages,
+            commands::conversations::group_domains,
+            commands::conversations::ungroup_domains,
+            commands::classify::reclassify,
+            commands::sync::sync_now,
+            commands::sync::get_onboarding_status,
+            commands::skills::list_skills,
+            commands::skills::get_skill,
+            commands::skills::create_skill,
+            commands::skills::update_skill,
+            commands::skills::toggle_skill,
+            commands::skills::delete_skill,
+            commands::settings::get_setting,
+            commands::settings::set_setting,
+            commands::settings::get_ollama_models,
+            commands::conversations::fetch_recent_messages,
+            commands::ollama::ollama_complete,
+            commands::discovery::discover_email_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

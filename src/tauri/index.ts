@@ -1,47 +1,20 @@
-/**
- * Tauri integration layer.
- *
- * All Tauri communication should go through this module.
- * Components should never call invoke() directly.
- */
-
-// Export all commands
-export * from "./commands";
-
-// Export all events
-export * from "./events";
-
-// Export all types
+export { connectAccount, fetchConversations, fetchConversationMessages, fetchClusters, fetchClusterMessages, fetchClusterThreads, fetchThreadMessages, syncNow, reclassify, listSkills, getSkill, createSkill, updateSkill, toggleSkill, deleteSkill, groupDomains, ungroupDomains, getSetting, setSetting, getOllamaModels, fetchRecentMessages, ollamaComplete, getOnboardingStatus, discoverEmailConfig, getExistingAccount } from "./commands";
+export { onSyncStatus, onConversationsUpdated, onOnboardingComplete } from "./events";
 export type {
-  // Core types
-  Envelope,
-  ChatMessage,
-  Attachment,
-
-  // Account types
-  EmailAccount,
-  EmailAccountDetails,
-  SaveEmailAccountRequest,
-  SaveDiscoveredEmailAccountRequest,
-
-  // Conversation types
-  Conversation,
-
-  // Sync types
   SyncStatus,
-  CachedConversation,
-  CachedChatMessage,
-  SyncActionType,
-  SyncEventPayload,
-
-  // Compose types
-  ComposeAttachment,
-  ComposeMessageData,
-  SendMessageResult,
-
-  // Attachment types
-  AttachmentInfo,
-
-  // Discovery types
+  ConversationsUpdated,
+  Conversation,
+  Message,
+  ConnectAccountParams,
+  Cluster,
+  Thread,
+  Skill,
+  SkillModifiers,
+  SkillSettings,
+  OllamaModels,
+  OnboardingStatus,
+  TaskStatus,
+  TrustContact,
   DiscoveryResult,
+  ExistingAccount,
 } from "./types";

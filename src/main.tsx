@@ -1,9 +1,21 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import { RouterProvider } from "@tanstack/react-router";
+import { router } from "./router";
+import { AuthProvider, useAuth } from "./shared/context";
+import { DataProvider } from "./shared/context";
+
+function InnerApp() {
+  const auth = useAuth();
+  return <RouterProvider router={router} context={{ auth: { loggedIn: auth.loggedIn } }} />;
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <DataProvider>
+        <InnerApp />
+      </DataProvider>
+    </AuthProvider>
   </React.StrictMode>,
 );

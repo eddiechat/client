@@ -1,20 +1,29 @@
 //! Tauri commands for email autodiscovery
-//!
-//! These commands handle email configuration discovery.
 
+use serde::Serialize;
 use tracing::info;
 
 use crate::autodiscovery::{
-    AuthMethod, DiscoveryPipeline, DiscoveryProgress, DiscoveryStage, EmailDiscoveryConfig,
-    Security, UsernameHint,
+    AuthMethod, DiscoveryPipeline, EmailDiscoveryConfig, Security, UsernameHint,
 };
-use crate::services::{create_account, AuthMethod as ServiceAuthMethod, CreateEmailAccountParams};
-use crate::types::responses::{DiscoveryResult, ProgressUpdate};
-use crate::types::EddieError;
+use crate::error::EddieError;
 
-// ============================================================================
-// Discovery result conversion
-// ============================================================================
+/// Flattened discovery result for the frontend
+#[derive(Debug, Serialize)]
+pub struct DiscoveryResult {
+    pub provider: Option<String>,
+    pub provider_id: Option<String>,
+    pub imap_host: String,
+    pub imap_port: u16,
+    pub imap_tls: bool,
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_tls: bool,
+    pub auth_method: String,
+    pub requires_app_password: bool,
+    pub username_hint: String,
+    pub source: String,
+}
 
 impl From<EmailDiscoveryConfig> for DiscoveryResult {
     fn from(config: EmailDiscoveryConfig) -> Self {
@@ -42,28 +51,6 @@ impl From<EmailDiscoveryConfig> for DiscoveryResult {
     }
 }
 
-impl From<DiscoveryProgress> for ProgressUpdate {
-    fn from(progress: DiscoveryProgress) -> Self {
-        ProgressUpdate {
-            stage: match progress.stage {
-                DiscoveryStage::KnownProvider => "known_provider".to_string(),
-                DiscoveryStage::Autoconfig => "autoconfig".to_string(),
-                DiscoveryStage::Autodiscover => "autodiscover".to_string(),
-                DiscoveryStage::Srv => "srv".to_string(),
-                DiscoveryStage::Mx => "mx".to_string(),
-                DiscoveryStage::Probing => "probing".to_string(),
-                DiscoveryStage::Complete => "complete".to_string(),
-            },
-            progress: progress.progress,
-            message: progress.message,
-        }
-    }
-}
-
-// ============================================================================
-// Autodiscovery commands
-// ============================================================================
-
 /// Discover email configuration for an email address
 #[tauri::command]
 pub async fn discover_email_config(email: String) -> Result<DiscoveryResult, EddieError> {
@@ -76,117 +63,4 @@ pub async fn discover_email_config(email: String) -> Result<DiscoveryResult, Edd
         .map_err(|e| EddieError::Backend(e.to_string()))?;
 
     Ok(config.into())
-}
-
-/// Test connection to discovered email servers
-#[tauri::command]
-pub async fn test_email_connection(
-    email: String,
-    _imap_host: String,
-    _imap_port: u16,
-    _imap_tls: bool,
-    _smtp_host: String,
-    _smtp_port: u16,
-    _smtp_tls: bool,
-    _auth_method: String,
-    _password: Option<String>,
-) -> Result<bool, EddieError> {
-    info!("Testing email connection for: {}", email);
-    // TODO: Implement actual connection testing
-    Ok(true)
-}
-
-// ============================================================================
-// Credential storage commands
-// ============================================================================
-
-/// Store a password securely - Deprecated (now stored encrypted in database)
-#[tauri::command]
-pub async fn store_password(_email: String, _password: String) -> Result<(), EddieError> {
-    // Passwords are now stored encrypted in the database during account creation
-    // This command is kept for backward compatibility but does nothing
-    Ok(())
-}
-
-/// Store an app-specific password securely - Deprecated (now stored encrypted in database)
-#[tauri::command]
-pub async fn store_app_password(_email: String, _password: String) -> Result<(), EddieError> {
-    // Passwords are now stored encrypted in the database during account creation
-    // This command is kept for backward compatibility but does nothing
-    Ok(())
-}
-
-/// Delete all credentials for an account - Deprecated (credentials in database)
-#[tauri::command]
-pub async fn delete_credentials(_email: String) -> Result<(), EddieError> {
-    // Credentials are now in the database and deleted when account is deleted
-    // This command is kept for backward compatibility but does nothing
-    Ok(())
-}
-
-/// Check if credentials exist for an account
-#[tauri::command]
-pub async fn has_credentials(email: String, _credential_type: String) -> Result<bool, EddieError> {
-    use crate::sync::db::{get_connection_config, init_config_db};
-
-    // Check if password exists in database
-    init_config_db()?;
-    let config = get_connection_config(&email)?;
-
-    Ok(config
-        .and_then(|c| c.encrypted_password)
-        .is_some())
-}
-
-// ============================================================================
-// Account setup with autodiscovery
-// ============================================================================
-
-/// Save account with discovered configuration
-#[tauri::command]
-pub async fn save_discovered_account(
-    name: String,
-    email: String,
-    display_name: Option<String>,
-    imap_host: String,
-    imap_port: u16,
-    imap_tls: bool,
-    smtp_host: String,
-    smtp_port: u16,
-    smtp_tls: bool,
-    auth_method: String,
-    password: Option<String>,
-) -> Result<(), EddieError> {
-    info!("Saving discovered account: {}", name);
-
-    let auth = match auth_method.as_str() {
-        "app_password" => {
-            let pwd = password
-                .ok_or_else(|| EddieError::InvalidInput("App password required".into()))?;
-            ServiceAuthMethod::AppPassword { password: pwd }
-        }
-        _ => {
-            let pwd =
-                password.ok_or_else(|| EddieError::InvalidInput("Password required".into()))?;
-            ServiceAuthMethod::Password {
-                username: email.clone(),
-                password: pwd,
-            }
-        }
-    };
-
-    create_account(CreateEmailAccountParams {
-        name,
-        email,
-        display_name,
-        imap_host,
-        imap_port,
-        imap_tls,
-        imap_tls_cert: None,
-        smtp_host,
-        smtp_port,
-        smtp_tls,
-        smtp_tls_cert: None,
-        auth_method: auth,
-    })
 }

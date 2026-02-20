@@ -1,43 +1,51 @@
 @import "tailwindcss";
 
-/* Theme customization for Tailwind 4 */
+/* Theme customization for Tailwind 4 — Soft Geometric palette */
 @theme {
   /* Background colors */
-  --color-bg-primary: #1a1a1a;
-  --color-bg-secondary: #1f1f1f;
-  --color-bg-tertiary: #2c2c2e;
-  --color-bg-hover: #2a2a2a;
-  --color-bg-active: #333333;
+  --color-bg-primary: #FAFBFE;
+  --color-bg-secondary: #FFFFFF;
+  --color-bg-tertiary: #F0F2FA;
+  --color-bg-hover: #E5F5EE;
+  --color-bg-active: #D8F0E4;
 
   /* Text colors */
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #b3b3b3;
-  --color-text-muted: #8e8e93;
-  --color-text-sent: #ffffff;
+  --color-text-primary: #2C2E3A;
+  --color-text-secondary: #5B5D6B;
+  --color-text-muted: #9B9DAA;
+  --color-text-dim: #C0C3D0;
 
   /* Message bubbles */
-  --color-bubble-sent: #33CC00;
-  --color-bubble-received: #3a3a3c;
+  --color-bubble-sent: #6EC6A5;
+  --color-bubble-received: #FFFFFF;
 
   /* Accents */
-  --color-accent-blue: #3478f6;
-  --color-accent-green: #34c759;
-  --color-accent-red: #ff3b30;
+  --color-accent-green: #6EC6A5;
+  --color-accent-green-dim: #5AB894;
+  --color-accent-purple: #B5A4E0;
+  --color-accent-amber: #F2A365;
+  --color-accent-red: #E88E8E;
+  --color-accent-skill: #7CAED9;
+  --color-accent-blue: #7CAED9;
 
   /* Borders */
-  --color-divider: #2c2c2e;
+  --color-divider: #E4E6F0;
+  --color-divider-light: #ECEDF5;
+
+  /* Glow / Transparent overlays */
+  --color-green-glow: rgba(110, 198, 165, 0.25);
+  --color-green-bg: #E5F5EE;
+  --color-green-border: #B8E4D0;
+  --color-purple-bg: #EEEAF8;
+  --color-purple-border: #D4CCF0;
+  --color-amber-bg: #FEF0E0;
+  --color-amber-border: #F5D5B0;
+  --color-red-bg: #FDE8E8;
+  --color-skill-bg: #E4F0FA;
+  --color-skill-border: #B8D6EE;
 }
 
-/* Base layer overrides */
 @layer base {
-  :root {
-    /* Safe area insets for mobile */
-    --safe-area-top: env(safe-area-inset-top, 0px);
-    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-area-left: env(safe-area-inset-left, 0px);
-    --safe-area-right: env(safe-area-inset-right, 0px);
-  }
-
   * {
     box-sizing: border-box;
     margin: 0;
@@ -50,9 +58,10 @@
   }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #1a1a1a;
-    color: #ffffff;
+    font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+      Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
     line-height: 1.4;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -60,145 +69,48 @@
     height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
-    /* Prevent body scroll on iOS */
     position: fixed;
     width: 100%;
   }
 
-  /* THIS IS THE KEY FIX - #root needs explicit height */
   #root {
     height: 100%;
     width: 100%;
     overflow: hidden;
   }
 
-  /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
-
   ::-webkit-scrollbar-track {
     background: transparent;
   }
-
   ::-webkit-scrollbar-thumb {
-    background: #2c2c2e;
+    background: var(--color-bg-tertiary);
     border-radius: 3px;
   }
-
   ::-webkit-scrollbar-thumb:hover {
-    background: #8e8e93;
+    background: var(--color-text-muted);
   }
 }
 
 @layer components {
-  /* Safe area utilities */
-  .safe-top {
-    padding-top: var(--safe-area-top);
-  }
-  .safe-bottom {
-    padding-bottom: var(--safe-area-bottom);
-  }
-  .safe-left {
-    padding-left: var(--safe-area-left);
-  }
-  .safe-right {
-    padding-right: var(--safe-area-right);
-  }
-  .safe-x {
-    padding-left: var(--safe-area-left);
-    padding-right: var(--safe-area-right);
-  }
-  .safe-y {
-    padding-top: var(--safe-area-top);
-    padding-bottom: var(--safe-area-bottom);
-  }
-
-  /* Spinner */
-  .spinner {
-    width: 1.5rem;
-    height: 1.5rem;
-    border: 2px solid #2c2c2e;
-    border-top-color: #33CC00;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  .spinner-lg {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-width: 3px;
-  }
-
-  /* Entity autocomplete suggestions */
-  .suggestions-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
+  /* Avatar group positioning */
+  .avatar-group .avatar-sm:nth-child(1) {
+    top: 0;
     left: 0;
+    z-index: 3;
+  }
+  .avatar-group .avatar-sm:nth-child(2) {
+    top: 0;
     right: 0;
-    background: #1f1f1f;
-    border: 1px solid #2c2c2e;
-    border-radius: 10px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    max-height: 200px;
-    overflow-y: auto;
+    z-index: 2;
   }
-
-  .suggestion-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    cursor: pointer;
-    transition: background 0.15s ease;
-  }
-
-  .suggestion-item:first-child {
-    border-radius: 9px 9px 0 0;
-  }
-
-  .suggestion-item:last-child {
-    border-radius: 0 0 9px 9px;
-  }
-
-  .suggestion-item:only-child {
-    border-radius: 9px;
-  }
-
-  .suggestion-item:hover,
-  .suggestion-item.selected {
-    background: #2a2a2a;
-  }
-
-  .suggestion-item.is-connection {
-    background: rgba(52, 120, 246, 0.05);
-  }
-
-  .suggestion-item.is-connection.selected,
-  .suggestion-item.is-connection:hover {
-    background: rgba(52, 120, 246, 0.1);
-  }
-
-  .suggestion-email {
-    color: #ffffff;
-    font-size: 14px;
-    font-weight: 500;
-  }
-
-  .suggestion-name {
-    color: #8e8e93;
-    font-size: 13px;
-    margin-left: auto;
-  }
-
-  .suggestion-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #3478f6;
-    margin-left: 4px;
+  .avatar-group .avatar-sm:nth-child(3) {
+    bottom: 0;
+    left: 10px;
+    z-index: 1;
   }
 }
 

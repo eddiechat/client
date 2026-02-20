@@ -1,9 +1,8 @@
-/**
- * Shared UI components used across the application.
- */
-
-export { Avatar } from "./Avatar";
-export { LoadingSpinner } from "./LoadingSpinner";
-export { EmptyState } from "./EmptyState";
-export { ReadOnlyToggle } from "./ReadOnlyToggle";
-export { ResizeHandle } from "./ResizeHandle";
+export {
+  ComposeIcon,
+  PointsIcon,
+  CirclesIcon,
+  LinesIcon,
+  SettingsToggle,
+} from "./Icons";
+export { OnboardingScreen } from "./OnboardingScreen";

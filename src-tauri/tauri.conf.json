@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "chat.eddie",
   "build": {
-    "beforeDevCommand": "bun dev",
+    "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
@@ -13,15 +13,10 @@
     "windows": [
       {
         "title": "eddie.chat",
-        "width": 800,
-        "height": 600,
-        "theme": "Dark"
+        "width": 420,
+        "height": 860
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": false
-    },
     "security": {
       "csp": null
     }
