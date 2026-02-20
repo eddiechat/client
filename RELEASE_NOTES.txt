@@ -1,7 +1,2 @@
-### Changed
-- Migrate to v0.2 architecture
-- Swap async-native-tls with tokio-rustls for TLS connections
-- Safe area support
-
 ### Fixed
-- Fix bottom margin in chat view
+- Rollback TLS Android fix
