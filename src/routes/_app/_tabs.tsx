@@ -38,7 +38,7 @@ function TabsLayout() {
     <div className="relative flex flex-col h-screen bg-bg-primary">
       <div className="flex-1 overflow-y-auto">
         {/* Header */}
-        <div className="px-5 pt-3 pb-2.5 bg-bg-secondary border-b border-divider">
+        <div className="px-5 pb-2.5 bg-bg-secondary border-b border-divider" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div
@@ -76,7 +76,7 @@ function TabsLayout() {
       </div>
 
       {/* Bottom Tab Bar */}
-      <nav className="relative flex border-t border-divider bg-bg-secondary px-0 pt-1.5 pb-2 shrink-0">
+      <nav className="relative flex border-t border-divider bg-bg-secondary px-0 pt-1.5 shrink-0" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
         {status && !dismissed && (
           <div className="absolute left-3 right-3 -top-12 z-10 flex items-center gap-2 px-4 py-2.5 text-[12px] text-text-muted bg-bg-secondary border border-divider rounded-xl" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             <span className="flex-1 text-center">{status}</span>
@@ -110,8 +110,8 @@ function TabsLayout() {
       {showAccountDrawer && (
         <div className="absolute inset-0 z-50" style={{ background: "rgba(0,0,0,0.15)", backdropFilter: "blur(4px)" }} onClick={() => setShowAccountDrawer(false)}>
           <div
-            className="absolute top-14 left-3 right-3 bg-bg-secondary border border-divider rounded-2xl overflow-hidden"
-            style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.08)" }}
+            className="absolute left-3 right-3 bg-bg-secondary border border-divider rounded-2xl overflow-hidden"
+            style={{ top: 'calc(3.5rem + env(safe-area-inset-top, 0px))', boxShadow: "0 16px 48px rgba(0,0,0,0.08)" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Active account */}
