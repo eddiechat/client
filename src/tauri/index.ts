@@ -44,4 +44,10 @@ export type {
 
   // Discovery types
   DiscoveryResult,
+
+  // LLM types
+  LlmModelInfo,
+  LlmGenerateOptions,
+  LlmGenerateResponse,
+  OllamaSettings,
 } from "./types";

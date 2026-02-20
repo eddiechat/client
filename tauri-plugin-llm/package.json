@@ -1,0 +1,25 @@
+{
+  "name": "tauri-plugin-llm-api",
+  "version": "0.1.0",
+  "description": "Tauri plugin for unified LLM inference across Apple, Android, Windows, and Ollama",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "guest-js"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^12.1.0",
+    "rollup": "^4.0.0",
+    "tslib": "^2.6.0",
+    "typescript": "~5.8.3"
+  }
+}

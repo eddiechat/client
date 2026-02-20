@@ -1,0 +1,3 @@
+[default]
+description = "Default permissions for the LLM plugin"
+permissions = ["allow-list-models", "allow-generate", "allow-configure-ollama"]

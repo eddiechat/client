@@ -201,6 +201,36 @@ export interface DiscoveryResult {
   source: string;
 }
 
+// ========== LLM Types ==========
+
+export interface LlmModelInfo {
+  id: string;
+  name: string;
+  available: boolean;
+  reason?: string;
+  provider: "apple" | "android" | "windows" | "ollama";
+  metadata?: Record<string, unknown>;
+}
+
+export interface LlmGenerateOptions {
+  model: string;
+  prompt: string;
+  temperature: number;
+  maxTokens?: number;
+}
+
+export interface LlmGenerateResponse {
+  text: string;
+  model: string;
+  provider: "apple" | "android" | "windows" | "ollama";
+}
+
+export interface OllamaSettings {
+  url: string | null;
+  apiKey?: string | null;
+  timeoutSecs?: number;
+}
+
 // ========== Sync Event Types ==========
 
 export type SyncActionType = "add_flags" | "remove_flags" | "delete" | "move" | "copy";

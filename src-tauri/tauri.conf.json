@@ -26,7 +26,12 @@
       "csp": null
     }
   },
-  "plugins": {},
+  "plugins": {
+    "llm": {
+      "ollama_url": "http://localhost:11434",
+      "ollama_timeout_secs": 120
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

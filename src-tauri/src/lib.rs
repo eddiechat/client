@@ -58,6 +58,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_llm::init())
         .manage(SyncManager::new())
         .setup(|app| {
             // Try to initialize config on startup

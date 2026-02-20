@@ -17,6 +17,10 @@ import type {
   AttachmentInfo,
   ComposeAttachment,
   SyncActionType,
+  LlmModelInfo,
+  LlmGenerateOptions,
+  LlmGenerateResponse,
+  OllamaSettings,
 } from "./types";
 
 // ========== App Commands ==========
@@ -259,4 +263,38 @@ export async function getReadOnlyMode(): Promise<boolean> {
  */
 export async function setReadOnlyMode(enabled: boolean): Promise<void> {
   return invoke("set_read_only_mode", { enabled });
+}
+
+// ========== LLM Commands ==========
+
+/** List all available LLM models across OS-native and Ollama backends */
+export async function listLlmModels(): Promise<LlmModelInfo[]> {
+  return invoke<LlmModelInfo[]>("plugin:llm|list_models");
+}
+
+/** Generate a non-streaming LLM completion */
+export async function llmGenerate(
+  options: LlmGenerateOptions
+): Promise<LlmGenerateResponse> {
+  return invoke<LlmGenerateResponse>("plugin:llm|generate", {
+    payload: {
+      model: options.model,
+      prompt: options.prompt,
+      temperature: options.temperature,
+      max_tokens: options.maxTokens,
+    },
+  });
+}
+
+/** Hot-swap the Ollama connection at runtime */
+export async function configureOllama(
+  settings: OllamaSettings
+): Promise<void> {
+  return invoke("plugin:llm|configure_ollama", {
+    settings: {
+      url: settings.url,
+      api_key: settings.apiKey ?? null,
+      timeout_secs: settings.timeoutSecs ?? 120,
+    },
+  });
 }

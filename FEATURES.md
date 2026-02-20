@@ -21,7 +21,8 @@
 12. [Settings & Configuration](#11-settings--configuration)
 13. [User Interface](#12-user-interface)
 14. [Data & Privacy](#13-data--privacy)
-15. [Platform Support](#14-platform-support)
+15. [On-Device LLM Inference](#14-on-device-llm-inference)
+16. [Platform Support](#15-platform-support)
 
 ---
 
@@ -706,7 +707,50 @@ Eddie aim for feature parity with modern messaging platforms, while keeping priv
 
 ---
 
-## 14. Platform Support
+## 14. On-Device LLM Inference
+
+### Unified LLM Access
+
+**Multi-Backend Model Discovery**
+- Discover available LLM models from all backends in a single call
+- Supports OS-native models and Ollama-hosted models
+- Each model reports availability status and readiness
+- Metadata includes model family, parameter size, and quantization level
+
+**Supported Backends**
+- **Apple Foundation Model**: On-device inference via Apple Intelligence (macOS 26+, iOS 26+)
+- **Gemini Nano**: On-device inference via Android ML Kit (supported Pixel/Galaxy devices)
+- **Phi Silica**: On-device inference via Windows Copilot+ NPU
+- **Ollama**: Local or remote server supporting any Ollama-compatible model
+
+### Text Generation
+
+**Non-Streaming Completion**
+- Generate text from any available model
+- Configurable temperature and max token limits
+- Automatic routing to the correct backend based on model ID
+- Response includes model and provider information
+
+### Ollama Configuration
+
+**Runtime Configuration**
+- Hot-swap Ollama server connection without app restart
+- Configure server URL, API key, and timeout
+- Supports reverse proxies (LiteLLM, OpenWebUI, nginx auth)
+- Disable Ollama entirely by setting URL to null
+- In-flight requests complete against prior configuration
+
+### Privacy
+
+**Local-First Inference**
+- OS-native models run entirely on-device
+- No data sent to external servers for native inference
+- Ollama can run locally on the same machine
+- User controls which servers receive their data
+
+---
+
+## 15. Platform Support
 
 ### Desktop Platforms
 
@@ -771,6 +815,7 @@ Eddie Chat provides a complete email experience with:
 ✅ **Cross-platform support** (macOS, Windows, Linux)
 ✅ **Modern, responsive UI** optimized for desktop and mobile
 ✅ **Real-time sync** with background monitoring
+✅ **On-device LLM inference** via Apple, Android, Windows, and Ollama backends
 
 ---
 
@@ -783,4 +828,4 @@ For changelog and release history, see [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-20
