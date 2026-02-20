@@ -1,22 +1,19 @@
 use async_imap::Session;
 use async_imap::types::Mailbox;
+use async_native_tls::TlsStream;
 use tokio::net::TcpStream;
-use tokio_rustls::TlsConnector;
-use tokio_rustls::client::TlsStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use tracing::info;
 use futures::io::{AsyncRead, AsyncWrite};
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::error::EddieError;
 
 /// A stream that can be either TLS-encrypted or plain TCP.
-/// Both variants wrapped with Compat for futures AsyncRead/AsyncWrite.
 #[derive(Debug)]
 pub enum MaybeTlsStream {
-    Tls(Compat<TlsStream<TcpStream>>),
+    Tls(TlsStream<Compat<TcpStream>>),
     Plain(Compat<TcpStream>),
 }
 
@@ -95,23 +92,13 @@ pub async fn connect_with_tls(
         .map_err(|e| EddieError::Backend(format!("TCP connection failed: {}", e)))?;
 
     let stream = if use_tls {
-        let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-        let config = rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-
-        let connector = TlsConnector::from(Arc::new(config));
-        let server_name = rustls::pki_types::ServerName::try_from(host.to_string())
-            .map_err(|e| EddieError::Backend(format!("Invalid server name: {}", e)))?;
-
-        let tls_stream = connector
-            .connect(server_name, tcp)
+        let tcp = tcp.compat();
+        let tls = async_native_tls::TlsConnector::new();
+        let tls_stream = tls
+            .connect(host, tcp)
             .await
             .map_err(|e| EddieError::Backend(format!("TLS handshake failed: {}", e)))?;
-
-        MaybeTlsStream::Tls(tls_stream.compat())
+        MaybeTlsStream::Tls(tls_stream)
     } else {
         MaybeTlsStream::Plain(tcp.compat())
     };

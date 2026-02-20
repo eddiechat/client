@@ -1,6 +1,6 @@
 [package]
 name = "eddie-chat"
-version = "0.2.0"
+version = "0.1.0"
 description = "eddie.chat - Email Client"
 authors = ["you"]
 edition = "2021"
@@ -32,7 +32,7 @@ futures = "0.3"
 async-imap = "0.11.2"
 mailparse = "0.15"
 quoted_printable = "0.5"
-webpki-roots = "1"
+async-native-tls = "0.5"
 
 rusqlite = { version = "0.38", features = ["bundled"] }
 r2d2 = "0.8"
