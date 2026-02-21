@@ -80,6 +80,15 @@ pub fn insert_entity(pool: &DbPool, account_id: &str, email: &str, source: &str,
     Ok(())
 }
 
+pub fn delete_entity(pool: &DbPool, account_id: &str, email: &str) -> Result<(), EddieError> {
+    let conn = pool.get()?;
+    conn.execute(
+        "DELETE FROM entities WHERE account_id = ?1 AND email = ?2",
+        params![account_id, email],
+    )?;
+    Ok(())
+}
+
 pub fn get_self_emails(pool: &DbPool, account_id: &str) -> Result<Vec<String>, EddieError> {
     let conn = pool.get()?;
     let mut stmt = conn

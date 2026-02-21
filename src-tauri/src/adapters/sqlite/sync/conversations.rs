@@ -172,6 +172,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                         CASE WHEN e.id IS NOT NULL THEN 1 ELSE 0 END AS is_trusted
                  FROM messages m
                  LEFT JOIN entities e ON e.email = m.from_address AND e.account_id = m.account_id
+                                       AND e.trust_level NOT IN ('user', 'alias')
                  WHERE m.account_id = ?1
                  ORDER BY m.conversation_id, m.date DESC",
             )?;

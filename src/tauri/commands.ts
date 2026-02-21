@@ -153,6 +153,13 @@ export async function getExistingAccount(): Promise<ExistingAccount | null> {
   return invoke<ExistingAccount | null>("get_existing_account");
 }
 
+export async function moveToLines(
+  accountId: string,
+  emails: string[]
+): Promise<void> {
+  return invoke<void>("move_to_lines", { accountId, emails });
+}
+
 export async function getAppVersion(): Promise<string> {
   return invoke<string>("get_app_version");
 }

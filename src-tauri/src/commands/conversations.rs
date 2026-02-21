@@ -2,6 +2,7 @@ use crate::adapters::sqlite;
 use crate::adapters::sqlite::conversations::{Conversation, Cluster, Thread};
 use crate::adapters::sqlite::messages::Message;
 use crate::error::EddieError;
+use tracing::info;
 
 #[tauri::command]
 pub async fn fetch_conversations(
@@ -72,6 +73,20 @@ pub async fn ungroup_domains(
     group_id: String,
 ) -> Result<(), EddieError> {
     sqlite::line_groups::ungroup_domains(&pool, &account_id, &group_id)
+}
+
+#[tauri::command]
+pub async fn move_to_lines(
+    pool: tauri::State<'_, sqlite::DbPool>,
+    account_id: String,
+    emails: Vec<String>,
+) -> Result<(), EddieError> {
+    for email in &emails {
+        sqlite::entities::delete_entity(&pool, &account_id, email)?;
+    }
+    info!(account_id = %account_id, "Deleted entities, rebuilding conversations");
+    sqlite::conversations::rebuild_conversations(&pool, &account_id)?;
+    Ok(())
 }
 
 #[tauri::command]

@@ -98,6 +98,7 @@ pub fn run() {
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::settings::get_ollama_models,
+            commands::conversations::move_to_lines,
             commands::conversations::fetch_recent_messages,
             commands::ollama::ollama_complete,
             commands::discovery::discover_email_config,
