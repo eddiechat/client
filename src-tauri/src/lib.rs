@@ -33,7 +33,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
-            let pool = sync::db::initialize()
+            let pool = sync::db::initialize(app.handle())
                 .expect("Failed to initialize sync database");
 
             let engine_pool = pool.clone();

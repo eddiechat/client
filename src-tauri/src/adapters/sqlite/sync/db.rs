@@ -10,12 +10,12 @@ use crate::error::EddieError;
 pub type DbPool = Pool<SqliteConnectionManager>;
 
 /// Creates the sync database directory, connection pool, and initializes the schema.
-pub fn initialize() -> Result<DbPool, EddieError> {
-    let db_dir = get_sync_db_dir();
+pub fn initialize(app: &tauri::AppHandle) -> Result<DbPool, EddieError> {
+    let db_dir = get_sync_db_dir(app);
     std::fs::create_dir_all(&db_dir)
         .map_err(|e| EddieError::Database(format!("Failed to create sync db dir: {e}")))?;
 
-    let db_path = get_sync_db_path();
+    let db_path = db_dir.join("sync.db");
     let pool = create_pool(&db_path)?;
 
     let conn = pool.get()
@@ -26,18 +26,21 @@ pub fn initialize() -> Result<DbPool, EddieError> {
 }
 
 /// Get the sync database directory path
-/// On mobile (iOS/Android), the CWD is read-only so we must use data_dir()
-fn get_sync_db_dir() -> PathBuf {
+/// On mobile, uses Tauri's path API which correctly resolves the app's sandboxed data dir.
+/// On desktop debug, uses a local relative path; on desktop release, uses the system data dir.
+fn get_sync_db_dir(app: &tauri::AppHandle) -> PathBuf {
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
-        dirs::data_dir()
-            .expect("Failed to determine data directory for iOS/Android")
-            .join("eddie.chat")
+        use tauri::Manager;
+        app.path()
+            .app_data_dir()
+            .expect("Failed to determine app data directory")
             .join("sync")
     }
 
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
+        let _ = app; // suppress unused warning on desktop
         if cfg!(debug_assertions) {
             PathBuf::from("../.sqlite")
         } else {
@@ -47,11 +50,6 @@ fn get_sync_db_dir() -> PathBuf {
                 .join("sync")
         }
     }
-}
-
-/// Get the config database file path
-fn get_sync_db_path() -> PathBuf {
-    get_sync_db_dir().join("sync.db")
 }
 
 fn create_pool(db_path: &Path) -> Result<DbPool, EddieError> {
