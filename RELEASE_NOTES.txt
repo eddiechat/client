@@ -1,2 +1,10 @@
+### Added
+- Dark mode support
+- Version display in the app
+
+### Changed
+- Applied safe area insets in skills views
+
 ### Fixed
-- Rollback TLS Android fix
+- Android build issue
+- Removed exposed API key
