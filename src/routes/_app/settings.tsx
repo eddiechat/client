@@ -10,7 +10,6 @@ export const Route = createFileRoute("/_app/settings")({
 
 const SETTING_KEYS = {
   ollamaUrl: "ollama_url",
-  ollamaApiKey: "ollama_api_key",
   notifPoints: "notif_points",
   notifCircles: "notif_circles",
   notifLines: "notif_lines",
@@ -30,7 +29,6 @@ function SettingsScreen() {
   const router = useRouter();
   const { email } = useAuth();
   const [ollamaUrl, setOllamaUrl] = useState("");
-  const [ollamaApiKey, setOllamaApiKey] = useState("");
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [toggles, setToggles] = useState<Record<string, boolean>>(TOGGLE_DEFAULTS);
@@ -49,7 +47,6 @@ function SettingsScreen() {
       for (const [k, v] of results) {
         if (v === null) continue;
         if (k === SETTING_KEYS.ollamaUrl) setOllamaUrl(v);
-        else if (k === SETTING_KEYS.ollamaApiKey) setOllamaApiKey(v);
         else setToggles((prev) => ({ ...prev, [k]: v === "true" }));
       }
     }
@@ -115,20 +112,6 @@ function SettingsScreen() {
               value={ollamaUrl}
               onChange={(e) => setOllamaUrl(e.target.value)}
               onBlur={() => setSetting(SETTING_KEYS.ollamaUrl, ollamaUrl)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5 py-3 border-b border-divider">
-            <div>
-              <div className="text-[13px] font-medium text-text-primary">API Key</div>
-              <div className="text-[11px] text-text-dim mt-px">Optional authentication key</div>
-            </div>
-            <input
-              className="w-full px-3 py-2 rounded-lg border border-divider bg-bg-tertiary text-[13px] text-text-primary font-(--font-body) outline-none transition-colors focus:border-accent-green placeholder:text-text-dim"
-              type="password"
-              placeholder="sk-..."
-              value={ollamaApiKey}
-              onChange={(e) => setOllamaApiKey(e.target.value)}
-              onBlur={() => setSetting(SETTING_KEYS.ollamaApiKey, ollamaApiKey)}
             />
           </div>
           <div className="flex flex-col gap-1.5 py-3">
