@@ -53,11 +53,11 @@ function TabsLayout() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div onClick={() => setShowAccountDrawer(true)} className="cursor-pointer shrink-0">
-                <Avatar name={email || "E"} email={email || undefined} size={8} fontSize="text-[13px]" />
+                <Avatar name={email || "E"} email={email || undefined} size={9} fontSize="text-[14px]" />
               </div>
               <div>
-                <h1 className="text-[22px] font-bold text-text-primary" style={{ letterSpacing: "-0.03em" }}>{title}</h1>
-                <div className="text-[11px] text-text-muted -mt-0.5">{TAB_SUBTITLES[activeTab]}</div>
+                <h1 className="text-[24px] font-bold text-text-primary" style={{ letterSpacing: "-0.03em" }}>{title}</h1>
+                <div className="text-[12px] text-text-muted -mt-0.5">{TAB_SUBTITLES[activeTab]}</div>
               </div>
             </div>
             <button
@@ -68,9 +68,9 @@ function TabsLayout() {
           </div>
           {/* Search */}
           <div className="mt-2.5 flex items-center gap-2 px-3 py-[9px] rounded-xl bg-bg-tertiary border border-divider">
-            <span className="text-text-dim text-[13px]">{"\u2315"}</span>
+            <span className="text-text-dim text-[14px]">{"\u2315"}</span>
             <input
-              className="flex-1 bg-transparent border-none outline-none text-[12px] text-text-primary placeholder:text-text-dim"
+              className="flex-1 bg-transparent border-none outline-none text-[14px] text-text-primary placeholder:text-text-dim"
               placeholder={"Search\u2026"}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -85,31 +85,31 @@ function TabsLayout() {
 
       {/* Bottom Tab Bar */}
       <nav className="relative flex border-t border-divider bg-bg-secondary px-0 pt-1.5 shrink-0" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
-        {status && !dismissed && (
-          <div className="absolute left-3 right-3 -top-12 z-10 flex items-center gap-2 px-4 py-2.5 text-[12px] text-text-muted bg-bg-secondary border border-divider rounded-xl" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+        {import.meta.env.DEV && status && !dismissed && (
+          <div className="absolute left-3 right-3 -top-12 z-10 flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-muted bg-bg-secondary border border-divider rounded-xl" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             <span className="flex-1 text-center">{status}</span>
-            <button className="shrink-0 text-text-dim hover:text-text-secondary text-[14px] leading-none bg-transparent border-none cursor-pointer p-0" onClick={() => setDismissed(true)}>&times;</button>
+            <button className="shrink-0 text-text-dim hover:text-text-secondary text-[15px] leading-none bg-transparent border-none cursor-pointer p-0" onClick={() => setDismissed(true)}>&times;</button>
           </div>
         )}
         <button
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[9px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "points" ? "text-accent-green" : "text-text-dim"}`}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[10px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "points" ? "text-accent-green" : "text-text-dim"}`}
           onClick={() => navigate({ to: "/points" })}
         >
-          <span className="flex items-center justify-center w-6 h-6 text-[16px]">{"\u25CF"}</span>
+          <span className="flex items-center justify-center w-6 h-6 text-[18px]">{"\u25CF"}</span>
           Points
         </button>
         <button
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[9px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "circles" ? "text-accent-purple" : "text-text-dim"}`}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[10px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "circles" ? "text-accent-purple" : "text-text-dim"}`}
           onClick={() => navigate({ to: "/circles" })}
         >
-          <span className="flex items-center justify-center w-6 h-6 text-[16px]">{"\u25C9"}</span>
+          <span className="flex items-center justify-center w-6 h-6 text-[18px]">{"\u25C9"}</span>
           Circles
         </button>
         <button
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[9px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "lines" ? "text-accent-amber" : "text-text-dim"}`}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[10px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "lines" ? "text-accent-amber" : "text-text-dim"}`}
           onClick={() => navigate({ to: "/lines" })}
         >
-          <span className="flex items-center justify-center w-6 h-6 text-[16px]">{"\u2261"}</span>
+          <span className="flex items-center justify-center w-6 h-6 text-[18px]">{"\u2261"}</span>
           Lines
         </button>
       </nav>
@@ -124,12 +124,12 @@ function TabsLayout() {
           >
             {/* Active account */}
             <div className="px-4 pt-4 pb-3">
-              <div className="text-[10px] font-bold text-text-dim tracking-[0.08em] mb-2.5">ACTIVE ACCOUNT</div>
+              <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2.5">ACTIVE ACCOUNT</div>
               <div className="flex items-center gap-3">
-                <Avatar name={email || "E"} email={email || undefined} size={10} fontSize="text-[16px]" />
+                <Avatar name={email || "E"} email={email || undefined} size={11} fontSize="text-[17px]" />
                 <div className="flex-1">
-                  <div className="text-[14px] font-semibold text-text-primary">Personal</div>
-                  <div className="text-[12px] text-text-muted">{email}</div>
+                  <div className="text-[15px] font-semibold text-text-primary">Personal</div>
+                  <div className="text-[13px] text-text-muted">{email}</div>
                 </div>
                 <div className="w-2 h-2 rounded-full bg-accent-green" style={{ boxShadow: "0 0 6px var(--color-green-glow)" }} />
               </div>
@@ -140,8 +140,8 @@ function TabsLayout() {
             {/* Add account */}
             <div className="py-2">
               <div className="flex items-center gap-3 px-4 py-2.5 cursor-pointer">
-                <div className="w-[34px] h-[34px] rounded-xl border-[1.5px] border-dashed border-text-dim flex items-center justify-center text-[16px] text-text-dim">+</div>
-                <span className="text-[13px] text-text-muted font-medium">Add account</span>
+                <div className="w-9.5 h-9.5 rounded-xl border-[1.5px] border-dashed border-text-dim flex items-center justify-center text-[18px] text-text-dim">+</div>
+                <span className="text-[14px] text-text-muted font-medium">Add account</span>
               </div>
             </div>
 
@@ -152,9 +152,9 @@ function TabsLayout() {
               className="flex items-center gap-3 px-4 py-3.5 cursor-pointer"
               onClick={() => { setShowAccountDrawer(false); navigate({ to: "/settings" }); }}
             >
-              <span className="text-[16px] text-text-muted">{"\u2699"}</span>
-              <span className="text-[13px] font-semibold text-text-secondary">Settings</span>
-              {version && <span className="ml-auto text-[11px] text-text-dim">v{version}</span>}
+              <span className="text-[18px] text-text-muted">{"\u2699"}</span>
+              <span className="text-[14px] font-semibold text-text-secondary">Settings</span>
+              {version && <span className="ml-auto text-[12px] text-text-dim">v{version}</span>}
             </div>
           </div>
         </div>

@@ -78,23 +78,23 @@ function SettingsScreen() {
     <div className="flex flex-col h-screen bg-bg-primary">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pb-3 border-b border-divider shrink-0 bg-bg-secondary" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
-        <button className="border-none bg-transparent text-[22px] cursor-pointer text-accent-green p-0 leading-none" onClick={() => router.history.back()}>
+        <button className="border-none bg-transparent text-[24px] cursor-pointer text-accent-green p-0 leading-none" onClick={() => router.history.back()}>
           &#8249;
         </button>
-        <span className="font-bold text-[17px] text-text-primary">Settings</span>
+        <span className="font-bold text-[19px] text-text-primary">Settings</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {/* Account card */}
         <div className="p-5">
           <div className="p-4 rounded-2xl bg-bg-secondary border border-divider flex items-center gap-3.5">
-            <Avatar name={email || "E"} email={email || undefined} size={12} fontSize="text-[20px]" className="shrink-0" />
+            <Avatar name={email || "E"} email={email || undefined} size={13} fontSize="text-[22px]" className="shrink-0" />
             <div>
-              <div className="text-[15px] font-bold text-text-primary">Personal</div>
-              <div className="text-[12px] text-text-muted">{email}</div>
+              <div className="text-[16px] font-bold text-text-primary">Personal</div>
+              <div className="text-[13px] text-text-muted">{email}</div>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className="w-[5px] h-[5px] rounded-full bg-accent-green" />
-                <span className="text-[10px] text-accent-green font-semibold">IMAP connected</span>
+                <span className="text-[11px] text-accent-green font-semibold">IMAP connected</span>
               </div>
             </div>
           </div>
@@ -102,14 +102,14 @@ function SettingsScreen() {
 
         {/* Ollama section */}
         <div className="px-5 pb-2">
-          <div className="text-[10px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">OLLAMA</div>
+          <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">OLLAMA</div>
           <div className="flex flex-col gap-1.5 py-3 border-b border-divider">
             <div>
-              <div className="text-[13px] font-medium text-text-primary">URL</div>
-              <div className="text-[11px] text-text-dim mt-px">Default Ollama server endpoint</div>
+              <div className="text-[14px] font-medium text-text-primary">URL</div>
+              <div className="text-[12px] text-text-dim mt-px">Default Ollama server endpoint</div>
             </div>
             <input
-              className="w-full px-3 py-2 rounded-lg border border-divider bg-bg-tertiary text-[13px] text-text-primary font-(--font-body) outline-none transition-colors focus:border-accent-green placeholder:text-text-dim"
+              className="w-full px-3 py-2 rounded-lg border border-divider bg-bg-tertiary text-[14px] text-text-primary font-(--font-body) outline-none transition-colors focus:border-accent-green placeholder:text-text-dim"
               placeholder="http://localhost:11434"
               value={ollamaUrl}
               onChange={(e) => setOllamaUrl(e.target.value)}
@@ -118,12 +118,12 @@ function SettingsScreen() {
           </div>
           <div className="flex flex-col gap-1.5 py-3">
             <div>
-              <div className="text-[13px] font-medium text-text-primary">Model</div>
-              <div className="text-[11px] text-text-dim mt-px">Default model for classification</div>
+              <div className="text-[14px] font-medium text-text-primary">Model</div>
+              <div className="text-[12px] text-text-dim mt-px">Default model for classification</div>
             </div>
             {ollamaModels.length > 0 ? (
               <select
-                className="w-full px-3 h-10 rounded-lg border border-divider bg-bg-tertiary text-[13px] text-text-primary font-(--font-body) outline-none transition-colors focus:border-accent-green appearance-none"
+                className="w-full px-3 h-10 rounded-lg border border-divider bg-bg-tertiary text-[14px] text-text-primary font-(--font-body) outline-none transition-colors focus:border-accent-green appearance-none"
                 value={selectedModel ?? ""}
                 onChange={(e) => { setSelectedModel(e.target.value); setSetting("ollama_model", e.target.value); }}
               >
@@ -132,7 +132,7 @@ function SettingsScreen() {
               </select>
             ) : (
               <select
-                className="w-full px-3 h-10 rounded-lg border border-divider bg-bg-tertiary text-[13px] text-text-dim font-(--font-body) outline-none appearance-none opacity-60 cursor-not-allowed"
+                className="w-full px-3 h-10 rounded-lg border border-divider bg-bg-tertiary text-[14px] text-text-dim font-(--font-body) outline-none appearance-none opacity-60 cursor-not-allowed"
                 disabled
               >
                 <option>Ollama not found</option>
@@ -144,7 +144,7 @@ function SettingsScreen() {
         {/* Setting sections */}
         {settingsSections.map((group) => (
           <div key={group.section} className="px-5 pb-2">
-            <div className="text-[10px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">{group.section.toUpperCase()}</div>
+            <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">{group.section.toUpperCase()}</div>
             {group.section === "Appearance" && (
               <SettingsSelect label="Theme" desc="Choose light, dark, or system" value={theme} options={THEME_OPTIONS} onChange={(v) => setTheme(v as "light" | "dark" | "system")} />
             )}
@@ -157,13 +157,13 @@ function SettingsScreen() {
         {/* Open source info */}
         <div className="px-5 pt-4">
           <div className="p-3.5 rounded-xl bg-green-bg border border-green-border">
-            <div className="text-[12px] font-bold text-accent-green mb-1">{"\uD83D\uDD12"} Eddie is open source</div>
-            <div className="text-[11px] text-text-muted leading-relaxed">Audit the code, contribute, or fork it. Your data never touches our servers.</div>
+            <div className="text-[13px] font-bold text-accent-green mb-1">{"\uD83D\uDD12"} Eddie is open source</div>
+            <div className="text-[12px] text-text-muted leading-relaxed">Audit the code, contribute, or fork it. Your data never touches our servers.</div>
           </div>
         </div>
 
         <div className="py-4 text-center">
-          <span className="text-[11px] text-text-dim">Eddie v0.4.2 &middot; Built on email</span>
+          <span className="text-[12px] text-text-dim">Eddie v0.4.2 &middot; Built on email</span>
         </div>
       </div>
     </div>

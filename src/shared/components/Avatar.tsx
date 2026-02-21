@@ -19,6 +19,7 @@ const SIZE_PX: Record<number, number> = {
   10: 40,
   11: 44,
   12: 48,
+  13: 52,
 };
 
 export function Avatar({

@@ -54,7 +54,7 @@ function PointsList() {
   return (
     <ul className="list-none">
       {filtered.length === 0 && (
-        <li className="text-center py-15 px-5 text-text-muted text-[13px]">No conversations yet</li>
+        <li className="text-center py-15 px-5 text-text-muted text-[14px]">No conversations yet</li>
       )}
       {filtered.map((c) => {
         const name = displayName(c);
@@ -69,7 +69,7 @@ function PointsList() {
             {/* Move button behind the row */}
             <div className="absolute inset-y-0 right-0 flex items-center">
               <button
-                className="h-full px-5 bg-red-500 text-white text-[13px] font-semibold"
+                className="h-full px-5 bg-red-500 text-white text-[14px] font-semibold"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleMove(participantEmails(c));
@@ -121,22 +121,22 @@ function PointsList() {
               }}
             >
               <div className="relative shrink-0">
-                <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[15px]" />
+                <Avatar name={name} email={participantEmails(c)[0]} size={12} fontSize="text-[17px]" />
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline gap-2">
-                  <span className={`text-[14px] truncate flex-1 ${hasUnread ? "font-semibold text-text-primary" : "font-normal text-text-secondary"}`}>{name}</span>
-                  <span className={`text-[11px] shrink-0 ${hasUnread ? "text-accent-green font-semibold" : "text-text-dim"}`}>
+                  <span className={`text-[15.5px] truncate flex-1 ${hasUnread ? "font-semibold text-text-primary" : "font-normal text-text-secondary"}`}>{name}</span>
+                  <span className={`text-[12px] shrink-0 ${hasUnread ? "text-accent-green font-semibold" : "text-text-dim"}`}>
                     {relTime(c.last_message_date)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center gap-2 mt-0.5">
-                  <span className="text-[12.5px] text-text-muted truncate flex-1 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <span className="text-[14px] text-text-muted truncate flex-1 whitespace-nowrap overflow-hidden text-ellipsis">
                     {c.last_message_preview || ""}
                   </span>
                   {hasUnread && (
-                    <span className="min-w-[20px] h-5 rounded-[10px] bg-accent-green text-white text-[10px] font-bold flex items-center justify-center px-1.5 shrink-0">
+                    <span className="min-w-[20px] h-5 rounded-[10px] bg-accent-green text-white text-[11px] font-bold flex items-center justify-center px-1.5 shrink-0">
                       {c.unread_count}
                     </span>
                   )}
