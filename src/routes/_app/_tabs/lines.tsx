@@ -7,10 +7,8 @@ import {
   relTime,
   lineEmoji,
   lineColor,
-  avatarBg,
-  avatarTextColor,
-  initials,
 } from "../../../shared/lib";
+import { Avatar } from "../../../shared/components";
 import type { Cluster } from "../../../tauri";
 import { useAuth } from "../../../shared/context";
 
@@ -293,12 +291,7 @@ function LinesList() {
                         className="flex items-start gap-2.5 py-2.5 px-5 pl-[70px] border-t border-divider cursor-pointer"
                         onClick={() => navigate({ to: "/cluster/$id", params: { id: c.id } })}
                       >
-                        <div
-                          className="w-7 h-7 avatar-shape flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5"
-                          style={{ background: avatarBg(sender), color: avatarTextColor(sender) }}
-                        >
-                          {initials(sender)}
-                        </div>
+                        <Avatar name={sender} email={t.from_address} size={7} fontSize="text-[10px]" className="shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-1.5 min-w-0">

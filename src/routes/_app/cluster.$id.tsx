@@ -8,10 +8,8 @@ import {
   fmtDate,
   lineEmoji,
   lineColor,
-  avatarBg,
-  avatarTextColor,
-  initials,
 } from "../../shared/lib";
+import { Avatar } from "../../shared/components";
 
 export const Route = createFileRoute("/_app/cluster/$id")({
   component: ClusterView,
@@ -108,12 +106,7 @@ function ClusterView() {
                   {hasUnread && (
                     <div className="w-1.5 h-1.5 rounded-full bg-accent-green shrink-0 mt-4" />
                   )}
-                  <div
-                    className="w-9 h-9 avatar-shape flex items-center justify-center font-bold text-xs shrink-0 mt-0.5"
-                    style={{ background: avatarBg(sender), color: avatarTextColor(sender) }}
-                  >
-                    {initials(sender)}
-                  </div>
+                  <Avatar name={sender} email={t.from_address} size={9} fontSize="text-xs" className="shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline gap-2">
                       <span className={`text-[13px] truncate ${hasUnread ? "font-bold text-text-primary" : "font-semibold text-text-secondary"}`}>

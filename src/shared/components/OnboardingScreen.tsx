@@ -7,7 +7,7 @@ import {
 } from "../../tauri";
 import type { TrustContact } from "../../tauri";
 import { useData } from "../context";
-import { avatarBg, avatarTextColor, initials } from "../lib/helpers";
+import { Avatar } from "./Avatar";
 
 interface OnboardingScreenProps {
   accountId: string;
@@ -247,17 +247,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
                 contact.message_count > maxCount * 0.5 ? "high" : "medium";
               return (
                 <div key={i} className="flex items-center gap-2.5">
-                  <div
-                    className="shrink-0 avatar-shape flex items-center justify-center text-[10px] font-bold"
-                    style={{
-                      width: 28,
-                      height: 28,
-                      background: avatarBg(contact.name),
-                      color: avatarTextColor(contact.name),
-                    }}
-                  >
-                    {initials(contact.name)}
-                  </div>
+                  <Avatar name={contact.name} email={contact.email} size={7} fontSize="text-[10px]" className="shrink-0" />
                   <span className="text-xs text-text-secondary flex-1">
                     {contact.name}
                   </span>

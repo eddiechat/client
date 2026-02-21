@@ -7,3 +7,4 @@ export {
   SettingsSelect,
 } from "./Icons";
 export { OnboardingScreen } from "./OnboardingScreen";
+export { Avatar } from "./Avatar";

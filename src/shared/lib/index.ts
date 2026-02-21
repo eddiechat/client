@@ -11,9 +11,11 @@ export {
   participantCount,
   participantEmails,
   participantNames,
+  participantEntries,
   dedup,
   LINE_EMOJIS,
   LINE_COLORS,
   lineEmoji,
   lineColor,
 } from "./helpers";
+export { useGravatar } from "./gravatar";

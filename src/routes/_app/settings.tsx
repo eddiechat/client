@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useAuth, useTheme } from "../../shared/context";
-import { SettingsToggle, SettingsSelect } from "../../shared/components";
+import { SettingsToggle, SettingsSelect, Avatar } from "../../shared/components";
 import { getSetting, setSetting, getOllamaModels } from "../../tauri";
 
 export const Route = createFileRoute("/_app/settings")({
@@ -88,9 +88,7 @@ function SettingsScreen() {
         {/* Account card */}
         <div className="p-5">
           <div className="p-4 rounded-2xl bg-bg-secondary border border-divider flex items-center gap-3.5">
-            <div className="w-12 h-12 avatar-shape flex items-center justify-center text-[20px] font-bold bg-accent-green text-white shrink-0">
-              {email ? email[0].toUpperCase() : "E"}
-            </div>
+            <Avatar name={email || "E"} email={email || undefined} size={12} fontSize="text-[20px]" className="shrink-0" />
             <div>
               <div className="text-[15px] font-bold text-text-primary">Personal</div>
               <div className="text-[12px] text-text-muted">{email}</div>

@@ -3,12 +3,11 @@ import { useData, useTabSearch, useTheme } from "../../../shared/context";
 import {
   displayName,
   participantCount,
-  participantNames,
+  participantEntries,
+  participantEmails,
   relTime,
-  avatarBg,
-  avatarTextColor,
-  initials,
 } from "../../../shared/lib";
+import { Avatar } from "../../../shared/components";
 
 export const Route = createFileRoute("/_app/_tabs/circles")({
   component: CirclesList,
@@ -35,7 +34,7 @@ function CirclesList() {
       {filtered.map((c) => {
         const name = displayName(c);
         const hasUnread = c.unread_count > 0;
-        const names = participantNames(c);
+        const entries = participantEntries(c);
 
         return (
           <li
@@ -44,26 +43,22 @@ function CirclesList() {
             onClick={() => navigate({ to: "/conversation/$id", params: { id: c.id } })}
           >
             {/* Avatar group */}
-            {names.length > 1 ? (
+            {entries.length > 1 ? (
               <div className="avatar-group w-11 h-11 relative shrink-0">
-                {names.slice(0, 3).map((n, i) => (
-                  <div
+                {entries.slice(0, 3).map(([email, n], i) => (
+                  <Avatar
                     key={i}
-                    className="avatar-sm absolute w-7 h-7 avatar-shape text-[10px] font-bold flex items-center justify-center border-[1.5px] border-bg-primary"
-                    style={{ background: avatarBg(n), color: avatarTextColor(n) }}
-                  >
-                    {n[0]}
-                  </div>
+                    name={n || email}
+                    email={email}
+                    size={7}
+                    fontSize="text-[10px]"
+                    className="avatar-sm absolute border-[1.5px] border-bg-primary"
+                  />
                 ))}
               </div>
             ) : (
               <div className="relative shrink-0">
-                <div
-                  className="w-11 h-11 avatar-shape flex items-center justify-center font-bold text-[15px]"
-                  style={{ background: avatarBg(name), color: avatarTextColor(name) }}
-                >
-                  {initials(name)}
-                </div>
+                <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[15px]" />
               </div>
             )}
 

@@ -3,11 +3,10 @@ import { useData, useTabSearch, useTheme } from "../../../shared/context";
 import {
   displayName,
   participantCount,
+  participantEmails,
   relTime,
-  avatarBg,
-  avatarTextColor,
-  initials,
 } from "../../../shared/lib";
+import { Avatar } from "../../../shared/components";
 
 export const Route = createFileRoute("/_app/_tabs/points")({
   component: PointsList,
@@ -42,12 +41,7 @@ function PointsList() {
             onClick={() => navigate({ to: "/conversation/$id", params: { id: c.id } })}
           >
             <div className="relative shrink-0">
-              <div
-                className="w-11 h-11 avatar-shape flex items-center justify-center font-bold text-[15px]"
-                style={{ background: avatarBg(name), color: avatarTextColor(name) }}
-              >
-                {initials(name)}
-              </div>
+              <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[15px]" />
             </div>
 
             <div className="flex-1 min-w-0">

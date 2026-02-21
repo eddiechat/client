@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { useAuth, useData, SearchContext } from "../../shared/context";
-import { ComposeIcon } from "../../shared/components";
+import { ComposeIcon, Avatar } from "../../shared/components";
 import { getAppVersion } from "../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs")({
@@ -52,11 +52,8 @@ function TabsLayout() {
         <div className="px-5 pb-2.5 bg-bg-secondary border-b border-divider" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 avatar-shape flex items-center justify-center text-[13px] font-bold cursor-pointer bg-accent-green text-white shrink-0"
-                onClick={() => setShowAccountDrawer(true)}
-              >
-                {email ? email[0].toUpperCase() : "E"}
+              <div onClick={() => setShowAccountDrawer(true)} className="cursor-pointer shrink-0">
+                <Avatar name={email || "E"} email={email || undefined} size={8} fontSize="text-[13px]" />
               </div>
               <div>
                 <h1 className="text-[22px] font-bold text-text-primary" style={{ letterSpacing: "-0.03em" }}>{title}</h1>
@@ -129,9 +126,7 @@ function TabsLayout() {
             <div className="px-4 pt-4 pb-3">
               <div className="text-[10px] font-bold text-text-dim tracking-[0.08em] mb-2.5">ACTIVE ACCOUNT</div>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 avatar-shape flex items-center justify-center text-[16px] font-bold bg-accent-green text-white">
-                  {email ? email[0].toUpperCase() : "E"}
-                </div>
+                <Avatar name={email || "E"} email={email || undefined} size={10} fontSize="text-[16px]" />
                 <div className="flex-1">
                   <div className="text-[14px] font-semibold text-text-primary">Personal</div>
                   <div className="text-[12px] text-text-muted">{email}</div>

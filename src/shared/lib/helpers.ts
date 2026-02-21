@@ -130,6 +130,17 @@ export function participantNames(c: Conversation): string[] {
   }
 }
 
+export function participantEntries(c: Conversation): [string, string][] {
+  if (!c.participant_names) return [[c.participant_key, c.participant_key]];
+  try {
+    return Object.entries(
+      JSON.parse(c.participant_names) as Record<string, string>
+    );
+  } catch {
+    return [[c.participant_key, c.participant_key]];
+  }
+}
+
 export function dedup(msgs: Message[]): Message[] {
   const seen = new Set<string>();
   return msgs.filter((m) => {
