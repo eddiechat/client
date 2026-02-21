@@ -189,7 +189,7 @@ export function SkillStudio({ accountId, skillId, initialPrompt, onBack, onSaved
   if (loading) {
     return (
       <div className="skills-screen">
-        <div className="skills-header">
+        <div className="skills-header" style={{ paddingTop: 'calc(12px + env(safe-area-inset-top, 0px))' }}>
           <button className="skills-back" onClick={onBack}>{"\u2039"}</button>
           <span className="skills-header-title">Skill Studio</span>
         </div>
@@ -199,7 +199,7 @@ export function SkillStudio({ accountId, skillId, initialPrompt, onBack, onSaved
 
   return (
     <div className="skills-screen">
-      <div className="skills-header">
+      <div className="skills-header" style={{ paddingTop: 'calc(12px + env(safe-area-inset-top, 0px))' }}>
         <button className="skills-back" onClick={onBack}>
           {"\u2039"}
         </button>
@@ -246,7 +246,7 @@ export function SkillStudio({ accountId, skillId, initialPrompt, onBack, onSaved
         </button>
       </div>
 
-      <div className="skills-scroll">
+      <div className="skills-scroll" style={{ paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0px))' }}>
         {/* ── Edit Tab ── */}
         {tab === "edit" && (
           <>

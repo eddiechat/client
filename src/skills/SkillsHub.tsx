@@ -28,7 +28,7 @@ export function SkillsHub({ accountId, onBack, onNewSkill, onEditSkill }: Skills
 
   return (
     <div className="skills-screen">
-      <div className="skills-header">
+      <div className="skills-header" style={{ paddingTop: 'calc(12px + env(safe-area-inset-top, 0px))' }}>
         <button className="skills-back" onClick={onBack}>
           {"\u2039"}
         </button>
@@ -38,7 +38,7 @@ export function SkillsHub({ accountId, onBack, onNewSkill, onEditSkill }: Skills
         </button>
       </div>
 
-      <div className="skills-scroll">
+      <div className="skills-scroll" style={{ paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0px))' }}>
         <div className="skills-section-label">MY SKILLS</div>
 
         {skills.map((s) => (
