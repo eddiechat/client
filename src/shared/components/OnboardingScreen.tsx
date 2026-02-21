@@ -248,7 +248,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
               return (
                 <div key={i} className="flex items-center gap-2.5">
                   <div
-                    className="shrink-0 rounded-[36%] flex items-center justify-center text-[10px] font-bold"
+                    className="shrink-0 avatar-shape flex items-center justify-center text-[10px] font-bold"
                     style={{
                       width: 28,
                       height: 28,

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useData, useTabSearch } from "../../../shared/context";
+import { useData, useTabSearch, useTheme } from "../../../shared/context";
 import { fetchClusterThreads, groupDomains, ungroupDomains } from "../../../tauri";
 import type { Thread } from "../../../tauri";
 import {
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/_app/_tabs/lines")({
 const LONG_PRESS_MS = 500;
 
 function LinesList() {
+  useTheme(); // subscribe to theme changes for avatar colors
   const navigate = useNavigate();
   const search = useTabSearch();
   const { clusters, refresh } = useData();
@@ -293,7 +294,7 @@ function LinesList() {
                         onClick={() => navigate({ to: "/cluster/$id", params: { id: c.id } })}
                       >
                         <div
-                          className="w-7 h-7 rounded-[36%] flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5"
+                          className="w-7 h-7 avatar-shape flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5"
                           style={{ background: avatarBg(sender), color: avatarTextColor(sender) }}
                         >
                           {initials(sender)}

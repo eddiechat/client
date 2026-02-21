@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useAuth } from "../../shared/context";
+import { useAuth, useTheme } from "../../shared/context";
 import { useData } from "../../shared/context";
 import { fetchConversationMessages } from "../../tauri";
 import type { Message } from "../../tauri";
@@ -20,6 +20,7 @@ export const Route = createFileRoute("/_app/conversation/$id")({
 });
 
 function ConversationView() {
+  useTheme(); // subscribe to theme changes for avatar colors
   const { id } = Route.useParams();
   const router = useRouter();
   const { myAddrs } = useAuth();
@@ -76,7 +77,7 @@ function ConversationView() {
           &#8249;
         </button>
         <div
-          className="w-10 h-10 rounded-[36%] flex items-center justify-center font-bold text-sm shrink-0"
+          className="w-10 h-10 avatar-shape flex items-center justify-center font-bold text-sm shrink-0"
           style={{ background: avatarBg(name), color: avatarTextColor(name) }}
         >
           {initials(name)}
@@ -136,7 +137,7 @@ function ConversationView() {
                 <div className={`flex items-end gap-2 ${isSent ? "flex-row-reverse" : ""} max-w-[85%]`}>
                   {!isSent && isMultiParticipant && (
                     <div
-                      className="w-7 h-7 rounded-[36%] flex items-center justify-center text-[11px] font-bold shrink-0"
+                      className="w-7 h-7 avatar-shape flex items-center justify-center text-[11px] font-bold shrink-0"
                       style={{ background: avatarBg(sender), color: avatarTextColor(sender) }}
                     >
                       {sender.charAt(0).toUpperCase()}

@@ -53,7 +53,7 @@ function TabsLayout() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-[13px] font-bold cursor-pointer bg-accent-green text-white shrink-0"
+                className="w-8 h-8 avatar-shape flex items-center justify-center text-[13px] font-bold cursor-pointer bg-accent-green text-white shrink-0"
                 onClick={() => setShowAccountDrawer(true)}
               >
                 {email ? email[0].toUpperCase() : "E"}
@@ -129,7 +129,7 @@ function TabsLayout() {
             <div className="px-4 pt-4 pb-3">
               <div className="text-[10px] font-bold text-text-dim tracking-[0.08em] mb-2.5">ACTIVE ACCOUNT</div>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[16px] font-bold bg-accent-green text-white">
+                <div className="w-10 h-10 avatar-shape flex items-center justify-center text-[16px] font-bold bg-accent-green text-white">
                   {email ? email[0].toUpperCase() : "E"}
                 </div>
                 <div className="flex-1">

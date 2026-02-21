@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useData } from "../../shared/context";
+import { useData, useTheme } from "../../shared/context";
 import { fetchClusterThreads, fetchThreadMessages } from "../../tauri";
 import type { Thread, Message } from "../../tauri";
 import {
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/_app/cluster/$id")({
 });
 
 function ClusterView() {
+  useTheme(); // subscribe to theme changes for avatar colors
   const { id } = Route.useParams();
   const router = useRouter();
   const { clusters } = useData();
@@ -108,7 +109,7 @@ function ClusterView() {
                     <div className="w-1.5 h-1.5 rounded-full bg-accent-green shrink-0 mt-4" />
                   )}
                   <div
-                    className="w-9 h-9 rounded-[36%] flex items-center justify-center font-bold text-xs shrink-0 mt-0.5"
+                    className="w-9 h-9 avatar-shape flex items-center justify-center font-bold text-xs shrink-0 mt-0.5"
                     style={{ background: avatarBg(sender), color: avatarTextColor(sender) }}
                   >
                     {initials(sender)}

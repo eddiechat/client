@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useData, useTabSearch } from "../../../shared/context";
+import { useData, useTabSearch, useTheme } from "../../../shared/context";
 import {
   displayName,
   participantCount,
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/_app/_tabs/circles")({
 });
 
 function CirclesList() {
+  useTheme(); // subscribe to theme changes for avatar colors
   const navigate = useNavigate();
   const search = useTabSearch();
   const { conversations } = useData();
@@ -48,7 +49,7 @@ function CirclesList() {
                 {names.slice(0, 3).map((n, i) => (
                   <div
                     key={i}
-                    className="avatar-sm absolute w-7 h-7 rounded-[36%] text-[10px] font-bold flex items-center justify-center border-[1.5px] border-bg-primary"
+                    className="avatar-sm absolute w-7 h-7 avatar-shape text-[10px] font-bold flex items-center justify-center border-[1.5px] border-bg-primary"
                     style={{ background: avatarBg(n), color: avatarTextColor(n) }}
                   >
                     {n[0]}
@@ -58,7 +59,7 @@ function CirclesList() {
             ) : (
               <div className="relative shrink-0">
                 <div
-                  className="w-11 h-11 rounded-[36%] flex items-center justify-center font-bold text-[15px]"
+                  className="w-11 h-11 avatar-shape flex items-center justify-center font-bold text-[15px]"
                   style={{ background: avatarBg(name), color: avatarTextColor(name) }}
                 >
                   {initials(name)}

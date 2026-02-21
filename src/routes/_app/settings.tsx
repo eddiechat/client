@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useAuth } from "../../shared/context";
-import { SettingsToggle } from "../../shared/components";
+import { useAuth, useTheme } from "../../shared/context";
+import { SettingsToggle, SettingsSelect } from "../../shared/components";
 import { getSetting, setSetting, getOllamaModels } from "../../tauri";
 
 export const Route = createFileRoute("/_app/settings")({
@@ -13,7 +13,6 @@ const SETTING_KEYS = {
   notifPoints: "notif_points",
   notifCircles: "notif_circles",
   notifLines: "notif_lines",
-  darkMode: "dark_mode",
   compactList: "compact_list",
 } as const;
 
@@ -21,13 +20,19 @@ const TOGGLE_DEFAULTS: Record<string, boolean> = {
   [SETTING_KEYS.notifPoints]: true,
   [SETTING_KEYS.notifCircles]: true,
   [SETTING_KEYS.notifLines]: false,
-  [SETTING_KEYS.darkMode]: false,
   [SETTING_KEYS.compactList]: false,
 };
+
+const THEME_OPTIONS = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
 
 function SettingsScreen() {
   const router = useRouter();
   const { email } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [ollamaUrl, setOllamaUrl] = useState("");
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -65,7 +70,6 @@ function SettingsScreen() {
       { label: "Line updates", desc: "New matches in your Lines", key: SETTING_KEYS.notifLines },
     ]},
     { section: "Appearance", items: [
-      { label: "Dark mode", desc: "Currently inactive", key: SETTING_KEYS.darkMode },
       { label: "Compact list", desc: "Reduce spacing in lists", key: SETTING_KEYS.compactList },
     ]},
   ];
@@ -84,7 +88,7 @@ function SettingsScreen() {
         {/* Account card */}
         <div className="p-5">
           <div className="p-4 rounded-2xl bg-bg-secondary border border-divider flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[20px] font-bold bg-accent-green text-white shrink-0">
+            <div className="w-12 h-12 avatar-shape flex items-center justify-center text-[20px] font-bold bg-accent-green text-white shrink-0">
               {email ? email[0].toUpperCase() : "E"}
             </div>
             <div>
@@ -143,6 +147,9 @@ function SettingsScreen() {
         {settingsSections.map((group) => (
           <div key={group.section} className="px-5 pb-2">
             <div className="text-[10px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">{group.section.toUpperCase()}</div>
+            {group.section === "Appearance" && (
+              <SettingsSelect label="Theme" desc="Choose light, dark, or system" value={theme} options={THEME_OPTIONS} onChange={(v) => setTheme(v as "light" | "dark" | "system")} />
+            )}
             {group.items.map((item) => (
               <SettingsToggle key={item.key} label={item.label} desc={item.desc} value={toggles[item.key]} onChange={(v) => persistToggle(item.key, v)} />
             ))}

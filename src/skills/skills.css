@@ -26,6 +26,29 @@
   --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+html.dark {
+  --sg-bg: #1a1a1a;
+  --sg-surface: #1f1f1f;
+  --sg-surface-alt: #2c2c2e;
+  --sg-border: #2c2c2e;
+  --sg-border-light: #333333;
+  --sg-text: #ffffff;
+  --sg-text2: #b3b3b3;
+  --sg-text3: #8e8e93;
+  --sg-text4: #6e6e73;
+  --sg-green: #34c759;
+  --sg-green-dim: #2da44e;
+  --sg-green-bg: rgba(52, 199, 89, 0.1);
+  --sg-green-border: rgba(52, 199, 89, 0.3);
+  --sg-skill: #3478f6;
+  --sg-skill-bg: rgba(52, 120, 246, 0.1);
+  --sg-skill-border: rgba(52, 120, 246, 0.3);
+  --sg-red: #ff3b30;
+  --sg-red-bg: rgba(255, 59, 48, 0.1);
+  --sg-purple: #a78bfa;
+  --sg-amber: #f59e0b;
+}
+
 /* ── Shared Layout ── */
 
 .skills-screen {

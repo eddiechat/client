@@ -45,6 +45,45 @@
   --color-skill-border: #B8D6EE;
 }
 
+/* Dark mode overrides — values from eddie-client-clean */
+html.dark {
+  --color-bg-primary: #1a1a1a;
+  --color-bg-secondary: #1f1f1f;
+  --color-bg-tertiary: #2c2c2e;
+  --color-bg-hover: #2a2a2a;
+  --color-bg-active: #333333;
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #b3b3b3;
+  --color-text-muted: #8e8e93;
+  --color-text-dim: #6e6e73;
+
+  --color-bubble-sent: #33CC00;
+  --color-bubble-received: #3a3a3c;
+
+  --color-accent-green: #34c759;
+  --color-accent-green-dim: #2da44e;
+  --color-accent-purple: #a78bfa;
+  --color-accent-amber: #f59e0b;
+  --color-accent-red: #ff3b30;
+  --color-accent-skill: #3478f6;
+  --color-accent-blue: #3478f6;
+
+  --color-divider: #2c2c2e;
+  --color-divider-light: #333333;
+
+  --color-green-glow: rgba(52, 199, 89, 0.25);
+  --color-green-bg: rgba(52, 199, 89, 0.1);
+  --color-green-border: rgba(52, 199, 89, 0.3);
+  --color-purple-bg: rgba(167, 139, 250, 0.1);
+  --color-purple-border: rgba(167, 139, 250, 0.3);
+  --color-amber-bg: rgba(245, 158, 11, 0.1);
+  --color-amber-border: rgba(245, 158, 11, 0.3);
+  --color-red-bg: rgba(255, 59, 48, 0.1);
+  --color-skill-bg: rgba(52, 120, 246, 0.1);
+  --color-skill-border: rgba(52, 120, 246, 0.3);
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -73,6 +112,11 @@
     width: 100%;
   }
 
+  html.dark body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+      Roboto, Helvetica, Arial, sans-serif;
+  }
+
   #root {
     height: 100%;
     width: 100%;
@@ -96,6 +140,10 @@
 }
 
 @layer components {
+  /* Avatar shape — squircle in light, circle in dark */
+  .avatar-shape { border-radius: 36%; }
+  html.dark .avatar-shape { border-radius: 9999px; }
+
   /* Avatar group positioning */
   .avatar-group .avatar-sm:nth-child(1) {
     top: 0;

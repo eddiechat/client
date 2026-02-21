@@ -11,12 +11,23 @@ const AVATAR_PALETTE = [
   "#B5A4E0", "#E8C96A", "#7BC7C7", "#E88E8E",
 ];
 
+const DARK_AVATAR_PALETTE = [
+  "#e91e63", "#9c27b0", "#673ab7", "#3f51b5",
+  "#2196f3", "#03a9f4", "#00bcd4", "#009688",
+  "#4caf50", "#8bc34a", "#ff9800", "#ff5722",
+];
+
 function charCodeSum(name: string): number {
   return name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
 }
 
+function isDark(): boolean {
+  return document.documentElement.classList.contains("dark");
+}
+
 export function avatarBg(name: string): string {
-  return AVATAR_PALETTE[charCodeSum(name) % AVATAR_PALETTE.length];
+  const palette = isDark() ? DARK_AVATAR_PALETTE : AVATAR_PALETTE;
+  return palette[charCodeSum(name) % palette.length];
 }
 
 export function avatarBorder(name: string): string {

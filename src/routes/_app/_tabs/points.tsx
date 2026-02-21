@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useData, useTabSearch } from "../../../shared/context";
+import { useData, useTabSearch, useTheme } from "../../../shared/context";
 import {
   displayName,
   participantCount,
@@ -14,6 +14,7 @@ export const Route = createFileRoute("/_app/_tabs/points")({
 });
 
 function PointsList() {
+  useTheme(); // subscribe to theme changes for avatar colors
   const navigate = useNavigate();
   const search = useTabSearch();
   const { conversations } = useData();
@@ -42,7 +43,7 @@ function PointsList() {
           >
             <div className="relative shrink-0">
               <div
-                className="w-11 h-11 rounded-[36%] flex items-center justify-center font-bold text-[15px]"
+                className="w-11 h-11 avatar-shape flex items-center justify-center font-bold text-[15px]"
                 style={{ background: avatarBg(name), color: avatarTextColor(name) }}
               >
                 {initials(name)}

@@ -32,6 +32,25 @@ export function LinesIcon() {
   );
 }
 
+export function SettingsSelect({ label, desc, value, options, onChange }: { label: string; desc: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div className="flex justify-between items-center py-3 border-b border-divider">
+      <div>
+        <div className="text-[13px] font-medium text-text-primary">{label}</div>
+        <div className="text-[11px] text-text-dim mt-px">{desc}</div>
+      </div>
+      <select
+        className="px-3 h-[34px] rounded-lg border border-divider bg-bg-tertiary text-[13px] text-text-primary outline-none transition-colors focus:border-accent-green appearance-none cursor-pointer pr-7"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239B9DAA' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center" }}
+      >
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
 export function SettingsToggle({ label, desc, value, onChange }: { label: string; desc: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex justify-between items-center py-3 border-b border-divider">
