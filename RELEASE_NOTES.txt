@@ -1,10 +1,8 @@
 ### Added
-- Dark mode support
-- Version display in the app
+- Gravatar support for contact avatars
 
 ### Changed
-- Applied safe area insets in skills views
+- Remove entity feature
 
 ### Fixed
-- Android build issue
-- Removed exposed API key
+- Android build fix
