@@ -152,3 +152,7 @@ export async function discoverEmailConfig(
 export async function getExistingAccount(): Promise<ExistingAccount | null> {
   return invoke<ExistingAccount | null>("get_existing_account");
 }
+
+export async function getAppVersion(): Promise<string> {
+  return invoke<string>("get_app_version");
+}

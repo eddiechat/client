@@ -97,6 +97,7 @@ pub fn run() {
             commands::conversations::fetch_recent_messages,
             commands::ollama::ollama_complete,
             commands::discovery::discover_email_config,
+            commands::app::get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

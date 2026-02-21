@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { useAuth, useData, SearchContext } from "../../shared/context";
 import { ComposeIcon } from "../../shared/components";
+import { getAppVersion } from "../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs")({
   component: TabsLayout,
@@ -21,6 +22,16 @@ function TabsLayout() {
   const [showAccountDrawer, setShowAccountDrawer] = useState(false);
   const [search, setSearch] = useState("");
   const [dismissed, setDismissed] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    getAppVersion()
+      .then((v) => {
+        const devSuffix = import.meta.env.DEV ? " (dev)" : "";
+        setVersion(`${v}${devSuffix}`);
+      })
+      .catch(() => {});
+  }, []);
 
   const path = location.pathname;
   const activeTab = path.includes("/circles") ? "circles"
@@ -148,6 +159,7 @@ function TabsLayout() {
             >
               <span className="text-[16px] text-text-muted">{"\u2699"}</span>
               <span className="text-[13px] font-semibold text-text-secondary">Settings</span>
+              {version && <span className="ml-auto text-[11px] text-text-dim">v{version}</span>}
             </div>
           </div>
         </div>
