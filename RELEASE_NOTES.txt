@@ -1,12 +1,2 @@
-### Added
-- Add fallback for RFC 6154 folder types
-
-### Changed
-- Update trust network
-- Increase size of back button
-- Improve logging
-- Cleanup
-
 ### Fixed
-- Fallback for missing sent folder
-- Fix overflow
+- Tolerant IMAP response parsing — messages with unparseable BODYSTRUCTURE (e.g., non-ASCII literal filenames) are now skipped instead of failing the entire sync batch
