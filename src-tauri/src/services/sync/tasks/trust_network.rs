@@ -42,7 +42,8 @@ pub async fn run_trust_network(
 
     let mailbox = conn.select_folder(&sent_folder).await?;
     let server_count = mailbox.exists;
-
+    logger::info(&format!("{} messages found in {}", server_count, sent_folder));
+    
     let above_uid = if cursor_uid > 0 { Some(cursor_uid) } else { None };
 
     let start = std::time::Instant::now();
