@@ -1,4 +1,2 @@
-### Changed
-- Improved logging across sync engine tasks (historical fetch, connection history, incremental sync)
-- Format elapsed time in log statements as whole milliseconds
-- Sentry integration improvements
+### Fixed
+- Fix Sentry logging not working on mobile (tracing init moved to shared entry point)
