@@ -1,2 +1,2 @@
 ### Fixed
-- Tolerant IMAP response parsing — messages with unparseable BODYSTRUCTURE (e.g., non-ASCII literal filenames) are now skipped instead of failing the entire sync batch
+- Error screen now shows "Go back" and "Go home" buttons so users are never stuck on a blank screen

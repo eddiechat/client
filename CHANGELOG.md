@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.12] - 2026-02-22
+
+### Fixed
+- Error screen now shows "Go back" and "Go home" buttons so users are never stuck on a blank screen
+
 ## [0.2.11] - 2026-02-22
 
 ### Fixed
