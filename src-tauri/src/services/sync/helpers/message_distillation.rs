@@ -1,13 +1,13 @@
 use crate::adapters::sqlite::{self, DbPool};
 use crate::error::EddieError;
-use tracing::debug;
+use crate::services::logger;
 
 pub fn distill_messages(pool: &DbPool, account_id: &str) -> Result<usize, EddieError> {
     let messages = sqlite::messages::get_unextracted_messages(pool, account_id)?;
     if messages.is_empty() {
         return Ok(0);
     }
-    debug!(account_id = %account_id, pending = messages.len(), "Distilling message previews");
+    logger::debug(&format!("Distilling message previews: account_id={}, pending={}", account_id, messages.len()));
     let mut count = 0;
 
     for msg in &messages {

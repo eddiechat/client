@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use futures::TryStreamExt;
-use tracing::{debug, info};
+use crate::services::logger;
 
 use super::connection::ImapConnection;
 use crate::error::EddieError;
@@ -15,11 +15,11 @@ pub async fn fetch_sent_recipients(
 
     let exists = mailbox.exists;
     if exists == 0 {
-        debug!(folder = %folder, "Sent folder is empty");
+        logger::debug(&format!("Sent folder is empty: {}", folder));
         return Ok(HashMap::new());
     }
 
-    info!(folder = %folder, messages = exists, "Scanning sent folder for recipients");
+    logger::info(&format!("Scanning sent folder for recipients: folder={}, messages={}", folder, exists));
     let mut counts: HashMap<String, usize> = HashMap::new();
     let mut start: u32 = 1;
 
@@ -48,7 +48,7 @@ pub async fn fetch_sent_recipients(
         start = end + 1;
     }
 
-    info!(unique_recipients = counts.len(), "Sent scan complete");
+    logger::info(&format!("Sent scan complete: {} unique recipients", counts.len()));
     Ok(counts)
 }
 

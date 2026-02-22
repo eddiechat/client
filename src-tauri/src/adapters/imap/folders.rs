@@ -1,5 +1,5 @@
 use futures::TryStreamExt;
-use tracing::debug;
+use crate::services::logger;
 
 use super::connection::ImapSession;
 use crate::error::EddieError;
@@ -73,7 +73,7 @@ pub async fn list_folders(session: &mut ImapSession) -> Result<Vec<FolderInfo>, 
         })
         .collect();
 
-    debug!(count = folder_infos.len(), "Listed IMAP folders");
+    logger::debug(&format!("Listed {} IMAP folders", folder_infos.len()));
     Ok(folder_infos)
 }
 

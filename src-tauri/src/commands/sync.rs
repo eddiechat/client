@@ -1,13 +1,13 @@
 
 use crate::adapters::sqlite;
 use crate::error::EddieError;
-use tracing::info;
+use crate::services::logger;
 
 #[tauri::command]
 pub async fn sync_now(
     wake_tx: tauri::State<'_, tokio::sync::mpsc::Sender<()>>,
 ) -> Result<String, EddieError> {
-    info!("Manual sync triggered");
+    logger::info("Manual sync triggered");
     let _ = wake_tx.send(()).await;
     Ok("Sync triggered".to_string())
 }

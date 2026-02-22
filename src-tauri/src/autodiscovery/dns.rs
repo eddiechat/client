@@ -6,7 +6,7 @@
 
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioAsyncResolver;
-use tracing::{debug, info};
+use crate::services::logger;
 
 use super::{
     providers, AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, Security,
@@ -62,10 +62,10 @@ pub async fn try_srv_records(domain: &str) -> Result<EmailDiscoveryConfig, Autod
         }
     };
 
-    info!(
+    logger::info(&format!(
         "Found SRV records - IMAP: {}:{}, SMTP: {}:{}",
         imap_host, imap_port, smtp_host, smtp_port
-    );
+    ));
 
     Ok(EmailDiscoveryConfig {
         provider: None,
@@ -89,7 +89,7 @@ pub async fn try_srv_records(domain: &str) -> Result<EmailDiscoveryConfig, Autod
 
 /// Query a single SRV record
 async fn query_srv(resolver: &TokioAsyncResolver, name: &str) -> Option<(String, u16)> {
-    debug!("Querying SRV record: {}", name);
+    logger::debug(&format!("Querying SRV record: {}", name));
 
     match resolver.srv_lookup(name).await {
         Ok(response) => {
@@ -100,17 +100,17 @@ async fn query_srv(resolver: &TokioAsyncResolver, name: &str) -> Option<(String,
 
                 // Skip if target is "." (service not available)
                 if host == "." || host.is_empty() {
-                    debug!("SRV record {} indicates service not available", name);
+                    logger::debug(&format!("SRV record {} indicates service not available", name));
                     return None;
                 }
 
-                debug!("Found SRV record: {} -> {}:{}", name, host, port);
+                logger::debug(&format!("Found SRV record: {} -> {}:{}", name, host, port));
                 return Some((host, port));
             }
             None
         }
         Err(e) => {
-            debug!("SRV lookup failed for {}: {}", name, e);
+            logger::debug(&format!("SRV lookup failed for {}: {}", name, e));
             None
         }
     }
@@ -126,7 +126,7 @@ async fn query_srv(resolver: &TokioAsyncResolver, name: &str) -> Option<(String,
 pub async fn try_mx_analysis(domain: &str) -> Result<EmailDiscoveryConfig, AutodiscoveryError> {
     let resolver = create_resolver()?;
 
-    debug!("Querying MX records for {}", domain);
+    logger::debug(&format!("Querying MX records for {}", domain));
 
     let mx_records = resolver
         .mx_lookup(domain)
@@ -141,7 +141,7 @@ pub async fn try_mx_analysis(domain: &str) -> Result<EmailDiscoveryConfig, Autod
         .map(|s| s.trim_end_matches('.').to_string())
         .ok_or_else(|| AutodiscoveryError::DnsError("No MX records found".to_string()))?;
 
-    info!("Primary MX record for {}: {}", domain, mx_host);
+    logger::info(&format!("Primary MX record for {}: {}", domain, mx_host));
 
     // Match MX host patterns to known providers
     if let Some(config) = detect_provider_from_mx(&mx_host, domain) {

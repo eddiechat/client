@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use async_imap::types::Fetch;
 use futures::TryStreamExt;
 use imap_proto::types::{BodyStructure, ContentEncoding, SectionPath};
-use tracing::{debug, info};
+use crate::services::logger;
 
 use super::connection::ImapConnection;
 use super::envelopes::{parse_envelope, Envelope, parse_references_value};
@@ -55,11 +55,11 @@ where
 
     let total = uids.len();
     if total == 0 {
-        debug!(folder = %folder, "No UIDs to fetch");
+        logger::debug(&format!("No UIDs to fetch in {}", folder));
         return Ok(0);
     }
 
-    info!(folder = %folder, total = total, since = %since, "Starting historical fetch");
+    logger::info(&format!("Starting historical fetch: folder={}, total={}, since={}", folder, total, since));
 
     // Step 3: Process in batches
     let mut batch_count = 0;
@@ -170,7 +170,7 @@ where
             }
         }
 
-        debug!(folder = %folder, batch = batch_count + 1, envelopes = envelopes.len(), bodies = bodies.len(), "Processing batch");
+        logger::debug(&format!("Processing batch: folder={}, batch={}, envelopes={}, bodies={}", folder, batch_count + 1, envelopes.len(), bodies.len()));
         on_batch(envelopes, bodies).map_err(|e| EddieError::Backend(e))?;
 
         batch_count += 1;

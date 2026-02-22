@@ -1,6 +1,6 @@
 use rusqlite::params;
 use uuid::Uuid;
-use tracing::warn;
+use crate::services::logger;
 
 use super::DbPool;
 use crate::error::EddieError;
@@ -55,7 +55,7 @@ pub fn upsert_entities(pool: &DbPool, entities: &[NewEntity]) -> Result<usize, E
 
         match result {
             Ok(_) => count += 1,
-            Err(e) => warn!("Failed to upsert entity {}: {}", entity.email, e),
+            Err(e) => logger::warn(&format!("Failed to upsert entity {}: {}", entity.email, e)),
         }
     }
 

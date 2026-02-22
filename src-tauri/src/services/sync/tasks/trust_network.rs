@@ -9,7 +9,7 @@ use crate::services::sync::{helpers, worker};
 use crate::services::sync::helpers::email_normalization::normalize_email;
 use crate::error::EddieError;
 
-use tracing::debug;
+use crate::services::logger;
 
 /// Onboarding phase 2: Build trust network from sent folder
 pub async fn run_trust_network(
@@ -20,7 +20,7 @@ pub async fn run_trust_network(
 ) -> Result<(), EddieError> {
     let (creds, self_emails, mut conn) = worker::connect_account(pool, account_id).await?;
 
-    print!("Discovering folders...");
+    logger::debug("Discovering folders...");
     let folder_list = folders::list_folders(&mut conn.session).await?;
     let sent_folder = folders::find_folder_by_attribute(&folder_list, "Sent")
         .ok_or(EddieError::Backend("No Sent folder found".into()))?;
@@ -29,11 +29,11 @@ pub async fn run_trust_network(
     let server_count = mailbox.exists;
     helpers::status_emit::emit_status(app, "trust_network", &format!("Building trust network from {} sent messages...", server_count));
 
-    print!("Scanning sent folder for connections...");
+    logger::debug("Scanning sent folder for connections...");
     let trust_count = build_trust_network(
         &mut conn, pool, &account_id, &creds.email, &self_emails, &sent_folder,
     ).await?;
-    print!("Found {} connections", trust_count);
+    logger::debug(&format!("Found {} connections", trust_count));
 
     worker::process_changes(app, pool, account_id)?;
     onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
@@ -81,7 +81,7 @@ pub async fn build_trust_network(
     let start = std::time::Instant::now();
     // Step 3: Scan Sent folder for connections (with per-recipient counts)
     let recipient_counts = fetch_sent_recipients(conn, sent_folder, 500).await?;
-    debug!("fetch_sent_recipients took: {:?}", start.elapsed());
+    logger::debug(&format!("fetch_sent_recipients took: {:?}", start.elapsed()));
 
     let self_emails: Vec<String> = std::iter::once(normalize_email(user_email))
         .chain(aliases.iter().map(|a| normalize_email(a)))
@@ -104,7 +104,7 @@ pub async fn build_trust_network(
             });
         }
     }
-    debug!("n * entities.push took: {:?}", start.elapsed());
+    logger::debug(&format!("n * entities.push took: {:?}", start.elapsed()));
 
     upsert_entities(pool, &entities)
 }

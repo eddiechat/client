@@ -24,7 +24,7 @@ pub use probe::*;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use thiserror::Error;
-use tracing::info;
+use crate::services::logger;
 
 /// Errors that can occur during autodiscovery
 #[derive(Debug, Error)]
@@ -196,11 +196,11 @@ impl DiscoveryPipeline {
         }
         let domain = parts[1];
 
-        info!("Starting autodiscovery for domain: {}", domain);
+        logger::info(&format!("Starting autodiscovery for domain: {}", domain));
 
         // Step 1: Check known providers first (fastest)
         if let Some(config) = providers::check_known_provider(&email, domain) {
-            info!("Found known provider configuration");
+            logger::info("Found known provider configuration");
             return Ok(config);
         }
 
@@ -216,31 +216,31 @@ impl DiscoveryPipeline {
 
         // Check autoconfig result first (more common for general domains)
         if let Ok(Ok(config)) = autoconfig_result {
-            info!("Found Mozilla Autoconfig configuration");
+            logger::info("Found Mozilla Autoconfig configuration");
             return Ok(config);
         }
 
         // Check autodiscover result
         if let Ok(Ok(config)) = autodiscover_result {
-            info!("Found Microsoft Autodiscover configuration");
+            logger::info("Found Microsoft Autodiscover configuration");
             return Ok(config);
         }
 
         // Step 3: Try DNS SRV records
         if let Ok(config) = dns::try_srv_records(domain).await {
-            info!("Found DNS SRV configuration");
+            logger::info("Found DNS SRV configuration");
             return Ok(config);
         }
 
         // Step 4: Analyze MX records for provider detection
         if let Ok(config) = dns::try_mx_analysis(domain).await {
-            info!("Detected provider from MX records");
+            logger::info("Detected provider from MX records");
             return Ok(config);
         }
 
         // Step 5: Heuristic probing as last resort
         if let Ok(config) = probe::probe_common_servers(domain).await {
-            info!("Found configuration via server probing");
+            logger::info("Found configuration via server probing");
             return Ok(config);
         }
 

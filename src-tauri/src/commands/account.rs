@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::adapters::{imap, sqlite};
 use crate::error::EddieError;
 use tokio::sync::mpsc;
-use tracing::{info, debug};
+use crate::services::logger;
 
 #[tauri::command]
 pub async fn connect_account(
@@ -19,12 +19,12 @@ pub async fn connect_account(
     aliases: Option<String>,
 ) -> Result<String, EddieError> {
     let use_tls = imap_tls.unwrap_or(true);
-    info!(email = %email, imap_host = %imap_host, imap_tls = use_tls, "Connecting account");
+    logger::info(&format!("Connecting account: email={}, imap_host={}, imap_tls={}", email, imap_host, use_tls));
 
     // Verify IMAP credentials before saving the account
     let mut conn = imap::connection::connect_with_tls(&imap_host, imap_port, use_tls, &email, &password).await?;
     conn.session.logout().await.ok();
-    info!("IMAP credentials verified");
+    logger::info("IMAP credentials verified");
 
     let id = sqlite::accounts::insert_account(
         &pool, &email, &password, &imap_host, imap_port, use_tls, &smtp_host, smtp_port,
@@ -32,7 +32,7 @@ pub async fn connect_account(
     sqlite::entities::insert_entity(&pool, &id, &email, "account", "user")?;
 
     if let Some(alias_str) = &aliases {
-        debug!(aliases = %alias_str, "Registering aliases");
+        logger::debug(&format!("Registering aliases: {}", alias_str));
         for alias in alias_str.split(&[',', ' '][..]) {
             let trimmed = alias.trim();
             if !trimmed.is_empty() {
@@ -41,8 +41,10 @@ pub async fn connect_account(
         }
     }
 
+    logger::set_source(&email);
+    logger::set_host(&imap_host);
     let _ = wake_tx.send(()).await;
-    info!(account_id = %id, "Account connected, engine woken");
+    logger::info(&format!("Account connected, engine woken: account_id={}", id));
     Ok(id)
 }
 

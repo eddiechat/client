@@ -4,7 +4,7 @@ use crate::adapters::imap::{folders, historical};
 use crate::services::sync::{helpers, worker};
 use crate::error::EddieError;
 
-use tracing::warn;
+use crate::services::logger;
 
 /// Onboarding phase 3: Fetch 12 months with text body
 pub async fn run_historical_fetch(
@@ -78,7 +78,7 @@ pub async fn run_historical_fetch(
                 if let Err(e) = sqlite::messages::update_body_by_uid(
                     pool, account_id, *uid, &clean_text
                 ) {
-                    warn!("Failed to store body for UID {}: {}", uid, e);
+                    logger::warn(&format!("Failed to store body for UID {}: {}", uid, e));
                 }
             }
 

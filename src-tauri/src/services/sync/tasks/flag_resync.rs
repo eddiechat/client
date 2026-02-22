@@ -4,7 +4,7 @@ use crate::adapters::imap::folders;
 use crate::services::sync::worker;
 use crate::error::EddieError;
 
-use tracing::{info, error};
+use crate::services::logger;
 use async_imap::types::Fetch;
 use futures::TryStreamExt;
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub async fn run_flag_resync_all(
     let account_ids = sqlite::accounts::list_onboarded_account_ids(pool)?;
     for account_id in &account_ids {
         if let Err(e) = run_flag_resync(app, pool, account_id).await {
-            error!("Flag resync error for {}: {}", account_id, e);
+            logger::error(&format!("Flag resync error for {}: {}", account_id, e));
         }
     }
     Ok(())
@@ -122,10 +122,10 @@ pub async fn run_flag_resync(
 
             if total_changed > 0 {
                 any_changed = true;
-                info!(
+                logger::info(&format!(
                     "Flag resync for {}: {} changed out of {} messages in {:?}",
                     folder_info.name, total_changed, total_messages, folder_start.elapsed()
-                );
+                ));
             }
         } else {
             // Non-Gmail: resync FLAGS only
@@ -183,10 +183,10 @@ pub async fn run_flag_resync(
 
             if total_changed > 0 {
                 any_changed = true;
-                info!(
+                logger::info(&format!(
                     "Flag resync for {}: {} changed out of {} messages in {:?}",
                     folder_info.name, total_changed, total_messages, folder_start.elapsed()
-                );
+                ));
             }
         }
     }

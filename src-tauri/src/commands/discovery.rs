@@ -1,7 +1,7 @@
 //! Tauri commands for email autodiscovery
 
 use serde::Serialize;
-use tracing::info;
+use crate::services::logger;
 
 use crate::autodiscovery::{
     AuthMethod, DiscoveryPipeline, EmailDiscoveryConfig, Security, UsernameHint,
@@ -54,7 +54,8 @@ impl From<EmailDiscoveryConfig> for DiscoveryResult {
 /// Discover email configuration for an email address
 #[tauri::command]
 pub async fn discover_email_config(email: String) -> Result<DiscoveryResult, EddieError> {
-    info!("Discovering email config for: {}", email);
+    logger::set_source(&email);
+    logger::info(&format!("Discovering email config for: {}", email));
 
     let pipeline = DiscoveryPipeline::new();
     let config = pipeline
@@ -62,5 +63,6 @@ pub async fn discover_email_config(email: String) -> Result<DiscoveryResult, Edd
         .await
         .map_err(|e| EddieError::Backend(e.to_string()))?;
 
+    logger::set_host(&config.imap.hostname);
     Ok(config.into())
 }

@@ -4,14 +4,14 @@ use crate::adapters::imap::connection;
 use crate::services::sync::{helpers, tasks};
 use crate::error::EddieError;
 
-use tracing::{debug, warn};
+use crate::services::logger;
 
 /// Run one unit of work. Returns true if work was done.
 pub async fn tick(
     app: &tauri::AppHandle,
     pool: &DbPool,
 ) -> Result<bool, EddieError> {
-    debug!("Engine tick");
+    logger::debug("Engine tick");
 
     // Step 1: Find an account that needs work
     let account_id = match accounts::find_account_for_onboarding(pool)? {
@@ -52,7 +52,7 @@ pub async fn tick(
             helpers::status_emit::emit_onboarding_complete(app, &account_id);
         }
         _ => {
-            warn!("Unknown task: {}", task.name);
+            logger::warn(&format!("Unknown task: {}", task.name));
             onboarding_tasks::mark_task_done(pool, &account_id, &task.name)?;
         }
     }
@@ -86,17 +86,17 @@ pub fn process_changes(
     helpers::status_emit::emit_status(app, "classifying", "Identifying Points & Circles...");
     let start = std::time::Instant::now();
     let classified = helpers::message_classification::classify_messages(pool, account_id)?;
-    debug!("Classified {} messages in {:?}", classified, start.elapsed());
+    logger::debug(&format!("Classified {} messages in {:?}", classified, start.elapsed()));
 
     helpers::status_emit::emit_status(app, "distilling", "Classifying Lines with AI...");
     let start = std::time::Instant::now();
     let distilled = helpers::message_distillation::distill_messages(pool, account_id)?;
-    debug!("Distilled {} messages in {:?}", distilled, start.elapsed());
+    logger::debug(&format!("Distilled {} messages in {:?}", distilled, start.elapsed()));
 
     helpers::status_emit::emit_status(app, "rebuilding", "Organizing conversations...");
     let start = std::time::Instant::now();
     let conv_count = sqlite::conversations::rebuild_conversations(pool, account_id)?;
-    debug!("Rebuilt {} conversations in {:?}", conv_count, start.elapsed());
+    logger::debug(&format!("Rebuilt {} conversations in {:?}", conv_count, start.elapsed()));
 
     helpers::status_emit::emit_conversations_updated(app, account_id, conv_count);
     Ok(())

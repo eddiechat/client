@@ -4,7 +4,7 @@ use crate::adapters::imap::{envelopes, folders, historical};
 use crate::services::sync::{helpers, worker};
 use crate::error::EddieError;
 
-use tracing::{info, warn, error};
+use crate::services::logger;
 use std::collections::HashMap;
 use async_imap::types::Fetch;
 use futures::TryStreamExt;
@@ -20,7 +20,7 @@ pub async fn run_incremental_sync_all(
         match run_incremental_sync(app, pool, account_id).await {
             Ok(true) => did_work = true,
             Ok(false) => {},
-            Err(e) => error!("Incremental sync error for {}: {}", account_id, e),
+            Err(e) => logger::error(&format!("Incremental sync error for {}: {}", account_id, e)),
         }
     }
     Ok(did_work)
@@ -65,7 +65,7 @@ pub async fn run_incremental_sync(
             continue;
         }
 
-        info!("Found {} new messages in {}", new_uids.len(), folder_info.name);
+        logger::info(&format!("Found {} new messages in {}", new_uids.len(), folder_info.name));
 
         let uid_list: String = new_uids.iter()
             .map(|u| u.to_string())
@@ -183,7 +183,7 @@ pub async fn run_incremental_sync(
             if let Err(e) = sqlite::messages::update_body_by_uid(
                 pool, account_id, *uid, &clean_text
             ) {
-                warn!("Failed to store body for UID {}: {}", uid, e);
+                logger::warn(&format!("Failed to store body for UID {}: {}", uid, e));
             }
         }
 

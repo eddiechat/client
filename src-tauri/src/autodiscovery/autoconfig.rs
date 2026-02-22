@@ -5,7 +5,7 @@
 
 use quick_xml::de::from_str;
 use serde::Deserialize;
-use tracing::{debug, info, warn};
+use crate::services::logger;
 
 use super::{
     AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, Security, ServerConfig,
@@ -118,29 +118,29 @@ pub async fn try_mozilla_autoconfig(
     ];
 
     for url in urls {
-        debug!("Trying autoconfig URL: {}", url);
+        logger::debug(&format!("Trying autoconfig URL: {}", url));
 
         match client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
                 let text = response.text().await?;
-                debug!("Got autoconfig response, parsing XML");
+                logger::debug("Got autoconfig response, parsing XML");
 
                 match parse_autoconfig_xml(&text, email, domain) {
                     Ok(config) => {
-                        info!("Successfully parsed autoconfig from {}", url);
+                        logger::info(&format!("Successfully parsed autoconfig from {}", url));
                         return Ok(config);
                     }
                     Err(e) => {
-                        warn!("Failed to parse autoconfig XML from {}: {}", url, e);
+                        logger::warn(&format!("Failed to parse autoconfig XML from {}: {}", url, e));
                         continue;
                     }
                 }
             }
             Ok(response) => {
-                debug!("Autoconfig URL {} returned status {}", url, response.status());
+                logger::debug(&format!("Autoconfig URL {} returned status {}", url, response.status()));
             }
             Err(e) => {
-                debug!("Failed to fetch autoconfig from {}: {}", url, e);
+                logger::debug(&format!("Failed to fetch autoconfig from {}: {}", url, e));
             }
         }
     }
@@ -235,7 +235,7 @@ pub async fn try_microsoft_autodiscover(
         email
     );
 
-    debug!("Trying Microsoft Autodiscover: {}", autodiscover_url);
+    logger::debug(&format!("Trying Microsoft Autodiscover: {}", autodiscover_url));
 
     let response = client.get(&autodiscover_url).send().await?;
 
@@ -244,7 +244,7 @@ pub async fn try_microsoft_autodiscover(
 
         // If we get a valid response, this is Office 365
         if json.url.is_some() {
-            info!("Microsoft Autodiscover indicates Office 365");
+            logger::info("Microsoft Autodiscover indicates Office 365");
             return Ok(EmailDiscoveryConfig {
                 provider: Some("Microsoft 365".to_string()),
                 provider_id: Some("outlook.com".to_string()),
@@ -273,14 +273,14 @@ pub async fn try_microsoft_autodiscover(
     ];
 
     for url in domain_urls {
-        debug!("Trying domain Autodiscover: {}", url);
+        logger::debug(&format!("Trying domain Autodiscover: {}", url));
 
         if let Ok(response) = client.get(&url).send().await {
             if response.status().is_success() {
                 if let Ok(json) = response.json::<AutodiscoverResponse>().await {
                     if json.url.is_some() {
                         // On-premises Exchange found
-                        info!("Found on-premises Exchange via Autodiscover");
+                        logger::info("Found on-premises Exchange via Autodiscover");
                         return Ok(EmailDiscoveryConfig {
                             provider: Some("Exchange Server".to_string()),
                             provider_id: Some(domain.to_string()),

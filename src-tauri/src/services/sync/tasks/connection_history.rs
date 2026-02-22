@@ -4,7 +4,7 @@ use crate::adapters::imap::{envelopes, folders, historical};
 use crate::services::sync::{helpers, worker};
 use crate::error::EddieError;
 
-use tracing::warn;
+use crate::services::logger;
 use std::collections::HashMap;
 use async_imap::types::Fetch;
 use futures::TryStreamExt;
@@ -186,7 +186,7 @@ pub async fn run_connection_history(
                     if let Err(e) = sqlite::messages::update_body_by_uid(
                         pool, account_id, *uid, &clean_text
                     ) {
-                        warn!("Failed to store body for UID {}: {}", uid, e);
+                        logger::warn(&format!("Failed to store body for UID {}: {}", uid, e));
                     }
                 }
 

@@ -1,6 +1,6 @@
 use rusqlite::params;
 use uuid::Uuid;
-use tracing::warn;
+use crate::services::logger;
 
 use super::DbPool;
 use super::entities;
@@ -107,7 +107,7 @@ pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, 
 
         match result {
             Ok(_) => count += 1,
-            Err(e) => warn!("Failed to insert message {}: {}", msg.message_id, e),
+            Err(e) => logger::warn(&format!("Failed to insert message {}: {}", msg.message_id, e)),
         }
     }
 

@@ -2,7 +2,7 @@
 use crate::adapters::sqlite;
 use crate::services::sync;
 use crate::error::EddieError;
-use tracing::info;
+use crate::services::logger;
 
 #[tauri::command]
 pub async fn reclassify(
@@ -10,9 +10,9 @@ pub async fn reclassify(
     app: tauri::AppHandle,
     account_id: String,
 ) -> Result<String, EddieError> {
-    info!(account_id = %account_id, "Reclassifying all messages");
+    logger::info(&format!("Reclassifying all messages: account_id={}", account_id));
     sqlite::messages::reset_classifications(&pool, &account_id)?;
     sync::worker::process_changes(&app, &pool, &account_id)?;
-    info!(account_id = %account_id, "Reclassification complete");
+    logger::info(&format!("Reclassification complete: account_id={}", account_id));
     Ok("Reclassification complete".to_string())
 }

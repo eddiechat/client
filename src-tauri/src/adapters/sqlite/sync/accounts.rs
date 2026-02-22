@@ -1,6 +1,6 @@
 use rusqlite::params;
 use uuid::Uuid;
-use tracing::{debug, info};
+use crate::services::logger;
 
 use super::DbPool;
 use crate::error::EddieError;
@@ -27,7 +27,7 @@ pub fn insert_account(
         .ok();
 
     if let Some(id) = existing {
-        debug!(email = %email, id = %id, "Account already exists");
+        logger::debug(&format!("Account already exists: email={}, id={}", email, id));
         return Ok(id);
     }
 
@@ -41,7 +41,7 @@ pub fn insert_account(
         params![id, email, password, imap_host, imap_port, imap_tls, smtp_host, smtp_port, now],
     )?;
 
-    info!(email = %email, id = %id, "New account created");
+    logger::info(&format!("New account created: email={}, id={}", email, id));
     Ok(id)
 }
 
@@ -113,6 +113,29 @@ pub fn get_first_account(pool: &DbPool) -> Result<Option<(String, String)>, Eddi
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(EddieError::Database(e.to_string())),
     }
+}
+
+pub fn get_first_imap_host(pool: &DbPool) -> Result<Option<String>, EddieError> {
+    let conn = pool.get()?;
+    let result = conn.query_row(
+        "SELECT imap_host FROM accounts LIMIT 1",
+        [],
+        |row| row.get(0),
+    );
+    match result {
+        Ok(host) => Ok(Some(host)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(EddieError::Database(e.to_string())),
+    }
+}
+
+pub fn list_account_emails(pool: &DbPool) -> Result<Vec<String>, EddieError> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare("SELECT email FROM accounts")?;
+    let emails = stmt.query_map([], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(emails)
 }
 
 pub fn list_onboarded_account_ids(pool: &DbPool) -> Result<Vec<String>, EddieError> {

@@ -4,12 +4,12 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
-use tracing::info;
 use futures::io::{AsyncRead, AsyncWrite};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use crate::services::logger;
 use crate::error::EddieError;
 
 /// A stream that can be either TLS-encrypted or plain TCP.
@@ -87,7 +87,7 @@ pub async fn connect_with_tls(
     username: &str,
     password: &str,
 ) -> Result<ImapConnection, EddieError> {
-    info!(host = %host, port = port, tls = use_tls, "Connecting to IMAP server");
+    logger::debug(&format!("Connecting to IMAP server: host={}, port={}, tls={}", host, port, use_tls));
 
     let tcp = TcpStream::connect((host, port))
         .await

@@ -8,7 +8,6 @@ use adapters::sqlite::{sync};
 use services::ollama::OllamaState;
 use tauri::Manager;
 use tokio::sync::mpsc;
-use tracing::error;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -21,13 +20,6 @@ pub fn run() {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "eddie_chat_lib=debug".into()),
-        )
-        .init();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -35,6 +27,9 @@ pub fn run() {
         .setup(|app| {
             let pool = sync::db::initialize(app.handle())
                 .expect("Failed to initialize sync database");
+
+            services::logger::init(&pool);
+            services::logger::info("App initialized");
 
             let engine_pool = pool.clone();
             let engine_app = app.handle().clone();
@@ -51,7 +46,7 @@ pub fn run() {
                             }
                         }
                         Err(e) => {
-                            error!("Engine error: {}", e);
+                            services::logger::error(&format!("Engine error: {}", e));
                         }
                     }
                     // Sleep until woken or timeout

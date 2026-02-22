@@ -1,5 +1,5 @@
 use crate::error::EddieError;
-use tracing::{debug, warn};
+use crate::services::logger;
 
 #[derive(serde::Deserialize)]
 struct ChatResponse {
@@ -76,7 +76,7 @@ pub async fn chat_complete(
 /// Returns empty vec on any error (connection refused, timeout, parse error).
 pub async fn fetch_models(url: &str) -> Vec<String> {
     let endpoint = format!("{}/v1/models", url.trim_end_matches('/'));
-    debug!("Fetching Ollama models from {}", endpoint);
+    logger::debug(&format!("Fetching Ollama models from {}", endpoint));
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
@@ -85,7 +85,7 @@ pub async fn fetch_models(url: &str) -> Vec<String> {
     let client = match client {
         Ok(c) => c,
         Err(e) => {
-            warn!("Failed to build HTTP client: {}", e);
+            logger::warn(&format!("Failed to build HTTP client: {}", e));
             return Vec::new();
         }
     };
@@ -94,12 +94,12 @@ pub async fn fetch_models(url: &str) -> Vec<String> {
         Ok(resp) => match resp.json::<ModelsResponse>().await {
             Ok(body) => body.data.into_iter().map(|m| m.id).collect(),
             Err(e) => {
-                warn!("Failed to parse Ollama models response: {}", e);
+                logger::warn(&format!("Failed to parse Ollama models response: {}", e));
                 Vec::new()
             }
         },
         Err(e) => {
-            warn!("Failed to reach Ollama at {}: {}", endpoint, e);
+            logger::warn(&format!("Failed to reach Ollama at {}: {}", endpoint, e));
             Vec::new()
         }
     }

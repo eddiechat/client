@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::debug;
+use crate::services::logger;
 
 use crate::adapters::sqlite::DbPool;
 
@@ -51,7 +51,7 @@ pub async fn populate(pool: &DbPool, state: &OllamaState) {
 
     // 2. Fetch models for the default URL
     let default_models = crate::adapters::ollama::fetch_models(&default_url).await;
-    debug!("Found {} models at default URL {}", default_models.len(), default_url);
+    logger::debug(&format!("Found {} models at default URL {}", default_models.len(), default_url));
 
     let mut map = HashMap::new();
     map.insert(
@@ -72,7 +72,7 @@ pub async fn populate(pool: &DbPool, state: &OllamaState) {
     // 4. Write to shared state
     let mut guard = state.write().await;
     *guard = map;
-    debug!("Ollama state populated with {} entries", guard.len());
+    logger::debug(&format!("Ollama state populated with {} entries", guard.len()));
 }
 
 /// Update a single skill's entry in the OllamaState after save.

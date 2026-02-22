@@ -4,7 +4,7 @@ use crate::error::EddieError;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use tracing::debug;
+use crate::services::logger;
 
 /// Classify all unprocessed messages for an account.
 ///
@@ -15,7 +15,7 @@ pub fn classify_messages(pool: &DbPool, account_id: &str) -> Result<usize, Eddie
     if messages.is_empty() {
         return Ok(0);
     }
-    debug!(account_id = %account_id, pending = messages.len(), "Classifying messages");
+    logger::debug(&format!("Classifying messages: account_id={}, pending={}", account_id, messages.len()));
     let classifier = MessageClassifier::new();
     let mut count = 0;
 
