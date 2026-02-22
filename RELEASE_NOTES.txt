@@ -1,2 +1,12 @@
+### Added
+- Add fallback for RFC 6154 folder types
+
+### Changed
+- Update trust network
+- Increase size of back button
+- Improve logging
+- Cleanup
+
 ### Fixed
-- Fix Sentry tracing not sending events in production builds by switching transport from native-tls to rustls
+- Fallback for missing sent folder
+- Fix overflow
