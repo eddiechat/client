@@ -8,3 +8,4 @@ export {
 } from "./Icons";
 export { OnboardingScreen } from "./OnboardingScreen";
 export { Avatar } from "./Avatar";
+export { ErrorFallback } from "./ErrorFallback";
