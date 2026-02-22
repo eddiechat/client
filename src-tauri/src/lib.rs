@@ -17,35 +17,35 @@ const SYNC_WORKER_TICK_FREQ: u64 = 15; // seconds
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let _sentry_guard = sentry::init((
-        "https://52c142f86a5adb01226a7aec943c63bc@o4506308159340544.ingest.us.sentry.io/4510925988036608",
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            enable_logs: true,
-            ..Default::default()
-        }
-    ));
-
-    let fmt_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| "eddie_chat_lib=info,error".into());
-    let sentry_filter = tracing_subscriber::filter::Targets::new()
-        .with_target("eddie_chat_lib", tracing::Level::INFO)
-        .with_default(tracing::Level::ERROR);
-
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_filter(fmt_filter))
-        .with(sentry::integrations::tracing::layer().with_filter(sentry_filter))
-        .init();
-
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .expect("Failed to install rustls crypto provider");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
+            let _sentry_guard = sentry::init((
+                "https://52c142f86a5adb01226a7aec943c63bc@o4506308159340544.ingest.us.sentry.io/4510925988036608",
+                sentry::ClientOptions {
+                    release: sentry::release_name!(),
+                    enable_logs: true,
+                    ..Default::default()
+                }
+            ));
+
+            let fmt_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "eddie_chat_lib=info,error".into());
+            let sentry_filter = tracing_subscriber::filter::Targets::new()
+                .with_target("eddie_chat_lib", tracing::Level::INFO)
+                .with_default(tracing::Level::ERROR);
+
+            tracing_subscriber::registry()
+                .with(tracing_subscriber::fmt::layer().with_filter(fmt_filter))
+                .with(sentry::integrations::tracing::layer().with_filter(sentry_filter))
+                .init();
+
+            rustls::crypto::aws_lc_rs::default_provider()
+                .install_default()
+                .expect("Failed to install rustls crypto provider");
+            
             let pool = sync::db::initialize(app.handle())
                 .expect("Failed to initialize sync database");
 
