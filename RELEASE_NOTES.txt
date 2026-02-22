@@ -1,3 +1,4 @@
 ### Changed
-- Increased text and avatar sizes across the app for better phone readability
-- Notification toaster now only shows in dev mode
+- Improved logging across sync engine tasks (historical fetch, connection history, incremental sync)
+- Format elapsed time in log statements as whole milliseconds
+- Sentry integration improvements

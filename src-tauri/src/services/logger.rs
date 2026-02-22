@@ -65,7 +65,7 @@ pub fn fmt_ms(d: std::time::Duration) -> String {
 pub fn debug(message: &str) {
     let l = get();
     let source = l.log_source.read().unwrap();
-    println!("DEBUG {}", source.as_str(), message);
+    println!("DEBUG [{}] {}", source.as_str(), message);
 }
 
 pub fn info(message: &str) {
@@ -78,7 +78,7 @@ pub fn info(message: &str) {
         environment = l.environment.as_str(),
         "{}", message
     );
-    println!("INFO {}", source.as_str(), message);
+    println!("INFO [{}] {}", source.as_str(), message);
 }
 
 pub fn warn(message: &str) {
@@ -91,7 +91,7 @@ pub fn warn(message: &str) {
         environment = l.environment.as_str(),
         "{}", message
     );
-    println!("WARN {}", source.as_str(), message);
+    println!("WARN [{}] {}", source.as_str(), message);
 }
 
 pub fn error(message: &str) {
@@ -104,5 +104,5 @@ pub fn error(message: &str) {
         environment = l.environment.as_str(),
         "{}", message
     );
-    println!("ERROR {}", source.as_str(), message);
+    println!("ERROR [{}] {}", source.as_str(), message);
 }
