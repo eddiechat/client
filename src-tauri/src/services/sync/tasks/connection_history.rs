@@ -20,9 +20,13 @@ pub async fn run_connection_history(
     let connection_emails = sqlite::conversations::get_connection_emails(pool, account_id)?;
 
     if connection_emails.is_empty() {
+        logger::debug("Connection history: no connections to expand");
         onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
         return Ok(());
     }
+
+    let task_start = std::time::Instant::now();
+    logger::debug(&format!("Connection history: expanding {} connections", connection_emails.len()));
 
     let (_creds, self_emails, mut conn) = worker::connect_account(pool, account_id).await?;
     let folder_list = folders::list_folders(&mut conn.session).await?;
@@ -56,10 +60,10 @@ pub async fn run_connection_history(
                 continue;
             }
 
-            println!(
-                "Found {} old messages with {} in {}",
+            logger::debug(&format!(
+                "Connection history: found {} messages with {} in {}",
                 new_uids.len(), email, folder_info.name
-            );
+            ));
 
             // Fetch in batches of 200
             let total = new_uids.len();
@@ -195,6 +199,10 @@ pub async fn run_connection_history(
         }
     }
 
+    logger::debug(&format!(
+        "Connection history: expanded {} connections in {}",
+        connection_emails.len(), logger::fmt_ms(task_start.elapsed())
+    ));
     onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
     Ok(())
 }

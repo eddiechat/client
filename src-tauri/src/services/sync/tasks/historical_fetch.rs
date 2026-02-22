@@ -28,10 +28,13 @@ pub async fn run_historical_fetch(
     let folder = match next_folder {
         Some(f) => f,
         None => {
+            logger::debug("Historical fetch: all folders done");
             onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
             return Ok(());
         }
     };
+
+    logger::debug(&format!("Historical fetch: starting {}", folder.name));
 
     let since = chrono::Utc::now()
         .checked_sub_signed(chrono::Duration::days(365))
@@ -54,6 +57,7 @@ pub async fn run_historical_fetch(
         None
     };
 
+    let fetch_start = std::time::Instant::now();
     let total = historical::fetch_historical(
         &mut conn,
         &folder.name,
@@ -100,11 +104,17 @@ pub async fn run_historical_fetch(
         },
     ).await?;
 
+    logger::debug(&format!(
+        "Historical fetch: {} fetched {} messages in {}",
+        folder.name, total, logger::fmt_ms(fetch_start.elapsed())
+    ));
+
     // Update last_sync so round-robin picks another folder next
     sqlite::folder_sync::set_status(pool, account_id, &folder.name, "in_progress")?;
 
     if total == 0 {
         // No more UIDs to process — folder is done
+        logger::debug(&format!("Historical fetch: {} complete", folder.name));
         sqlite::folder_sync::set_status(pool, account_id, &folder.name, "done")?;
     }
 

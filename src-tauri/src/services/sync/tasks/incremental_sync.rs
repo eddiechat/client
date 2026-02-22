@@ -65,6 +65,7 @@ pub async fn run_incremental_sync(
             continue;
         }
 
+        let folder_start = std::time::Instant::now();
         logger::info(&format!("Found {} new messages in {}", new_uids.len(), folder_info.name));
 
         let uid_list: String = new_uids.iter()
@@ -191,6 +192,11 @@ pub async fn run_incremental_sync(
         if let Some(&max_uid) = new_uids.iter().max() {
             sqlite::folder_sync::update_highest_uid(pool, account_id, &folder_info.name, max_uid)?;
         }
+
+        logger::debug(&format!(
+            "Synced {} messages from {} in {}",
+            new_uids.len(), folder_info.name, logger::fmt_ms(folder_start.elapsed())
+        ));
 
         total_new += new_uids.len();
     }
