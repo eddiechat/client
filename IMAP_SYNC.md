@@ -207,17 +207,20 @@ Each task is marked `done` when complete. The worker advances to the next pendin
 
 **Goal:** Discover who the user communicates with by scanning the Sent folder.
 
-**Steps:**
+**Steps (per tick):**
 1. Connect to IMAP, locate Sent folder via `\Sent` attribute
-2. Insert the user's own email as trust level `user`
-3. Fetch all recipients from Sent messages using `BODY.PEEK[HEADER.FIELDS (To Cc Bcc)]`
-4. Parse and deduplicate recipient addresses via `mailparse`
-5. Insert each unique recipient as trust level `connection`, source `sent_scan`
-6. Run `process_changes()` and mark task done
+2. Read UID cursor from `onboarding_tasks.cursor` (0 on first tick)
+3. First tick only: insert user + alias entities
+4. `UID SEARCH` for messages above cursor, take first 500 UIDs
+5. `UID FETCH` those UIDs for `BODY.PEEK[HEADER.FIELDS (To Cc Bcc)]`
+6. Parse recipients via `mailparse`, build entity records with per-batch `sent_count`
+7. Upsert entities (additive `sent_count`), persist cursor to max UID processed
+8. If UIDs remain → return (next tick continues from cursor)
+9. If no UIDs remain → run `process_changes()` and mark task done
 
-**Batch size:** 500 messages per IMAP fetch
-**Resumability:** None — runs to completion in one tick
-**IMAP operations:** SELECT Sent, then batch-fetch recipient headers
+**Batch size:** 500 messages per tick
+**Resumability:** Yes — UID cursor persisted in `onboarding_tasks.cursor` between ticks and app restarts
+**IMAP operations:** SELECT Sent, UID SEARCH, UID FETCH recipient headers
 
 ### Task 2: Historical Fetch
 
@@ -241,20 +244,24 @@ Each task is marked `done` when complete. The worker advances to the next pendin
 
 **Goal:** Fetch the complete conversation history with known connections (no date limit).
 
-After the trust network and historical fetch establish who the user talks to, this task searches for any remaining messages involving those people.
+After the trust network and historical fetch establish who the user talks to, this task searches for any remaining messages involving those people. Processes **one connection email per tick**.
 
-**Steps:**
-1. Get list of connection emails from conversations classified as `connections`
-2. Connect to IMAP
-3. For each sync folder, for each connection:
+**Steps (per tick):**
+1. Read cursor from `onboarding_tasks.cursor` — a JSON list of already-processed emails
+2. Get all connection emails via `get_connection_emails()`, find first unprocessed one
+3. If none remaining → mark task done, emit `onboarding_complete`, return
+4. Connect to IMAP
+5. For each sync folder:
    - IMAP SEARCH: `OR FROM "email" TO "email"` (no date restriction)
    - Filter to UIDs not already in the database
    - Fetch in batches of 200 (same 3-round-trip pattern)
    - Insert messages into DB
-4. Mark task done when all folders and connections are processed
+6. Run `process_changes()` once for this connection
+7. Add email to cursor's done list, persist cursor
+8. Return (next tick picks the next connection)
 
-**Batch size:** 200 messages
-**Resumability:** None — runs to completion, but uses UID filtering to avoid duplicates
+**Batch size:** 200 messages (within each connection)
+**Resumability:** Yes — JSON cursor in `onboarding_tasks.cursor` tracks completed emails; survives app restarts
 
 ---
 
@@ -493,8 +500,10 @@ Computed from messages: participant names, classification (`connections`/`others
 
 The engine is designed to survive app restarts at any point:
 
-- **Onboarding tasks** are persisted with status. On restart, the worker picks up the first non-done task.
-- **Historical fetch** uses `lowest_uid` and `highest_uid` cursors per folder. On restart, it continues from where it left off.
+- **Onboarding tasks** are persisted with status and an optional `cursor` field. On restart, the worker picks up the first non-done task and resumes from its cursor.
+- **Trust network** uses a UID cursor in `onboarding_tasks.cursor`. On restart, it continues scanning Sent messages from the last processed UID.
+- **Historical fetch** uses `lowest_uid` and `highest_uid` cursors per folder in `folder_sync`. On restart, it continues from where it left off.
+- **Connection history** uses a JSON cursor in `onboarding_tasks.cursor` tracking completed emails. On restart, it skips already-processed connections.
 - **Message inserts** use `INSERT OR IGNORE` with unique constraints on both `(account_id, imap_folder, imap_uid)` and `(account_id, message_id)`, so duplicate fetches are harmless.
 - **Folder sync round-robin** orders by `CASE WHEN last_sync IS NULL THEN 0 ELSE 1 END, last_sync ASC`, ensuring never-synced folders are prioritized and no folder is starved.
 
