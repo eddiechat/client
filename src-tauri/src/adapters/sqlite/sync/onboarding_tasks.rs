@@ -11,13 +11,14 @@ pub const ONBOARDING_TASKS: &[&str] = &[
 pub struct Task {
     pub name: String,
     pub status: String,
+    pub cursor: Option<String>,
 }
 
 pub fn get_tasks(pool: &DbPool, account_id: &str) -> Result<Vec<Task>, EddieError> {
     let conn = pool.get()?;
     let mut stmt = conn
         .prepare(
-            "SELECT task, status FROM onboarding_tasks
+            "SELECT task, status, cursor FROM onboarding_tasks
              WHERE account_id = ?1 ORDER BY rowid",
         )?;
 
@@ -26,6 +27,7 @@ pub fn get_tasks(pool: &DbPool, account_id: &str) -> Result<Vec<Task>, EddieErro
             Ok(Task {
                 name: row.get(0)?,
                 status: row.get(1)?,
+                cursor: row.get(2)?,
             })
         })?;
 
@@ -57,6 +59,17 @@ pub fn mark_task_done(pool: &DbPool, account_id: &str, task: &str) -> Result<(),
         "UPDATE onboarding_tasks SET status = 'done', updated_at = ?1
          WHERE account_id = ?2 AND task = ?3",
         rusqlite::params![now, account_id, task],
+    )?;
+    Ok(())
+}
+
+pub fn update_cursor(pool: &DbPool, account_id: &str, task: &str, cursor: &str) -> Result<(), EddieError> {
+    let conn = pool.get()?;
+    let now = chrono::Utc::now().timestamp_millis();
+    conn.execute(
+        "UPDATE onboarding_tasks SET cursor = ?1, updated_at = ?2
+         WHERE account_id = ?3 AND task = ?4",
+        rusqlite::params![cursor, now, account_id, task],
     )?;
     Ok(())
 }

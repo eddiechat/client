@@ -38,7 +38,7 @@ pub fn upsert_entities(pool: &DbPool, entities: &[NewEntity]) -> Result<usize, E
                 END,
                 last_seen = MAX(COALESCE(entities.last_seen, 0), COALESCE(excluded.last_seen, 0)),
                 display_name = COALESCE(entities.display_name, excluded.display_name),
-                sent_count = COALESCE(excluded.sent_count, entities.sent_count)",
+                sent_count = COALESCE(entities.sent_count, 0) + COALESCE(excluded.sent_count, 0)",
             params![
                 Uuid::new_v4().to_string(),
                 entity.account_id,

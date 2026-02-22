@@ -49,7 +49,6 @@ pub async fn tick(
         "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task).await?,
         "connection_history" => {
             tasks::run_connection_history(app, pool, &account_id, &task).await?;
-            helpers::status_emit::emit_onboarding_complete(app, &account_id);
         }
         _ => {
             logger::warn(&format!("Unknown task: {}", task.name));
