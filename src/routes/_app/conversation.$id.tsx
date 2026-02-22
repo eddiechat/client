@@ -132,7 +132,7 @@ function ConversationView() {
                   {!isSent && isMultiParticipant && (
                     <Avatar name={sender} email={m.from_address} size={8} fontSize="text-[12px]" className="shrink-0" />
                   )}
-                  <div className={`px-3.5 py-2.5 text-[16px] leading-snug break-words ${isSent
+                  <div className={`min-w-0 px-3.5 py-2.5 text-[16px] leading-snug break-words ${isSent
                     ? "bg-accent-green text-white rounded-[18px_18px_4px_18px]"
                     : "bg-bg-secondary text-text-primary rounded-[18px_18px_18px_4px] border border-divider"
                     }`}>
