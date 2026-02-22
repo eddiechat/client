@@ -1,2 +1,2 @@
-### Changed
-- Batched ingestion of sent messages for building the trust network
+### Fixed
+- Move Sentry initialization inside the setup function
