@@ -1,2 +1,2 @@
 ### Fixed
-- Move Sentry initialization inside the setup function
+- Fix Sentry tracing not sending events in production builds by switching transport from native-tls to rustls
