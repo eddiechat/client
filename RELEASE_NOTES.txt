@@ -1,2 +1,2 @@
-### Fixed
-- Fix Sentry logging not working on mobile (tracing init moved to shared entry point)
+### Changed
+- Batched ingestion of sent messages for building the trust network
