@@ -79,11 +79,15 @@ html.dark {
 .skills-back {
   border: none;
   background: none;
-  font-size: 24px;
+  font-size: 32px;
   cursor: pointer;
   color: var(--sg-green);
-  padding: 0 4px;
-  line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -8px;
   font-weight: 300;
 }
 .skills-back:hover {

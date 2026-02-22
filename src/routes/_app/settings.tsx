@@ -78,7 +78,7 @@ function SettingsScreen() {
     <div className="flex flex-col h-screen bg-bg-primary">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pb-3 border-b border-divider shrink-0 bg-bg-secondary" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
-        <button className="border-none bg-transparent text-[24px] cursor-pointer text-accent-green p-0 leading-none" onClick={() => router.history.back()}>
+        <button className="border-none bg-transparent text-[32px] cursor-pointer text-accent-green min-w-11 min-h-11 flex items-center justify-center -ml-2" onClick={() => router.history.back()}>
           &#8249;
         </button>
         <span className="font-bold text-[19px] text-text-primary">Settings</span>
