@@ -52,7 +52,7 @@ The engine has two phases:
 | Recurring sync | `services/sync/tasks/incremental_sync.rs`, `flag_resync.rs` |
 | IMAP protocol | `adapters/imap/connection.rs`, `folders.rs`, `envelopes.rs`, `historical.rs`, `sent_scan.rs` |
 | SQLite persistence | `adapters/sqlite/sync/messages.rs`, `conversations.rs`, `folder_sync.rs`, `onboarding_tasks.rs`, `entities.rs` |
-| Processing helpers | `services/sync/helpers/message_classification.rs`, `message_distillation.rs`, `message_builder.rs`, `email_normalization.rs`, `status_emit.rs` |
+| Processing helpers | `services/sync/helpers/entity_extraction.rs`, `message_classification.rs`, `message_distillation.rs`, `message_builder.rs`, `email_normalization.rs`, `status_emit.rs` |
 
 All paths are relative to `src-tauri/src/`.
 
@@ -357,15 +357,28 @@ HTML bodies are converted to plain text using `html2text` and stored in `body_te
 
 ## Message Processing Pipeline
 
-After messages are fetched and inserted, `worker::process_changes()` runs three processing steps:
+After messages are fetched and inserted, `worker::process_changes()` runs four processing steps:
 
 ```
 process_changes(app, pool, account_id)
-  1. classify_messages()    → Categorize each message
-  2. distill_messages()     → Extract chat-style preview
-  3. rebuild_conversations() → Materialize conversation records
-  4. emit event             → Notify frontend to refresh
+  1. extract_entities()       → Update trust network from new sent messages
+  2. classify_messages()      → Categorize each message
+  3. distill_messages()       → Extract chat-style preview
+  4. rebuild_conversations()  → Materialize conversation records
+  5. emit event               → Notify frontend to refresh
 ```
+
+### Entity Extraction (Inline Trust Network Update)
+
+Before classification runs, new messages from the user are scanned to incrementally update the trust network. This ensures the trust network stays current as new sent messages arrive via incremental sync, not just during the onboarding trust network task.
+
+**How it works:**
+1. Query messages where `processed_at IS NULL` (not yet classified) and `from_address` matches a self email (user or alias)
+2. Parse `to_addresses` and `cc_addresses` (JSON arrays already stored in the DB)
+3. Normalize and deduplicate recipient emails, filtering out self addresses
+4. Upsert as connection entities with additive `sent_count`
+
+This must run **before** `classify_messages()` because classification sets `processed_at`, closing the "new message" window. No IMAP calls are needed — all data comes from the local database.
 
 ### Classification
 

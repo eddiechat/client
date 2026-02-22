@@ -82,6 +82,13 @@ pub fn process_changes(
     pool: &DbPool,
     account_id: &str,
 ) -> Result<(), EddieError> {
+    // Update trust network from new sent messages (before classify sets processed_at)
+    let start = std::time::Instant::now();
+    let extracted = helpers::entity_extraction::extract_entities_from_new_messages(pool, account_id)?;
+    if extracted > 0 {
+        logger::debug(&format!("Extracted {} connections in {}", extracted, logger::fmt_ms(start.elapsed())));
+    }
+
     helpers::status_emit::emit_status(app, "classifying", "Identifying Points & Circles...");
     let start = std::time::Instant::now();
     let classified = helpers::message_classification::classify_messages(pool, account_id)?;

@@ -222,6 +222,33 @@ pub fn update_extracted(
     Ok(())
 }
 
+/// Returns (to_addresses, cc_addresses) for new messages sent by the user.
+/// "New" = processed_at IS NULL (not yet classified).
+/// Used to incrementally update the trust network as new sent messages arrive.
+pub fn get_new_sent_recipients(pool: &DbPool, account_id: &str) -> Result<Vec<(String, String)>, EddieError> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        "SELECT m.to_addresses, m.cc_addresses
+         FROM messages m
+         WHERE m.account_id = ?1
+           AND m.processed_at IS NULL
+           AND m.from_address IN (
+               SELECT email FROM entities
+               WHERE account_id = ?1 AND trust_level IN ('user', 'alias')
+           )"
+    )?;
+
+    let rows = stmt.query_map(params![account_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row?);
+    }
+    Ok(results)
+}
+
 pub fn reset_classifications(pool: &DbPool, account_id: &str) -> Result<(), EddieError> {
     let conn = pool.get()?;
     conn.execute(
