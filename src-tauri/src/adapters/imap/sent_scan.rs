@@ -8,17 +8,22 @@ use crate::error::EddieError;
 /// Scans one batch of sent messages (by UID) and returns recipient counts + the max UID processed.
 ///
 /// - `above_uid`: only process UIDs strictly greater than this (pass None for the first batch)
+/// - `from_filter`: when set, restricts the IMAP SEARCH to messages FROM this address.
+///   Used when scanning non-Sent folders (e.g., INBOX) to find the user's outgoing messages.
 /// - Returns `(recipient_counts, Some(max_uid), remaining_uids)` if messages were found,
 ///   or `(empty, None, 0)` if done.
 pub async fn fetch_sent_recipients_batch(
     conn: &mut ImapConnection,
     batch_size: usize,
     above_uid: Option<u32>,
+    from_filter: Option<&str>,
 ) -> Result<(HashMap<String, usize>, Option<u32>, usize), EddieError> {
     // UID SEARCH to get all UIDs, then filter client-side
-    let search_query = match above_uid {
-        Some(uid) => format!("UID {}:*", uid + 1),
-        None => "ALL".to_string(),
+    let search_query = match (above_uid, from_filter) {
+        (Some(uid), Some(email)) => format!("FROM \"{}\" UID {}:*", email, uid + 1),
+        (Some(uid), None) => format!("UID {}:*", uid + 1),
+        (None, Some(email)) => format!("FROM \"{}\"", email),
+        (None, None) => "ALL".to_string(),
     };
 
     let uid_set = conn.session

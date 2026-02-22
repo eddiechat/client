@@ -148,13 +148,13 @@ The `folders_to_sync()` function accepts an `is_gmail` flag and returns only fol
 
 Note: folders without recognized attributes are included in sync (they get Low priority). A folder named "Sent Items" without the `\Sent` attribute would still be synced, but would not be recognized as the Sent folder for trust network scanning.
 
-The Sent folder is identified separately via `find_sent_folder()` for trust network scanning, using a 3-tier strategy:
+The Sent folder is identified separately via `find_sent_folder()` for trust network scanning, using a multi-tier strategy:
 
 1. **Attribute match** — Search for a folder with the `\Sent` special-use attribute (RFC 6154). Most reliable.
-2. **Gmail labels** — Not applicable here; Gmail accounts use `[Gmail]/All Mail` for sync and don't need separate Sent folder discovery.
-3. **Name-based fallback** — Match the folder's leaf name (last segment after `.` or `/` delimiter) against a list of known Sent folder names across European languages: English (`Sent`, `Sent Items`, `Sent Messages`, `Sent Mail`), German (`Gesendet`, `Gesendete Objekte`), French (`Envoyés`, `Éléments envoyés`), Spanish (`Enviados`), Portuguese (`Enviadas`, `Itens Enviados`), Italian (`Inviata`, `Inviati`), Dutch (`Verzonden`), Swedish (`Skickat`), Danish/Norwegian (`Sendt`), Finnish (`Lähetetyt`), Polish (`Wysłane`), Czech (`Odeslané`), Hungarian (`Elküldött`), Romanian (`Trimise`), Russian (`Отправленные`), Turkish (`Gönderilenler`), Greek (`Απεσταλμένα`).
+2. **Name-based fallback** — Match the folder's leaf name (last segment after `.` or `/` delimiter) against a list of known Sent folder names across European languages: English (`Sent`, `Sent Items`, `Sent Messages`, `Sent Mail`), German (`Gesendet`, `Gesendete Objekte`), French (`Envoyés`, `Éléments envoyés`), Spanish (`Enviados`), Portuguese (`Enviadas`, `Itens Enviados`), Italian (`Inviata`, `Inviati`), Dutch (`Verzonden`), Swedish (`Skickat`), Danish/Norwegian (`Sendt`), Finnish (`Lähetetyt`), Polish (`Wysłane`), Czech (`Odeslané`), Hungarian (`Elküldött`), Romanian (`Trimise`), Russian (`Отправленные`), Turkish (`Gönderilenler`), Greek (`Απεσταλμένα`).
+3. **FROM-user scan** — If no Sent folder is found by attribute or name, all syncable folders are scanned for messages `FROM "user@email.com"`. This catches sent messages regardless of which folder they're in (unrecognized folder name, unusual server layout, or messages scattered across folders). Recipients of those messages are extracted to build the trust network. This runs as a single-pass operation with a larger batch size (5000) since the FROM filter typically yields far fewer messages than a full Sent folder scan.
 
-If no Sent folder is found by any tier, the trust network task is **gracefully skipped** (self entities are still seeded, and the task is marked done). The trust network will be less complete but onboarding continues normally.
+If the FROM-user scan also finds no messages (e.g., brand-new account), self entities are still seeded and the task is marked done. The trust network will be empty but onboarding continues normally.
 
 ### Folder sync state
 
@@ -217,10 +217,10 @@ Each task is marked `done` when complete. The worker advances to the next pendin
 **Goal:** Discover who the user communicates with by scanning the Sent folder.
 
 **Steps (per tick):**
-1. Connect to IMAP, locate Sent folder via `find_sent_folder()` (attribute match → name fallback)
-2. If no Sent folder found → seed self entities, mark task done, skip (graceful degradation)
-3. Read UID cursor from `onboarding_tasks.cursor` (0 on first tick)
-4. First tick only: insert user + alias entities
+1. Connect to IMAP, insert user + alias entities (first tick only)
+2. Locate Sent folder via `find_sent_folder()` (attribute match → name fallback)
+3. If no Sent folder found → fall back to FROM-user scan of all syncable folders (single pass, see below)
+4. Read UID cursor from `onboarding_tasks.cursor` (0 on first tick)
 5. `UID SEARCH` for messages above cursor, take first 500 UIDs
 6. `UID FETCH` those UIDs for `BODY.PEEK[HEADER.FIELDS (To Cc Bcc)]`
 7. Parse recipients via `mailparse`, build entity records with per-batch `sent_count`
@@ -228,9 +228,11 @@ Each task is marked `done` when complete. The worker advances to the next pendin
 9. If UIDs remain → return (next tick continues from cursor)
 10. If no UIDs remain → run `process_changes()` and mark task done
 
-**Batch size:** 500 messages per tick
-**Resumability:** Yes — UID cursor persisted in `onboarding_tasks.cursor` between ticks and app restarts
-**IMAP operations:** SELECT Sent, UID SEARCH, UID FETCH recipient headers
+**FROM-user fallback (step 3):** When no Sent folder is identified, each syncable folder is selected and searched for `FROM "user@email.com"`. Recipients are extracted from matching messages and upserted as connections. This runs as a single-tick operation (no cursor) since the FROM filter typically yields far fewer results. If no messages are found at all (e.g., brand-new account), the task completes with an empty trust network.
+
+**Batch size:** 500 messages per tick (Sent folder path), 5000 per folder (FROM-user fallback)
+**Resumability:** Yes — UID cursor persisted in `onboarding_tasks.cursor` between ticks and app restarts (Sent folder path only; FROM-user fallback runs in one pass)
+**IMAP operations:** SELECT folder, UID SEARCH [FROM], UID FETCH recipient headers
 
 ### Task 2: Historical Fetch
 
