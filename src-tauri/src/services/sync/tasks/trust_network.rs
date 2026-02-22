@@ -81,7 +81,7 @@ pub async fn build_trust_network(
     let start = std::time::Instant::now();
     // Step 3: Scan Sent folder for connections (with per-recipient counts)
     let recipient_counts = fetch_sent_recipients(conn, sent_folder, 500).await?;
-    logger::debug(&format!("fetch_sent_recipients took: {:?}", start.elapsed()));
+    logger::debug(&format!("fetch_sent_recipients took: {}", logger::fmt_ms(start.elapsed())));
 
     let self_emails: Vec<String> = std::iter::once(normalize_email(user_email))
         .chain(aliases.iter().map(|a| normalize_email(a)))
@@ -104,7 +104,7 @@ pub async fn build_trust_network(
             });
         }
     }
-    logger::debug(&format!("n * entities.push took: {:?}", start.elapsed()));
+    logger::debug(&format!("n * entities.push took: {}", logger::fmt_ms(start.elapsed())));
 
     upsert_entities(pool, &entities)
 }

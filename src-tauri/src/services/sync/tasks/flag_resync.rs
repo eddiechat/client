@@ -123,8 +123,8 @@ pub async fn run_flag_resync(
             if total_changed > 0 {
                 any_changed = true;
                 logger::info(&format!(
-                    "Flag resync for {}: {} changed out of {} messages in {:?}",
-                    folder_info.name, total_changed, total_messages, folder_start.elapsed()
+                    "Flag resync for {}: {} changed out of {} messages in {}",
+                    folder_info.name, total_changed, total_messages, logger::fmt_ms(folder_start.elapsed())
                 ));
             }
         } else {
@@ -184,8 +184,8 @@ pub async fn run_flag_resync(
             if total_changed > 0 {
                 any_changed = true;
                 logger::info(&format!(
-                    "Flag resync for {}: {} changed out of {} messages in {:?}",
-                    folder_info.name, total_changed, total_messages, folder_start.elapsed()
+                    "Flag resync for {}: {} changed out of {} messages in {}",
+                    folder_info.name, total_changed, total_messages, logger::fmt_ms(folder_start.elapsed())
                 ));
             }
         }

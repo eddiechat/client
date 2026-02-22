@@ -57,6 +57,11 @@ fn get() -> &'static Logger {
     LOGGER.get().expect("Logger not initialized — call logger::init() first")
 }
 
+pub fn fmt_ms(d: std::time::Duration) -> String {
+    let ms = d.as_millis();
+    if ms == 0 { "<1ms".into() } else { format!("{}ms", ms) }
+}
+
 pub fn debug(message: &str) {
     let l = get();
     let source = l.log_source.read().unwrap();
