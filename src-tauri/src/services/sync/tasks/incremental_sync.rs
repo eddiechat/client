@@ -6,8 +6,6 @@ use crate::error::EddieError;
 
 use crate::services::logger;
 use std::collections::HashMap;
-use async_imap::types::Fetch;
-use futures::TryStreamExt;
 
 /// Run incremental sync for all accounts
 pub async fn run_incremental_sync_all(
@@ -80,13 +78,13 @@ pub async fn run_incremental_sync(
             "(UID FLAGS ENVELOPE BODYSTRUCTURE)"
         };
 
-        let fetches: Vec<Fetch> = conn.session
-            .uid_fetch(&uid_list, fetch_query)
-            .await
-            .map_err(|e| EddieError::Backend(format!("FETCH failed: {}", e)))?
-            .try_collect()
-            .await
-            .map_err(|e| EddieError::Backend(format!("Collect failed: {}", e)))?;
+        let fetches = historical::collect_tolerant(
+            conn.session
+                .uid_fetch(&uid_list, fetch_query)
+                .await
+                .map_err(|e| EddieError::Backend(format!("FETCH failed: {}", e)))?,
+            &format!("envelopes in {}", folder_info.name),
+        ).await;
 
         let mut envelopes: Vec<envelopes::Envelope> = Vec::new();
         let mut text_parts: Vec<(u32, Vec<u32>, bool, String)> = Vec::new();
@@ -105,13 +103,13 @@ pub async fn run_incremental_sync(
         }
 
         // Fetch references
-        let refs_fetches: Vec<Fetch> = conn.session
-            .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References)])")
-            .await
-            .map_err(|e| EddieError::Backend(format!("FETCH refs failed: {}", e)))?
-            .try_collect()
-            .await
-            .map_err(|e| EddieError::Backend(format!("Collect refs failed: {}", e)))?;
+        let refs_fetches = historical::collect_tolerant(
+            conn.session
+                .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References)])")
+                .await
+                .map_err(|e| EddieError::Backend(format!("FETCH refs failed: {}", e)))?,
+            &format!("references in {}", folder_info.name),
+        ).await;
 
         for fetch in &refs_fetches {
             if let Some(uid) = fetch.uid {
@@ -145,13 +143,13 @@ pub async fn run_incremental_sync(
 
                 let body_query = format!("(UID BODY.PEEK[{}])", historical::part_to_string(part));
 
-                let body_fetches: Vec<Fetch> = conn.session
-                    .uid_fetch(&part_uid_list, &body_query)
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("FETCH body failed: {}", e)))?
-                    .try_collect()
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("Collect body failed: {}", e)))?;
+                let body_fetches = historical::collect_tolerant(
+                    conn.session
+                        .uid_fetch(&part_uid_list, &body_query)
+                        .await
+                        .map_err(|e| EddieError::Backend(format!("FETCH body failed: {}", e)))?,
+                    &format!("bodies in {}", folder_info.name),
+                ).await;
 
                 let path = historical::part_to_section_path(part);
 

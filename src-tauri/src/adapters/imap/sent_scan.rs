@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use futures::TryStreamExt;
 use crate::services::logger;
 
 use super::connection::ImapConnection;
+use super::historical;
 use crate::error::EddieError;
 
 /// Scans one batch of sent messages (by UID) and returns recipient counts + the max UID processed.
@@ -58,13 +58,13 @@ pub async fn fetch_sent_recipients_batch(
         batch_uids.len(), above_uid
     ));
 
-    let messages: Vec<_> = conn.session
-        .uid_fetch(&uid_list, "BODY.PEEK[HEADER.FIELDS (To Cc Bcc)]")
-        .await
-        .map_err(|e| EddieError::Backend(format!("UID FETCH failed: {}", e)))?
-        .try_collect()
-        .await
-        .map_err(|e| EddieError::Backend(format!("Failed to collect: {}", e)))?;
+    let messages = historical::collect_tolerant(
+        conn.session
+            .uid_fetch(&uid_list, "BODY.PEEK[HEADER.FIELDS (To Cc Bcc)]")
+            .await
+            .map_err(|e| EddieError::Backend(format!("UID FETCH failed: {}", e)))?,
+        "sent scan recipients",
+    ).await;
 
     let mut counts: HashMap<String, usize> = HashMap::new();
     for msg in &messages {

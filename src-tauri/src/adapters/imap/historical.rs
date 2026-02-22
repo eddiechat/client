@@ -1,13 +1,35 @@
 use std::collections::HashMap;
 
 use async_imap::types::Fetch;
-use futures::TryStreamExt;
+use futures::StreamExt;
 use imap_proto::types::{BodyStructure, ContentEncoding, SectionPath};
 use crate::services::logger;
 
 use super::connection::ImapConnection;
 use super::envelopes::{parse_envelope, Envelope, parse_references_value};
 use crate::error::EddieError;
+
+/// Collects a FETCH stream tolerantly — logs and skips individual responses
+/// that fail to parse (e.g., IMAP literal strings in BODYSTRUCTURE).
+/// Returns all successfully parsed Fetch items.
+pub async fn collect_tolerant<E: std::fmt::Display>(
+    stream: impl futures::Stream<Item = Result<Fetch, E>>,
+    context: &str,
+) -> Vec<Fetch> {
+    futures::pin_mut!(stream);
+    let mut items = Vec::new();
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(fetch) => items.push(fetch),
+            Err(e) => {
+                logger::warn(&format!(
+                    "Skipping unparseable IMAP response ({}): {}", context, e
+                ));
+            }
+        }
+    }
+    items
+}
 
 
 // ---------------------------------------------------------------------------
@@ -77,14 +99,13 @@ where
         };
 
         // Round trip 1: Envelopes + BODYSTRUCTURE
-        let fetches: Vec<Fetch> = conn
-            .session
-            .uid_fetch(&uid_list, fetch_query)
-            .await
-            .map_err(|e| EddieError::Backend(format!("FETCH envelopes failed: {}", e)))?
-            .try_collect()
-            .await
-            .map_err(|e| EddieError::Backend(format!("Collect failed: {}", e)))?;
+        let fetches = collect_tolerant(
+            conn.session
+                .uid_fetch(&uid_list, fetch_query)
+                .await
+                .map_err(|e| EddieError::Backend(format!("FETCH envelopes failed: {}", e)))?,
+            &format!("envelopes in {}", folder),
+        ).await;
 
         let mut envelopes: Vec<Envelope> = Vec::new();
         let mut text_parts: Vec<(u32, Vec<u32>, bool, String)> = Vec::new();
@@ -103,14 +124,13 @@ where
         }
 
         // Round trip 2: References headers (once per batch, full uid_list)
-        let refs_fetches: Vec<Fetch> = conn
-            .session
-            .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References)])")
-            .await
-            .map_err(|e| EddieError::Backend(format!("FETCH refs failed: {}", e)))?
-            .try_collect()
-            .await
-            .map_err(|e| EddieError::Backend(format!("Collect refs failed: {}", e)))?;
+        let refs_fetches = collect_tolerant(
+            conn.session
+                .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References)])")
+                .await
+                .map_err(|e| EddieError::Backend(format!("FETCH refs failed: {}", e)))?,
+            &format!("references in {}", folder),
+        ).await;
 
         for fetch in &refs_fetches {
             if let Some(uid) = fetch.uid {
@@ -145,14 +165,13 @@ where
 
                 let fetch_query = format!("(UID BODY.PEEK[{}])", part_to_string(part));
 
-                let body_fetches: Vec<Fetch> = conn
-                    .session
-                    .uid_fetch(&part_uid_list, &fetch_query)
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("FETCH body failed: {}", e)))?
-                    .try_collect()
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("Collect body failed: {}", e)))?;
+                let body_fetches = collect_tolerant(
+                    conn.session
+                        .uid_fetch(&part_uid_list, &fetch_query)
+                        .await
+                        .map_err(|e| EddieError::Backend(format!("FETCH body failed: {}", e)))?,
+                    &format!("bodies in {}", folder),
+                ).await;
 
                 let path = part_to_section_path(part);
 

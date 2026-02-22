@@ -1,12 +1,10 @@
 use crate::adapters::sqlite;
 use crate::adapters::sqlite::DbPool;
-use crate::adapters::imap::folders;
+use crate::adapters::imap::{folders, historical};
 use crate::services::sync::worker;
 use crate::error::EddieError;
 
 use crate::services::logger;
-use async_imap::types::Fetch;
-use futures::TryStreamExt;
 use std::collections::HashMap;
 
 const BATCH_SIZE: usize = 500;
@@ -76,13 +74,13 @@ pub async fn run_flag_resync(
                     .collect::<Vec<_>>()
                     .join(",");
 
-                let fetches: Vec<Fetch> = conn.session
-                    .uid_fetch(&uid_list, "(UID FLAGS X-GM-LABELS)")
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("FETCH flags failed: {}", e)))?
-                    .try_collect()
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("Collect flags failed: {}", e)))?;
+                let fetches = historical::collect_tolerant(
+                    conn.session
+                        .uid_fetch(&uid_list, "(UID FLAGS X-GM-LABELS)")
+                        .await
+                        .map_err(|e| EddieError::Backend(format!("FETCH flags failed: {}", e)))?,
+                    &format!("flags+labels in {}", folder_info.name),
+                ).await;
 
                 let mut updates: Vec<(u32, String, String)> = Vec::new();
 
@@ -147,13 +145,13 @@ pub async fn run_flag_resync(
                     .collect::<Vec<_>>()
                     .join(",");
 
-                let fetches: Vec<Fetch> = conn.session
-                    .uid_fetch(&uid_list, "(UID FLAGS)")
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("FETCH flags failed: {}", e)))?
-                    .try_collect()
-                    .await
-                    .map_err(|e| EddieError::Backend(format!("Collect flags failed: {}", e)))?;
+                let fetches = historical::collect_tolerant(
+                    conn.session
+                        .uid_fetch(&uid_list, "(UID FLAGS)")
+                        .await
+                        .map_err(|e| EddieError::Backend(format!("FETCH flags failed: {}", e)))?,
+                    &format!("flags in {}", folder_info.name),
+                ).await;
 
                 let mut updates: Vec<(u32, String)> = Vec::new();
 
