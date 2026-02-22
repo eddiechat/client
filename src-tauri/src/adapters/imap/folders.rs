@@ -73,6 +73,7 @@ pub async fn list_folders(session: &mut ImapSession) -> Result<Vec<FolderInfo>, 
         })
         .collect();
 
+    // TODO: Cleanup after verifying Martins inbox
     logger::debug(&format!("Listed {} IMAP folders:", folder_infos.len()));
     for f in &folder_infos {
         logger::debug(&format!(
