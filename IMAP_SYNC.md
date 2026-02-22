@@ -123,15 +123,16 @@ Gmail is detected by hostname (`gmail.com` or `googlemail.com`). When detected, 
 
 Folders are fetched from the IMAP server via the LIST command and classified by priority:
 
-| Priority | Folders | Behavior |
-|----------|---------|----------|
-| High | INBOX, Sent, Drafts | Core folders |
-| Medium | All Mail | Archive-like |
-| Low | Custom folders | User-created |
-| Excluded | Junk, Trash | Skipped entirely |
-| NoSelect | Structural-only | Cannot be selected |
+| Priority | Match | Folders | Behavior |
+|----------|-------|---------|----------|
+| High | Name | INBOX | Core folder (matched by name) |
+| High | Attribute | Sent, Drafts | Core folders (matched by `\Sent`, `\Drafts` attributes) |
+| Medium | Attribute | All Mail | Archive-like (matched by `\All` attribute) |
+| Low | — | Custom folders | User-created (no recognized attribute) |
+| Excluded | Attribute | Junk, Trash | Skipped (matched by `\Junk`, `\Trash` attributes) |
+| NoSelect | Attribute | Structural-only | Cannot be selected |
 
-Classification uses IMAP attributes (`\Sent`, `\Drafts`, `\All`, etc.) and folder names as fallbacks.
+Classification is **attribute-based** using RFC 6154 special-use mailbox attributes (`\Sent`, `\Drafts`, `\All`, etc.). The only exception is INBOX, which is matched by name. If a server does not advertise special-use attributes, folders other than INBOX will be classified as Low priority. The Sent folder has additional name-based fallback logic (see `find_sent_folder()` below); other folder roles (Drafts, Trash, etc.) remain attribute-only.
 
 ### Sync folder filtering
 
@@ -139,13 +140,21 @@ The `folders_to_sync()` function accepts an `is_gmail` flag and returns only fol
 
 **Gmail accounts:** Only sync folders with the `\All` attribute (i.e., `[Gmail]/All Mail`). This folder contains every message exactly once regardless of labels, eliminating duplicates that would arise from syncing label-based folders like INBOX, Sent, Important, etc.
 
-**Non-Gmail accounts:** Sync all folders except:
-- Drafts, Trash, Junk (content not useful for conversations)
-- All Mail (would duplicate INBOX/Sent content)
-- Flagged (virtual folder)
-- NoSelect (structural containers)
+**Non-Gmail accounts:** Sync all folders except those with any of these attributes:
+- `\Drafts`, `\Trash`, `\Junk` (content not useful for conversations)
+- `\All` (would duplicate INBOX/Sent content)
+- `\Flagged` (virtual folder)
+- `\NoSelect` (structural containers)
 
-The Sent folder is identified separately via `find_folder_by_attribute("\\Sent")` for trust network scanning (this works for both Gmail and non-Gmail).
+Note: folders without recognized attributes are included in sync (they get Low priority). A folder named "Sent Items" without the `\Sent` attribute would still be synced, but would not be recognized as the Sent folder for trust network scanning.
+
+The Sent folder is identified separately via `find_sent_folder()` for trust network scanning, using a 3-tier strategy:
+
+1. **Attribute match** — Search for a folder with the `\Sent` special-use attribute (RFC 6154). Most reliable.
+2. **Gmail labels** — Not applicable here; Gmail accounts use `[Gmail]/All Mail` for sync and don't need separate Sent folder discovery.
+3. **Name-based fallback** — Match the folder's leaf name (last segment after `.` or `/` delimiter) against a list of known Sent folder names across European languages: English (`Sent`, `Sent Items`, `Sent Messages`, `Sent Mail`), German (`Gesendet`, `Gesendete Objekte`), French (`Envoyés`, `Éléments envoyés`), Spanish (`Enviados`), Portuguese (`Enviadas`, `Itens Enviados`), Italian (`Inviata`, `Inviati`), Dutch (`Verzonden`), Swedish (`Skickat`), Danish/Norwegian (`Sendt`), Finnish (`Lähetetyt`), Polish (`Wysłane`), Czech (`Odeslané`), Hungarian (`Elküldött`), Romanian (`Trimise`), Russian (`Отправленные`), Turkish (`Gönderilenler`), Greek (`Απεσταλμένα`).
+
+If no Sent folder is found by any tier, the trust network task is **gracefully skipped** (self entities are still seeded, and the task is marked done). The trust network will be less complete but onboarding continues normally.
 
 ### Folder sync state
 
@@ -208,15 +217,16 @@ Each task is marked `done` when complete. The worker advances to the next pendin
 **Goal:** Discover who the user communicates with by scanning the Sent folder.
 
 **Steps (per tick):**
-1. Connect to IMAP, locate Sent folder via `\Sent` attribute
-2. Read UID cursor from `onboarding_tasks.cursor` (0 on first tick)
-3. First tick only: insert user + alias entities
-4. `UID SEARCH` for messages above cursor, take first 500 UIDs
-5. `UID FETCH` those UIDs for `BODY.PEEK[HEADER.FIELDS (To Cc Bcc)]`
-6. Parse recipients via `mailparse`, build entity records with per-batch `sent_count`
-7. Upsert entities (additive `sent_count`), persist cursor to max UID processed
-8. If UIDs remain → return (next tick continues from cursor)
-9. If no UIDs remain → run `process_changes()` and mark task done
+1. Connect to IMAP, locate Sent folder via `find_sent_folder()` (attribute match → name fallback)
+2. If no Sent folder found → seed self entities, mark task done, skip (graceful degradation)
+3. Read UID cursor from `onboarding_tasks.cursor` (0 on first tick)
+4. First tick only: insert user + alias entities
+5. `UID SEARCH` for messages above cursor, take first 500 UIDs
+6. `UID FETCH` those UIDs for `BODY.PEEK[HEADER.FIELDS (To Cc Bcc)]`
+7. Parse recipients via `mailparse`, build entity records with per-batch `sent_count`
+8. Upsert entities (additive `sent_count`), persist cursor to max UID processed
+9. If UIDs remain → return (next tick continues from cursor)
+10. If no UIDs remain → run `process_changes()` and mark task done
 
 **Batch size:** 500 messages per tick
 **Resumability:** Yes — UID cursor persisted in `onboarding_tasks.cursor` between ticks and app restarts

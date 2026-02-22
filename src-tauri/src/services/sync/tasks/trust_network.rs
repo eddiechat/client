@@ -30,10 +30,21 @@ pub async fn run_trust_network(
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
 
-    // Discover Sent folder
+    // Discover Sent folder (attribute match, then name-based fallback)
     let folder_list = folders::list_folders(&mut conn.session).await?;
-    let sent_folder = folders::find_folder_by_attribute(&folder_list, "Sent")
-        .ok_or(EddieError::Backend("No Sent folder found".into()))?;
+    let sent_folder = match folders::find_sent_folder(&folder_list) {
+        Some(f) => f,
+        None => {
+            // No Sent folder at all (brand-new account, or unusual server).
+            // Skip trust network — entities will still be built from synced messages.
+            logger::info("No Sent folder found, skipping trust network task");
+            if cursor_uid == 0 {
+                seed_self_entities(pool, account_id, &creds.email, &self_emails)?;
+            }
+            onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
+            return Ok(());
+        }
+    };
 
     // First tick: insert user + alias entities
     if cursor_uid == 0 {
