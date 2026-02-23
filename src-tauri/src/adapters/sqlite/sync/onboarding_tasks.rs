@@ -5,7 +5,8 @@ use crate::error::EddieError;
 pub const ONBOARDING_TASKS: &[&str] = &[
     "trust_network",
     "historical_fetch",
-    "connection_history",
+    // TODO: Remove comment to re-enable task (+ 1 in connection_history.rs)
+    // "connection_history",
 ];
 
 pub struct Task {

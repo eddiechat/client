@@ -19,6 +19,9 @@ pub async fn run_connection_history(
     account_id: &str,
     task: &onboarding_tasks::Task,
 ) -> Result<(), EddieError> {
+    // TODO: Remove line to re-enable task (+ 1 in onboarding_tasks.rs)
+    onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
+
     // Parse cursor: JSON list of completed email addresses
     let done_emails: Vec<String> = task.cursor
         .as_deref()
