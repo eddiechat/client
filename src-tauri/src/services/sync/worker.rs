@@ -6,44 +6,38 @@ use crate::error::EddieError;
 
 use crate::services::logger;
 
-/// Run one unit of work. Returns true if work was done.
+/// Run one unit of work. Returns true if work was done (onboarding in progress).
 pub async fn tick(
     app: &tauri::AppHandle,
     pool: &DbPool,
 ) -> Result<bool, EddieError> {
     logger::debug("Engine tick");
 
-    // Step 1: Find an account that needs work
+    // Step 1: Always fetch latest messages for all onboarded accounts.
+    // This runs even during onboarding so new mail keeps arriving.
+    let _ = tasks::run_incremental_sync_all(app, pool).await;
+    let _ = tasks::run_flag_resync_all(app, pool).await;
+
+    // Step 2: Find an account that needs onboarding
     let account_id = match accounts::find_account_for_onboarding(pool)? {
         Some(id) => id,
-        None => {
-            // No accounts needing onboarding — run incremental sync + flag resync
-            let did_work = tasks::run_incremental_sync_all(app, pool).await;
-            let _ = tasks::run_flag_resync_all(app, pool).await;
-            return did_work;
-        }
+        None => return Ok(false),
     };
 
-    // Step 2: Get tasks for this account, seed if missing
+    // Step 3: Get tasks for this account, seed if missing
     let tasks = onboarding_tasks::get_tasks(pool, &account_id)?;
     if tasks.is_empty() {
         onboarding_tasks::seed_tasks(pool, &account_id)?;
         return Ok(true);
     }
 
-    // Step 3: Find first non-done task
-    let next = tasks.iter().find(|t| t.status != "done");
-    let task = match next {
+    // Step 4: Find first non-done task
+    let task = match tasks.iter().find(|t| t.status != "done") {
         Some(t) => t,
-        None => {
-            // This account is done — run incremental sync + flag resync for it
-            let result = tasks::run_incremental_sync(app, pool, &account_id).await;
-            let _ = tasks::run_flag_resync(app, pool, &account_id).await;
-            return result;
-        }
+        None => return Ok(false), // all tasks done, incremental sync already ran above
     };
 
-    // Step 4: Run it
+    // Step 5: Run it
     match task.name.as_str() {
         "trust_network" => tasks::run_trust_network(app, pool, &account_id, &task).await?,
         "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task).await?,
