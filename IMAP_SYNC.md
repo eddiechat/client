@@ -41,7 +41,7 @@ This document describes the sync engine that powers Eddie Chat's email synchroni
 The engine has two phases:
 
 1. **Onboarding** — When a new account is added, three sequential tasks run to build initial state: trust network discovery, historical message fetch, and connection history expansion.
-2. **Recurring sync** — Once onboarding completes, the engine switches to incremental message fetching and flag resynchronization on every tick.
+2. **Recurring sync** — Incremental message fetching and flag resynchronization run on **every tick**, even during onboarding, so new mail keeps arriving for already-onboarded accounts while a new account is being set up.
 
 ### Key source files
 
@@ -79,16 +79,16 @@ Each tick executes **one unit of work** and returns whether anything was done. I
 
 ```
 tick()
+├── Run incremental_sync_all + flag_resync_all (always, for all onboarded accounts)
 ├── Find account needing onboarding?
 │   ├── Yes:
 │   │   ├── Tasks seeded? No → seed 3 tasks, return true
 │   │   ├── Next pending task? Yes → run it, return true
-│   │   └── All tasks done? → run incremental_sync + flag_resync for this account
-│   └── No onboarding needed:
-│       └── Run incremental_sync_all + flag_resync_all for all onboarded accounts
+│   │   └── All tasks done? → return false (incremental sync already ran above)
+│   └── No onboarding needed → return false
 ```
 
-The engine prioritizes onboarding — only when all accounts are fully onboarded does it switch to recurring sync.
+Incremental sync and flag resync run first on every tick, ensuring new mail arrives even during long-running onboarding. The `did_work` return (`true`/`false`) only reflects whether onboarding work was done, controlling whether the loop sleeps or continues immediately.
 
 When the last onboarding task (`connection_history`) completes, the worker clears all onboarding status messages so the UI no longer shows progress indicators.
 
@@ -279,7 +279,7 @@ After the trust network and historical fetch establish who the user talks to, th
 
 ## Recurring Sync Phase
 
-Once all onboarding tasks are done, every worker tick runs two operations for all onboarded accounts:
+Every worker tick runs two operations for all onboarded accounts, regardless of whether other accounts are still onboarding:
 
 ### Incremental Sync
 
