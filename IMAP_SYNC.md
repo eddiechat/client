@@ -466,6 +466,16 @@ This ensures the same person with different address variations maps to the same 
 
 ---
 
+## Skill Classification
+
+After the built-in classification pipeline processes messages, user-defined **skills** can run as a second classification pass. Skills are LLM-powered classifiers that evaluate every message against a user-written prompt via a local Ollama model, persisting only matches in a many-to-many `skill_matches` table.
+
+Skill classification runs in the worker tick loop after incremental sync and flag resync, processing batches of 10 messages at a time. Each skill tracks per-folder UID cursors in a `folder_classify` table (analogous to `folder_sync`), with revision-based invalidation that triggers full reclassification when a skill's prompt or modifiers change.
+
+For the full specification — data model, cursor mechanics, Ollama integration, batch processing, and error handling — see **[CLASSIFICATION.md](./CLASSIFICATION.md)**.
+
+---
+
 ## Database State
 
 The sync engine persists all state in SQLite (`sync.db`) using WAL mode with an r2d2 connection pool (max 8 connections).
