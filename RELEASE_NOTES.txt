@@ -1,7 +1,5 @@
-### Changed
-- Run incremental sync on every tick so new mail arrives during onboarding
-- Disable the connection history task
-- Update docs
+### Added
+- Spec for skills processing
 
-### Fixed
-- Fix release skill to bump version in all config files
+### Changed
+- Cluster lines by sender instead of domain
