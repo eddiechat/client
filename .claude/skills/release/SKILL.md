@@ -88,14 +88,21 @@ Create a new release by bumping the version, generating a changelog, and pushing
     - Fix 1
     ```
 
-### 5. Commit and Push Changes
+### 5. Update Version Numbers
 
-- Stage both files: `git add CHANGELOG.md RELEASE_NOTES.txt`
+Update the version number (without `v` prefix) in all three files:
+- `src-tauri/Cargo.toml` — the `version` field under `[package]`
+- `src-tauri/tauri.conf.json` — the top-level `"version"` field
+- `package.json` — the top-level `"version"` field
+
+### 6. Commit and Push Changes
+
+- Stage all changed files: `git add CHANGELOG.md RELEASE_NOTES.txt src-tauri/Cargo.toml src-tauri/tauri.conf.json package.json`
 - Commit with message: `Update CHANGELOG for <version>`
 - Push to origin: `git push origin main` (or current branch)
 - Confirm the commit was pushed successfully
 
-### 6. Create and Push Tag
+### 7. Create and Push Tag
 
 - Create the git tag: `git tag <version>`
 - Push the tag to origin: `git push origin <version>`
