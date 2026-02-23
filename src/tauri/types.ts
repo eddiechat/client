@@ -27,14 +27,14 @@ export type Conversation = {
 export type Cluster = {
   id: string;
   name: string;
+  from_name: string | null;
   message_count: number;
-  thread_count: number;
   unread_count: number;
   keywords: string;
   last_activity: number;
   account_id: string;
   is_join: boolean;
-  domains: string; // JSON array of domain strings
+  domains: string; // JSON array of sender email strings
 };
 
 export type Thread = {

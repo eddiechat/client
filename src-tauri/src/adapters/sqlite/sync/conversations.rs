@@ -376,28 +376,28 @@ pub fn fetch_conversations(
 pub struct Cluster {
     pub id: String,
     pub name: String,
+    pub from_name: Option<String>,
     pub message_count: i32,
-    pub thread_count: i32,
     pub unread_count: i32,
     pub keywords: String,
     pub last_activity: i64,
     pub account_id: String,
     pub is_join: bool,
-    pub domains: String, // JSON array of domains
+    pub domains: String, // JSON array of sender emails
 }
 pub fn fetch_clusters(
     pool: &DbPool,
     account_id: &str,
 ) -> Result<Vec<Cluster>, EddieError> {
     let conn = pool.get()?;
+    let sender_names = name_lookup(pool, account_id)?;
 
-    // 1. Raw per-domain clusters
+    // 1. Raw per-sender clusters
     let mut stmt = conn
         .prepare(
             "SELECT
-                    SUBSTR(from_address, INSTR(from_address, '@') + 1) AS domain,
+                    from_address,
                     COUNT(*) AS message_count,
-                    COUNT(DISTINCT thread_id) AS thread_count,
                     SUM(CASE WHEN NOT EXISTS (
                         SELECT 1 FROM json_each(imap_flags) WHERE value = 'Seen'
                     ) THEN 1 ELSE 0 END) AS unread_count,
@@ -405,15 +405,13 @@ pub fn fetch_clusters(
                     account_id
                 FROM messages
                 WHERE account_id = ?1
-                  AND INSTR(from_address, '@') > 0
-                GROUP BY domain
+                GROUP BY from_address
                 ORDER BY last_activity DESC;",
         )?;
 
     struct RawCluster {
-        domain: String,
+        sender: String,
         message_count: i32,
-        thread_count: i32,
         unread_count: i32,
         last_activity: i64,
         account_id: String,
@@ -422,26 +420,25 @@ pub fn fetch_clusters(
     let raw: Vec<RawCluster> = stmt
         .query_map(params![account_id], |row| {
             Ok(RawCluster {
-                domain: row.get(0)?,
+                sender: row.get(0)?,
                 message_count: row.get(1)?,
-                thread_count: row.get(2)?,
-                unread_count: row.get(3)?,
-                last_activity: row.get(4)?,
-                account_id: row.get(5)?,
+                unread_count: row.get(2)?,
+                last_activity: row.get(3)?,
+                account_id: row.get(4)?,
             })
         })?
         .filter_map(|r| r.ok())
         .collect();
 
-    // 2. Get domain → group_id mapping
-    let domain_to_group = super::line_groups::get_domain_to_group(pool, account_id)?;
+    // 2. Get sender → group_id mapping
+    let sender_to_group = super::line_groups::get_domain_to_group(pool, account_id)?;
 
-    // 3. Merge joined domains, keep singles as-is
+    // 3. Merge joined senders, keep singles as-is
     let mut join_groups: HashMap<String, Vec<&RawCluster>> = HashMap::new();
     let mut singles: Vec<&RawCluster> = Vec::new();
 
     for rc in &raw {
-        if let Some(group_id) = domain_to_group.get(&rc.domain) {
+        if let Some(group_id) = sender_to_group.get(&rc.sender) {
             join_groups.entry(group_id.clone()).or_default().push(rc);
         } else {
             singles.push(rc);
@@ -452,38 +449,40 @@ pub fn fetch_clusters(
 
     // Joined groups — group_id is the user-chosen name
     for (group_id, members) in &join_groups {
-        let mut domains: Vec<&str> = members.iter().map(|m| m.domain.as_str()).collect();
-        domains.sort();
-        let domains_json = serde_json::to_string(&domains).unwrap_or_else(|_| "[]".to_string());
+        let mut senders: Vec<&str> = members.iter().map(|m| m.sender.as_str()).collect();
+        senders.sort();
+        let senders_json = serde_json::to_string(&senders).unwrap_or_else(|_| "[]".to_string());
 
         clusters.push(Cluster {
             id: group_id.clone(),
             name: group_id.clone(),
+            from_name: None,
             message_count: members.iter().map(|m| m.message_count).sum(),
-            thread_count: members.iter().map(|m| m.thread_count).sum(),
             unread_count: members.iter().map(|m| m.unread_count).sum(),
             keywords: "[]".to_string(),
             last_activity: members.iter().map(|m| m.last_activity).max().unwrap_or(0),
             account_id: members[0].account_id.clone(),
             is_join: true,
-            domains: domains_json,
+            domains: senders_json,
         });
     }
 
     // Singles
     for rc in &singles {
-        let domains_json = serde_json::to_string(&[&rc.domain]).unwrap_or_else(|_| "[]".to_string());
+        let display_name = sender_names.get(&rc.sender.to_lowercase()).cloned();
+        let name = display_name.clone().unwrap_or_else(|| rc.sender.clone());
+        let senders_json = serde_json::to_string(&[&rc.sender]).unwrap_or_else(|_| "[]".to_string());
         clusters.push(Cluster {
-            id: rc.domain.clone(),
-            name: rc.domain.clone(),
+            id: rc.sender.clone(),
+            name,
+            from_name: display_name,
             message_count: rc.message_count,
-            thread_count: rc.thread_count,
             unread_count: rc.unread_count,
             keywords: "[]".to_string(),
             last_activity: rc.last_activity,
             account_id: rc.account_id.clone(),
             is_join: false,
-            domains: domains_json,
+            domains: senders_json,
         });
     }
 
@@ -510,26 +509,26 @@ pub fn fetch_cluster_threads(
     account_id: &str,
     cluster_id: &str,
 ) -> Result<Vec<Thread>, EddieError> {
-    // Resolve domains for this cluster
-    let join_domains = super::line_groups::get_domains_for_group(pool, account_id, cluster_id)?;
-    let domains: Vec<String> = if join_domains.is_empty() {
+    // Resolve senders for this cluster
+    let join_senders = super::line_groups::get_domains_for_group(pool, account_id, cluster_id)?;
+    let senders: Vec<String> = if join_senders.is_empty() {
         vec![cluster_id.to_string()]
     } else {
-        join_domains
+        join_senders
     };
 
     let conn = pool.get()?;
 
-    let placeholders: Vec<String> = domains.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
+    let placeholders: Vec<String> = senders.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
     let in_clause = placeholders.join(", ");
 
-    // Query all messages for the cluster domains, ordered for processing
+    // Query all messages for the cluster senders, ordered for processing
     let query = format!(
         "SELECT thread_id, subject, from_name, from_address, date, imap_flags, distilled_text
          FROM messages
          WHERE account_id = ?1
            AND thread_id IS NOT NULL
-           AND SUBSTR(from_address, INSTR(from_address, '@') + 1) IN ({})
+           AND from_address IN ({})
          ORDER BY thread_id, date ASC",
         in_clause
     );
@@ -537,8 +536,8 @@ pub fn fetch_cluster_threads(
     let mut stmt = conn.prepare(&query)?;
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     param_values.push(Box::new(account_id.to_string()));
-    for d in &domains {
-        param_values.push(Box::new(d.clone()));
+    for s in &senders {
+        param_values.push(Box::new(s.clone()));
     }
     let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
 

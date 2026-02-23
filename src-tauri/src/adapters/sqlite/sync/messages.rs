@@ -328,25 +328,25 @@ pub fn fetch_cluster_messages(
 ) -> Result<Vec<Message>, EddieError> {
     let self_emails = entities::get_self_emails(pool, account_id)?;
     // Check if cluster_id is a join group
-    let join_domains = super::line_groups::get_domains_for_group(pool, account_id, cluster_id)?;
+    let join_senders = super::line_groups::get_domains_for_group(pool, account_id, cluster_id)?;
 
-    if join_domains.is_empty() {
-        // Single domain — use cluster_id as domain
-        fetch_messages_by_domains(pool, account_id, &[cluster_id.to_string()], &self_emails)
+    if join_senders.is_empty() {
+        // Single sender — use cluster_id as sender email
+        fetch_messages_by_senders(pool, account_id, &[cluster_id.to_string()], &self_emails)
     } else {
-        fetch_messages_by_domains(pool, account_id, &join_domains, &self_emails)
+        fetch_messages_by_senders(pool, account_id, &join_senders, &self_emails)
     }
 }
 
-fn fetch_messages_by_domains(
+fn fetch_messages_by_senders(
     pool: &DbPool,
     account_id: &str,
-    domains: &[String],
+    senders: &[String],
     self_emails: &[String],
 ) -> Result<Vec<Message>, EddieError> {
     let conn = pool.get()?;
 
-    let placeholders: Vec<String> = domains.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
+    let placeholders: Vec<String> = senders.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
     let in_clause = placeholders.join(", ");
 
     let query = format!(
@@ -355,7 +355,7 @@ fn fetch_messages_by_domains(
                 gmail_labels, imap_folder
          FROM messages
          WHERE account_id = ?1
-           AND SUBSTR(from_address, INSTR(from_address, '@') + 1) IN ({})
+           AND from_address IN ({})
          ORDER BY date DESC",
         in_clause
     );
@@ -363,8 +363,8 @@ fn fetch_messages_by_domains(
     let mut stmt = conn.prepare(&query)?;
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     param_values.push(Box::new(account_id.to_string()));
-    for d in domains {
-        param_values.push(Box::new(d.clone()));
+    for s in senders {
+        param_values.push(Box::new(s.clone()));
     }
     let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
 

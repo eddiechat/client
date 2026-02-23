@@ -204,5 +204,19 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
     // Add thread_id column to messages (computed during rebuild_conversations)
     let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN thread_id TEXT;");
 
+    // Migration: clear domain-based line_groups (Lines now group by sender, not domain).
+    // The 'domain' column is reused to store sender emails.
+    let needs_lines_migration: bool = conn.query_row(
+        "SELECT COUNT(*) = 0 FROM settings WHERE key = 'lines_v2_migrated'",
+        [], |row| row.get(0),
+    ).unwrap_or(true);
+    if needs_lines_migration {
+        let _ = conn.execute("DELETE FROM line_groups", []);
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('lines_v2_migrated', '1', 0)",
+            [],
+        );
+    }
+
     Ok(())
 }

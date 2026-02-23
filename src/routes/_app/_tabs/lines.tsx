@@ -1,14 +1,14 @@
 import { useState, useRef, useCallback } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useData, useTabSearch, useTheme } from "../../../shared/context";
-import { fetchClusterThreads, groupDomains, ungroupDomains } from "../../../tauri";
-import type { Thread } from "../../../tauri";
+import { fetchClusterMessages, groupDomains, ungroupDomains } from "../../../tauri";
+import type { Message } from "../../../tauri";
 import {
   relTime,
   lineEmoji,
   lineColor,
+  dedup,
 } from "../../../shared/lib";
-import { Avatar } from "../../../shared/components";
 import type { Cluster } from "../../../tauri";
 import { useAuth } from "../../../shared/context";
 
@@ -26,7 +26,8 @@ function LinesList() {
   const { accountId } = useAuth();
 
   const [expandedLines, setExpandedLines] = useState<Set<string>>(new Set());
-  const [lineThreads, setLineThreads] = useState<Record<string, Thread[]>>({});
+  const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null);
+  const [lineMessages, setLineMessages] = useState<Record<string, Message[]>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showNamePopup, setShowNamePopup] = useState(false);
   const [groupName, setGroupName] = useState("");
@@ -53,10 +54,10 @@ function LinesList() {
       next.delete(c.id);
     } else {
       next.add(c.id);
-      if (!lineThreads[c.id]) {
+      if (!lineMessages[c.id]) {
         try {
-          const threads = await fetchClusterThreads(c.account_id, c.id);
-          setLineThreads((prev) => ({ ...prev, [c.id]: threads }));
+          const msgs = await fetchClusterMessages(c.account_id, c.id);
+          setLineMessages((prev) => ({ ...prev, [c.id]: msgs }));
         } catch {
           /* ignore */
         }
@@ -82,7 +83,7 @@ function LinesList() {
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
       toggleSelection(c.id);
-      // For grouped clusters, toggle domain reveal
+      // For grouped clusters, toggle sender reveal
       if (c.is_join) {
         setRevealedIds((prev) => {
           const next = new Set(prev);
@@ -122,10 +123,10 @@ function LinesList() {
 
   const handleGroup = useCallback(async (name: string) => {
     if (!accountId || selectedClusters.length < 2 || !name.trim()) return;
-    const allDomains = selectedClusters.flatMap((c) => JSON.parse(c.domains) as string[]);
-    await groupDomains(accountId, name.trim(), allDomains);
+    const allSenders = selectedClusters.flatMap((c) => JSON.parse(c.domains) as string[]);
+    await groupDomains(accountId, name.trim(), allSenders);
     setSelectedIds(new Set());
-    setLineThreads({});
+    setLineMessages({});
     setExpandedLines(new Set());
     setRevealedIds(new Set());
     await refresh(accountId);
@@ -135,7 +136,7 @@ function LinesList() {
     if (!accountId || selectedClusters.length !== 1) return;
     await ungroupDomains(accountId, selectedClusters[0].id);
     setSelectedIds(new Set());
-    setLineThreads({});
+    setLineMessages({});
     setExpandedLines(new Set());
     setRevealedIds(new Set());
     await refresh(accountId);
@@ -229,13 +230,14 @@ function LinesList() {
           const isExpanded = expandedLines.has(c.id);
           const isSelected = selectedIds.has(c.id);
           const isRevealed = revealedIds.has(c.id);
-          const threads = lineThreads[c.id] || [];
-          const threadCount = threads.length > 0 ? threads.length : c.thread_count;
-          const previewThreads = threads.slice(0, 3);
+          const msgs = lineMessages[c.id] || [];
+          const uniqueMsgs = dedup([...msgs]).sort((a, b) => b.date - a.date);
+          const msgCount = msgs.length > 0 ? uniqueMsgs.length : c.message_count;
+          const previewMsgs = uniqueMsgs.slice(0, 3);
 
-          // For grouped clusters when long-pressed, show domain list instead of thread count
-          const domainList = c.is_join ? (JSON.parse(c.domains) as string[]).join(", ") : "";
-          const subtitle = c.is_join && isRevealed ? domainList : `${threadCount} threads`;
+          // For grouped clusters when long-pressed, show sender list instead of message count
+          const senderList = c.is_join ? (JSON.parse(c.domains) as string[]).join(", ") : "";
+          const subtitle = c.is_join && isRevealed ? senderList : `${msgCount} messages`;
 
           return (
             <div key={c.id} className="border-b border-divider">
@@ -282,46 +284,35 @@ function LinesList() {
 
               {isExpanded && (
                 <div className="bg-bg-secondary">
-                  {previewThreads.map((t) => {
-                    const sender = t.from_name || t.from_address;
-                    const hasUnread = t.unread_count > 0;
+                  {previewMsgs.map((m) => {
+                    const isMsgExpanded = expandedMsgId === m.id;
+                    const body = m.distilled_text || m.body_text || "";
                     return (
                       <div
-                        key={t.thread_id}
-                        className="flex items-start gap-2.5 py-2.5 px-5 pl-[70px] border-t border-divider cursor-pointer"
-                        onClick={() => navigate({ to: "/cluster/$id", params: { id: c.id } })}
+                        key={m.id}
+                        className="py-2.5 px-5 pl-[70px] border-t border-divider cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setExpandedMsgId(isMsgExpanded ? null : m.id); }}
                       >
-                        <Avatar name={sender} email={t.from_address} size={8} fontSize="text-[11px]" className="shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              {hasUnread && <div className="w-1.5 h-1.5 rounded-full bg-accent-green shrink-0" />}
-                              <span className={`text-[14px] truncate ${hasUnread ? "font-bold text-text-primary" : "font-semibold text-text-secondary"}`}>{sender}</span>
-                            </div>
-                            <span className={`text-[11px] shrink-0 ml-2 ${hasUnread ? "text-accent-green font-semibold" : "text-text-dim"}`}>{relTime(t.last_activity)}</span>
-                          </div>
-                          <div className="flex justify-between items-center gap-2 mt-px">
-                            <span className={`text-[13px] truncate flex-1 ${hasUnread ? "text-text-primary" : "text-text-secondary"}`}>
-                              {t.subject || "(no subject)"}
-                            </span>
-                            {t.message_count > 1 && (
-                              <span className="text-[11px] text-text-dim shrink-0">({t.message_count})</span>
-                            )}
-                          </div>
-                          {t.preview && (
-                            <div className="text-[12px] text-text-muted mt-0.5 truncate">{t.preview}</div>
-                          )}
+                        <div className="flex justify-between">
+                          <span className="font-semibold text-[14px] text-text-primary truncate">{m.subject || "(no subject)"}</span>
+                          <span className="text-[11px] text-text-dim shrink-0 ml-2">{relTime(m.date)}</span>
                         </div>
+                        <div className="text-[13px] text-text-secondary mt-px truncate">{body.slice(0, 80) || ""}</div>
+                        {isMsgExpanded && body && (
+                          <div className="mt-2 px-3 py-2.5 bg-bg-tertiary rounded-lg text-[13px] leading-relaxed text-text-muted border border-divider whitespace-pre-wrap break-words">
+                            {body}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
-                  {threadCount > 3 && (
+                  {msgCount > 3 && (
                     <div className="py-2 px-5 pl-[70px]">
                       <button
                         className="text-[12px] text-accent-amber font-semibold cursor-pointer bg-transparent border-none"
                         onClick={(e) => { e.stopPropagation(); navigate({ to: "/cluster/$id", params: { id: c.id } }); }}
                       >
-                        View all {threadCount} threads {"\u2192"}
+                        View all {msgCount} messages {"\u2192"}
                       </button>
                     </div>
                   )}
