@@ -1,2 +1,7 @@
+### Changed
+- Run incremental sync on every tick so new mail arrives during onboarding
+- Disable the connection history task
+- Update docs
+
 ### Fixed
-- Error screen now shows "Go back" and "Go home" buttons so users are never stuck on a blank screen
+- Fix release skill to bump version in all config files
