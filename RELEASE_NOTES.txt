@@ -1,5 +1,3 @@
 ### Added
-- Spec for skills processing
-
-### Changed
-- Cluster lines by sender instead of domain
+- Show full message content with HTML rendering
+- Skills reintroduced
