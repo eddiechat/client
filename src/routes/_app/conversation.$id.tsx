@@ -12,7 +12,7 @@ import {
   fmtTime,
   avatarBg,
 } from "../../shared/lib";
-import { Avatar } from "../../shared/components";
+import { Avatar, MessageDetail } from "../../shared/components";
 
 export const Route = createFileRoute("/_app/conversation/$id")({
   component: ConversationView,
@@ -27,13 +27,17 @@ function ConversationView() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const savedScrollRef = useRef<number>(0);
 
   const conversation = conversations.find((c) => c.id === id);
 
   useEffect(() => {
     if (!conversation) return;
     setMessagesLoading(true);
+    setSelectedMessage(null);
     fetchConversationMessages(conversation.account_id, conversation.id)
       .then(setMessages)
       .catch(() => {})
@@ -46,11 +50,27 @@ function ConversationView() {
     }
   }, [messagesLoading, messages]);
 
+  // Restore scroll position when returning from detail view
+  useEffect(() => {
+    if (!selectedMessage && scrollRef.current && savedScrollRef.current > 0) {
+      scrollRef.current.scrollTop = savedScrollRef.current;
+    }
+  }, [selectedMessage]);
+
   if (!conversation) {
     return (
       <div className="flex flex-col h-screen bg-bg-primary items-center justify-center text-text-muted">
         Conversation not found
       </div>
+    );
+  }
+
+  if (selectedMessage) {
+    return (
+      <MessageDetail
+        message={selectedMessage}
+        onBack={() => setSelectedMessage(null)}
+      />
     );
   }
 
@@ -68,6 +88,13 @@ function ConversationView() {
       ? new Date(Math.min(...messages.map((m) => m.date))).getFullYear()
       : null;
 
+  const handleSelectMessage = (m: Message) => {
+    if (scrollRef.current) {
+      savedScrollRef.current = scrollRef.current.scrollTop;
+    }
+    setSelectedMessage(m);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
       {/* Header */}
@@ -83,7 +110,7 @@ function ConversationView() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-1">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-1">
         <div className="self-center bg-bg-tertiary text-text-muted text-[13px] px-4 py-1 rounded-xl mb-4 border border-divider">
           Derived from {totalCount} emails{oldestYear ? ` since ${oldestYear}` : ""}
         </div>
@@ -111,7 +138,11 @@ function ConversationView() {
               } catch { return []; }
             })() : [];
             return (
-              <div key={m.id} className={`flex flex-col mb-0.5 ${isSent ? "items-end" : "items-start"}`}>
+              <div
+                key={m.id}
+                className={`flex flex-col mb-0.5 ${isSent ? "items-end" : "items-start"} cursor-pointer`}
+                onClick={() => handleSelectMessage(m)}
+              >
                 {i > 0 && year !== prevYear && (
                   <div className="self-center text-text-dim text-[13px] px-4 py-1 rounded-xl my-3 border border-text-dim">
                     {year}

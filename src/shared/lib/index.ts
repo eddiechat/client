@@ -17,5 +17,7 @@ export {
   LINE_COLORS,
   lineEmoji,
   lineColor,
+  parseAddresses,
+  hasAddresses,
 } from "./helpers";
 export { useGravatar } from "./gravatar";

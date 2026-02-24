@@ -171,3 +171,18 @@ export function lineEmoji(name: string): string {
 export function lineColor(name: string): string {
   return LINE_COLORS[hash(name) % LINE_COLORS.length];
 }
+
+export function parseAddresses(json: string): string {
+  try {
+    const arr = JSON.parse(json) as string[];
+    if (Array.isArray(arr) && arr.length > 0) return arr.join(", ");
+  } catch { /* ignore */ }
+  return json;
+}
+
+export function hasAddresses(json: string): boolean {
+  try {
+    const arr = JSON.parse(json) as string[];
+    return Array.isArray(arr) && arr.length > 0;
+  } catch { return false; }
+}

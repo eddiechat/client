@@ -9,3 +9,4 @@ export {
 export { OnboardingScreen } from "./OnboardingScreen";
 export { Avatar } from "./Avatar";
 export { ErrorFallback } from "./ErrorFallback";
+export { MessageDetail } from "./MessageDetail";

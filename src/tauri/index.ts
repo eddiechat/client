@@ -1,4 +1,4 @@
-export { connectAccount, fetchConversations, fetchConversationMessages, fetchClusters, fetchClusterMessages, fetchClusterThreads, fetchThreadMessages, syncNow, reclassify, listSkills, getSkill, createSkill, updateSkill, toggleSkill, deleteSkill, groupDomains, ungroupDomains, getSetting, setSetting, getOllamaModels, fetchRecentMessages, ollamaComplete, getOnboardingStatus, discoverEmailConfig, getExistingAccount, moveToLines, getAppVersion } from "./commands";
+export { connectAccount, fetchConversations, fetchConversationMessages, fetchClusters, fetchClusterMessages, fetchClusterThreads, fetchThreadMessages, syncNow, reclassify, listSkills, getSkill, createSkill, updateSkill, toggleSkill, deleteSkill, groupDomains, ungroupDomains, getSetting, setSetting, getOllamaModels, fetchRecentMessages, ollamaComplete, getOnboardingStatus, discoverEmailConfig, getExistingAccount, moveToLines, getAppVersion, fetchMessageHtml } from "./commands";
 export { onSyncStatus, onConversationsUpdated, onOnboardingComplete } from "./events";
 export type {
   SyncStatus,

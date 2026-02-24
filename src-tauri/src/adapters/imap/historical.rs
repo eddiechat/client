@@ -251,6 +251,46 @@ pub fn find_mime_part<'a>(
     }
 }
 
+/// Find all inline image parts in a BODYSTRUCTURE tree.
+/// Returns Vec<(part_path, content_id, mime_type, encoding)>.
+pub fn find_inline_images(
+    body: &BodyStructure<'_>,
+    prefix: &[u32],
+) -> Vec<(Vec<u32>, String, String, String)> {
+    let mut results = Vec::new();
+
+    match body {
+        BodyStructure::Basic { common, other, .. } => {
+            let ty = common.ty.ty.to_lowercase();
+            if ty == "image" {
+                if let Some(content_id) = &other.id {
+                    let cid = content_id.trim_matches(|c| c == '<' || c == '>').to_string();
+                    if !cid.is_empty() {
+                        let mime = format!("{}/{}", ty, common.ty.subtype.to_lowercase());
+                        let encoding = encoding_to_string(&other.transfer_encoding);
+                        let path = if prefix.is_empty() { vec![1] } else { prefix.to_vec() };
+                        results.push((path, cid, mime, encoding));
+                    }
+                }
+            }
+        }
+        BodyStructure::Multipart { bodies, .. } => {
+            for (i, part) in bodies.iter().enumerate() {
+                let mut part_path = prefix.to_vec();
+                part_path.push((i + 1) as u32);
+                results.append(&mut find_inline_images(part, &part_path));
+            }
+        }
+        BodyStructure::Message { body, .. } => {
+            let inner = if prefix.is_empty() { vec![1] } else { prefix.to_vec() };
+            results.append(&mut find_inline_images(body, &inner));
+        }
+        _ => {}
+    }
+
+    results
+}
+
 pub fn encoding_to_string(enc: &ContentEncoding) -> String {
     match enc {
         ContentEncoding::SevenBit => "7bit".to_string(),

@@ -632,6 +632,52 @@ pub fn update_flags_and_labels_batch(
     Ok(count)
 }
 
+pub struct MessageImapInfo {
+    pub account_id: String,
+    pub imap_uid: u32,
+    pub imap_folder: String,
+    pub body_html: Option<String>,
+}
+
+pub fn get_message_imap_info(pool: &DbPool, message_id: &str) -> Result<MessageImapInfo, EddieError> {
+    let conn = pool.get()?;
+    conn.query_row(
+        "SELECT account_id, imap_uid, imap_folder, body_html FROM messages WHERE id = ?1",
+        params![message_id],
+        |row| {
+            Ok(MessageImapInfo {
+                account_id: row.get(0)?,
+                imap_uid: row.get(1)?,
+                imap_folder: row.get(2)?,
+                body_html: row.get(3)?,
+            })
+        },
+    ).map_err(|e| EddieError::Database(format!("Message not found: {}", e)))
+}
+
+pub fn update_body_html_by_id(pool: &DbPool, message_id: &str, html: &str) -> Result<(), EddieError> {
+    let conn = pool.get()?;
+    conn.execute(
+        "UPDATE messages SET body_html = ?1 WHERE id = ?2",
+        params![html, message_id],
+    )?;
+    Ok(())
+}
+
+pub fn update_body_html_by_uid(
+    pool: &DbPool,
+    account_id: &str,
+    uid: u32,
+    html: &str,
+) -> Result<(), EddieError> {
+    let conn = pool.get()?;
+    conn.execute(
+        "UPDATE messages SET body_html = ?1 WHERE account_id = ?2 AND imap_uid = ?3",
+        params![html, account_id, uid as i64],
+    )?;
+    Ok(())
+}
+
 pub fn count_messages(pool: &DbPool, account_id: &str) -> Result<usize, EddieError> {
     let conn = pool.get()?;
     let count: i64 = conn.query_row(

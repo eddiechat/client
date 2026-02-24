@@ -73,6 +73,9 @@ pub async fn run_historical_fetch(
                 .map_err(|e| e.to_string())?;
 
             for (uid, text, is_html) in &bodies {
+                if *is_html {
+                    let _ = sqlite::messages::update_body_html_by_uid(pool, account_id, *uid, text);
+                }
                 let clean_text = if *is_html {
                     html2text::from_read(text.as_bytes(), 80)
                         .unwrap_or_else(|_| text.clone())

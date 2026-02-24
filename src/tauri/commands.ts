@@ -163,3 +163,9 @@ export async function moveToLines(
 export async function getAppVersion(): Promise<string> {
   return invoke<string>("get_app_version");
 }
+
+export async function fetchMessageHtml(
+  messageId: string
+): Promise<string | null> {
+  return invoke<string | null>("fetch_message_html", { messageId });
+}
