@@ -30,10 +30,10 @@ We believe that an open and shared repository of agent skills, and the ability f
 │     React Frontend      │           Rust Backend            │
 │     (TypeScript)        │            (Tauri v2)             │
 ├─────────────────────────┼───────────────────────────────────┤
-│  • Components           │  • EmailBackend Service           │
-│  • Hooks                │  • Command Handlers               │
-│  • State Management     │  • Configuration System           │
-│  • Tauri IPC Client     │  • Type Serialization             │
+│  • File-based Routing   │  • Sync Engine (worker loop)      │
+│  • Context Providers    │  • Command Handlers               │
+│  • Tauri IPC Client     │  • IMAP/SMTP Adapters             │
+│  • Skills UI            │  • SQLite Cache + Classification  │
 └─────────────────────────┴───────────────────────────────────┘
                                │
                                ▼
@@ -48,73 +48,60 @@ We believe that an open and shared repository of agent skills, and the ability f
 | Layer | Technology | Purpose |
 |-------|------------|---------|
 | **Frontend** | React 19 + TypeScript | UI components and state management |
+| **Styling** | Tailwind CSS 4 | Utility-first CSS |
+| **Routing** | TanStack Router | File-based routing with hash history |
 | **Build Tool** | Vite 7 | Fast development and bundling |
 | **Client Runtime** | Tauri v2 | Cross-platform native shell |
 | **Backend** | Rust (Edition 2021) | Core email operations |
 | **Async Runtime** | Tokio | Non-blocking I/O |
-| **Email Protocol** | email-lib (pimalaya) | IMAP/SMTP implementation |
-| **Config** | TOML | Human-readable configuration |
-
-### Vendored Dependencies
-
-Eddie uses a vendored version of the [pimalaya/core](https://github.com/pimalaya/core) email library to enable custom patches while maintaining easy upstream tracking:
-
-**Location**: `src-tauri/vendor/pimalaya-core/`
-
-**Method**: Git subtree (vendored commit: `c36dd7c5`)
-
-**Rationale**: The upstream email-lib didn't extract CC (carbon copy) recipients from IMAP envelope responses. We vendor the library to patch this functionality while maintaining the ability to pull and merge upstream updates.
-
-**Custom Patches**:
-- **CC Field Support**: Adds CC field extraction to the `Envelope` struct for both IMAP envelope parsing and full message parsing
-- Detailed patch documentation in [`src-tauri/vendor/patches/`](src-tauri/vendor/patches/)
-
-**Updating from Upstream**:
-```bash
-git subtree pull --prefix=src-tauri/vendor/pimalaya-core \
-  https://github.com/pimalaya/core.git master --squash
-```
-
-See [`src-tauri/vendor/README.md`](src-tauri/vendor/README.md) for complete vendoring documentation and maintenance workflow.
+| **Email Protocol** | async-imap + mailparse | IMAP protocol and message parsing |
+| **TLS** | tokio-rustls | Secure connections |
+| **Database** | SQLite (rusqlite + r2d2) | Local email cache and settings |
+| **AI** | Ollama (optional) | Local LLM for skill classification |
 
 ### Data Flow
 
 ```
-User Action → React Component → Tauri invoke() → Rust Command Handler
-                                                         │
-                                                         ▼
-                                                  EmailBackend
-                                                         │
-                                                         ▼
-                                              IMAP/SMTP Server
-                                                         │
-                                                         ▼
-                                              Response (JSON)
-                                                         │
-User Interface ← React State Update ← Tauri Response ←───┘
+User Action → React Route → Tauri invoke() → Rust Command Handler
+                                                      │
+                                                      ▼
+                                              Services / Adapters
+                                                      │
+                                          ┌───────────┴───────────┐
+                                          ▼                       ▼
+                                    SQLite Cache          IMAP/SMTP Server
+                                          │
+                                          ▼
+                                  Tauri Event Emission
+                                          │
+User Interface ← React Context Update ←───┘
 ```
 
 ### Core Components
 
 #### Frontend (`src/`)
 
-The frontend follows a **feature-based architecture** with clear separation of concerns:
+The frontend uses **file-based routing** with TanStack Router and React Context for state:
 
 | Directory | Purpose |
 |-----------|---------|
-| `features/` | Feature modules organized by domain (accounts, conversations) |
-| `shared/` | Reusable components, hooks, and utilities across features |
+| `routes/` | File-based route definitions (TanStack Router conventions) |
+| `shared/` | Reusable components, context providers, and utility functions |
+| `skills/` | Skill UI components (SkillsHub, SkillStudio) |
 | `tauri/` | Centralized Tauri communication layer (commands, events, types) |
-| `lib/` | Static data and external integrations (emoji data) |
 
-##### Feature Modules (`features/`)
+##### Routes (`routes/`)
 
-Each feature module is self-contained with its own components, hooks, and utilities:
-
-| Module | Contents |
-|--------|----------|
-| `accounts/` | Account management (SidebarHeader, AccountSetupWizard, AccountConfigModal, useAccounts hook, AccountContext) |
-| `conversations/` | Email conversations (ChatMessages, ConversationView, useConversations hook, useConversationMessages hook) |
+Route files follow TanStack Router conventions:
+- `__root.tsx` — Root layout
+- `_app.tsx` — Auth guard (`beforeLoad`)
+- `_app/_tabs.tsx` — Tab layout (header, tabs, account drawer)
+- `_app/_tabs/points.tsx`, `circles.tsx`, `lines.tsx` — Tab routes
+- `_app/conversation.$id.tsx` — Conversation detail
+- `_app/cluster.$id.tsx` — Cluster detail
+- `_app/settings.tsx` — Settings screen
+- `_app/skills.hub.tsx`, `skills.studio.tsx` — Skills routes
+- `login.tsx`, `onboarding.tsx` — Unauthenticated routes
 
 ##### Tauri Layer (`tauri/`)
 
@@ -123,25 +110,27 @@ All Tauri communication is centralized for type safety and maintainability:
 | File | Purpose |
 |------|---------|
 | `commands.ts` | Type-safe wrappers for all `invoke()` calls to Rust backend |
-| `events.ts` | Event listener subscriptions (sync events, status changes) |
+| `events.ts` | Event listener subscriptions (sync status, conversations updated) |
 | `types.ts` | TypeScript types mirroring Rust backend types |
 | `index.ts` | Barrel exports for clean imports |
 
-##### Shared Utilities (`shared/`)
+##### Shared (`shared/`)
 
 | Directory | Purpose |
 |-----------|---------|
-| `components/` | Generic UI components (Avatar, LoadingSpinner, EmptyState) |
-| `lib/` | Utility functions (avatar colors, email parsing, date formatting) |
+| `components/` | Generic UI components (Avatar, Icons, ErrorFallback, etc.) |
+| `context/` | Global state providers (AuthContext, DataContext, SearchContext, ThemeContext) |
+| `lib/` | Utility functions (helpers, gravatar) |
 
 #### Backend (`src-tauri/src/`)
 
 | Module | Purpose |
 |--------|---------|
-| `backend/` | EmailBackend service - IMAP/SMTP operations |
-| `commands/` | Tauri command handlers exposed to frontend |
-| `config/` | TOML configuration management and account settings |
-| `types/` | Rust structs for serialization across IPC boundary |
+| `adapters/` | External service bridges — IMAP protocol, SQLite persistence, Ollama AI |
+| `commands/` | Thin Tauri command wrappers exposed to frontend |
+| `services/` | Business logic — sync engine (worker, helpers, tasks), Ollama, logger |
+| `autodiscovery/` | Email provider auto-configuration (autoconfig, DNS, probing) |
+| `error.rs` | `EddieError` enum for all error returns |
 
 ---
 
@@ -150,95 +139,105 @@ All Tauri communication is centralized for type safety and maintainability:
 ```
 eddie.chat/
 ├── src/                              # React/TypeScript frontend
-│   ├── App.tsx                       # Main application component
-│   ├── App.css                       # Global styles (dark theme)
-│   ├── main.tsx                      # React entry point
+│   ├── main.tsx                      # Entry point (providers + router)
+│   ├── router.tsx                    # TanStack Router config (hash history)
 │   │
-│   ├── features/                     # Feature modules (domain-based)
-│   │   ├── accounts/                 # Account management feature
-│   │   │   ├── components/           # Account-related UI
-│   │   │   │   ├── SidebarHeader.tsx
-│   │   │   │   ├── AccountSetupWizard.tsx
-│   │   │   │   ├── AccountConfigModal.tsx
-│   │   │   │   └── index.ts
-│   │   │   ├── hooks/
-│   │   │   │   ├── useAccounts.ts    # Account state management
-│   │   │   │   └── index.ts
-│   │   │   ├── context/
-│   │   │   │   ├── AccountContext.tsx # Global account state
-│   │   │   │   └── index.ts
-│   │   │   └── index.ts              # Barrel exports
-│   │   │
-│   │   ├── conversations/            # Conversations feature
-│   │   │   ├── components/           # Conversation UI
-│   │   │   │   ├── ChatMessages.tsx  # Conversation list
-│   │   │   │   ├── ChatMessage.tsx   # Single conversation item
-│   │   │   │   ├── ConversationView.tsx # Main chat view
-│   │   │   │   ├── AttachmentList.tsx
-│   │   │   │   ├── EmojiPicker.tsx
-│   │   │   │   ├── GravatarModal.tsx
-│   │   │   │   └── index.ts
-│   │   │   ├── hooks/
-│   │   │   │   ├── useConversations.ts      # Conversation list
-│   │   │   │   ├── useConversationMessages.ts # Messages in conversation
-│   │   │   │   └── index.ts
-│   │   │   ├── utils.ts              # Conversation helpers
-│   │   │   └── index.ts
-│   │   │
-│   │   └── index.ts                  # Feature barrel exports
+│   ├── routes/                       # File-based routing (TanStack Router)
+│   │   ├── __root.tsx                # Root layout
+│   │   ├── login.tsx                 # Login screen
+│   │   ├── onboarding.tsx            # Onboarding screen
+│   │   ├── _app.tsx                  # Auth guard (beforeLoad)
+│   │   ├── _app/_tabs.tsx            # Tab layout
+│   │   ├── _app/_tabs/              # Tab routes
+│   │   │   ├── points.tsx            # Points tab (connections)
+│   │   │   ├── circles.tsx           # Circles tab (clusters)
+│   │   │   └── lines.tsx             # Lines tab (automated)
+│   │   ├── _app/conversation.$id.tsx # Conversation detail
+│   │   ├── _app/cluster.$id.tsx      # Cluster detail
+│   │   ├── _app/settings.tsx         # Settings screen
+│   │   └── _app/skills.*.tsx         # Skills routes
 │   │
 │   ├── shared/                       # Shared utilities & components
 │   │   ├── components/               # Generic UI components
 │   │   │   ├── Avatar.tsx
-│   │   │   ├── LoadingSpinner.tsx
-│   │   │   ├── EmptyState.tsx
+│   │   │   ├── Icons.tsx
+│   │   │   ├── ErrorFallback.tsx
+│   │   │   ├── MessageDetail.tsx
+│   │   │   ├── OnboardingScreen.tsx
+│   │   │   └── index.ts
+│   │   ├── context/                  # Global state providers
+│   │   │   ├── AuthContext.tsx
+│   │   │   ├── DataContext.tsx
+│   │   │   ├── SearchContext.tsx
+│   │   │   ├── ThemeContext.tsx
 │   │   │   └── index.ts
 │   │   ├── lib/                      # Utility functions
-│   │   │   ├── utils.ts              # Avatar, email, date utils
+│   │   │   ├── helpers.ts
+│   │   │   ├── gravatar.ts
 │   │   │   └── index.ts
 │   │   └── index.ts
 │   │
-│   ├── tauri/                        # Tauri integration layer
-│   │   ├── commands.ts               # Type-safe invoke wrappers
-│   │   ├── events.ts                 # Event listener subscriptions
-│   │   ├── types.ts                  # Backend contract types
-│   │   └── index.ts                  # Barrel exports
+│   ├── skills/                       # Skill UI components
+│   │   ├── SkillsHub.tsx
+│   │   ├── SkillStudio.tsx
+│   │   ├── types.ts
+│   │   └── index.ts
 │   │
-│   └── lib/
-│       └── emojiData.ts              # Emoji database
+│   └── tauri/                        # Tauri integration layer
+│       ├── commands.ts               # Type-safe invoke wrappers
+│       ├── events.ts                 # Event listener subscriptions
+│       ├── types.ts                  # Backend contract types
+│       └── index.ts                  # Barrel exports
 │
 ├── src-tauri/                        # Rust backend
 │   ├── src/
-│   │   ├── main.rs                   # Application entry point
-│   │   ├── lib.rs                    # Tauri initialization
-│   │   ├── backend/                  # Email operations
+│   │   ├── main.rs                   # Binary entry point
+│   │   ├── lib.rs                    # Tauri setup, state init, worker spawn
+│   │   ├── error.rs                  # EddieError enum
+│   │   ├── commands/                 # Tauri command handlers
+│   │   │   ├── account.rs            # Account connect/lookup
+│   │   │   ├── conversations.rs      # Conversation & cluster queries
+│   │   │   ├── sync.rs               # Sync control & onboarding status
+│   │   │   ├── classify.rs           # Message reclassification
+│   │   │   ├── discovery.rs          # Email autodiscovery
+│   │   │   ├── skills.rs             # Skill CRUD
+│   │   │   ├── settings.rs           # App settings & Ollama models
+│   │   │   ├── ollama.rs             # Ollama LLM completion
+│   │   │   ├── app.rs                # App metadata (version)
 │   │   │   └── mod.rs
-│   │   ├── commands/                 # IPC command handlers
-│   │   │   ├── accounts.rs
-│   │   │   ├── conversations.rs
-│   │   │   ├── messages.rs
-│   │   │   ├── discovery.rs
-│   │   │   ├── flags.rs
-│   │   │   ├── folders.rs
-│   │   │   ├── sync.rs
+│   │   ├── services/                 # Business logic
+│   │   │   ├── sync/                 # Sync engine
+│   │   │   │   ├── worker.rs         # Tick loop (15s interval)
+│   │   │   │   ├── helpers/          # Processing utilities
+│   │   │   │   └── tasks/            # Onboarding & recurring tasks
+│   │   │   ├── ollama.rs             # Ollama model discovery
+│   │   │   ├── logger.rs             # Structured logging
 │   │   │   └── mod.rs
-│   │   ├── services/                 # Business logic services
-│   │   │   ├── account_service.rs
-│   │   │   ├── message_service.rs
-│   │   │   └── mod.rs
-│   │   ├── state/                    # Application state
-│   │   │   ├── sync_manager.rs
-│   │   │   ├── oauth_state.rs
-│   │   │   └── mod.rs
-│   │   └── types/                    # Data structures
-│   │       ├── mod.rs
-│   │       ├── responses.rs
-│   │       └── error.rs
-│   ├── vendor/                       # Vendored dependencies
-│   │   ├── pimalaya-core/            # email-lib, secret-lib, etc.
-│   │   ├── patches/                  # Patch documentation
-│   │   │   └── 001-envelope-cc-field.md
-│   │   └── README.md                 # Vendoring documentation
+│   │   ├── adapters/                 # External service bridges
+│   │   │   ├── imap/                 # IMAP protocol (async-imap)
+│   │   │   │   ├── connection.rs     # TCP + TLS + LOGIN
+│   │   │   │   ├── envelopes.rs      # Message envelope fetching
+│   │   │   │   ├── folders.rs        # Folder discovery & classification
+│   │   │   │   ├── historical.rs     # Historical message fetch
+│   │   │   │   └── sent_scan.rs      # Sent folder scanning
+│   │   │   ├── sqlite/               # SQLite persistence
+│   │   │   │   └── sync/             # Sync database
+│   │   │   │       ├── db.rs         # Connection pool init
+│   │   │   │       ├── db_schema.rs  # Schema & migrations
+│   │   │   │       ├── messages.rs   # Message CRUD
+│   │   │   │       ├── conversations.rs # Conversation materialization
+│   │   │   │       ├── entities.rs   # Trust network
+│   │   │   │       ├── folder_sync.rs # IMAP sync cursors
+│   │   │   │       ├── skills.rs     # Skill persistence
+│   │   │   │       ├── skill_classify.rs # Skill classification
+│   │   │   │       ├── settings.rs   # App settings
+│   │   │   │       └── onboarding_tasks.rs
+│   │   │   └── ollama/               # Ollama AI adapter
+│   │   └── autodiscovery/            # Email provider detection
+│   │       ├── autoconfig.rs         # Mozilla autoconfig
+│   │       ├── dns.rs                # DNS SRV/MX lookup
+│   │       ├── providers.rs          # Known provider database
+│   │       └── probe.rs              # Server probing
 │   ├── Cargo.toml                    # Rust dependencies
 │   ├── tauri.conf.json               # Tauri configuration
 │   └── icons/                        # Application icons
@@ -348,7 +347,17 @@ Every push to `main` (including merged PRs) automatically creates a **pre-releas
 
 ### Stable Releases
 
-Stable releases are created by pushing a version tag:
+Stable releases are created using the `/release` skill in [Claude Code](https://docs.anthropic.com/en/docs/claude-code). The skill handles the full release workflow:
+
+1. Prompts you to choose a version bump (patch, minor, or major)
+2. Generates a categorized changelog entry from commits since the last tag
+3. Lets you review and edit the changelog before committing
+4. Updates version numbers in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`
+5. Commits, pushes, and creates a git tag
+
+Once the tag is pushed, GitHub Actions automatically builds and publishes releases for all platforms.
+
+You can also create a release manually by pushing a version tag:
 
 ```bash
 git tag v1.0.0
@@ -365,56 +374,17 @@ git push origin v1.0.0
 
 Download the latest stable release or development builds from the [Releases](../../releases) page.
 
-Note that the builds aren't signed, for iOS run the following command after installation.
+Note that the builds aren't signed, for macOS run the following command after installation.
 
 `xattr -cr /Applications/eddie.chat.app`
-
-More info: https://claude.ai/share/6a5cdec1-f6ba-4152-8c36-7347eddab9f1
 
 ---
 
 ## Configuration
 
-eddie.chat stores configuration at:
+Accounts are configured through the application's setup wizard, which includes email autodiscovery for automatic IMAP/SMTP server detection. Account credentials are stored locally in an encrypted SQLite database.
 
-- **Linux/macOS**: `~/.config/eddie.chat/config.toml` or `~/.eddie.chat.rc`
-- **Windows**: `%APPDATA%\eddie.chat\config.toml`
-
-### Example Configuration
-
-```toml
-# Default account to use
-default_account = "personal"
-
-[accounts.personal]
-email = "you@example.com"
-display_name = "Your Name"
-
-[accounts.personal.imap]
-host = "imap.example.com"
-port = 993
-encryption = "tls"  # "tls", "starttls", or "none"
-
-[accounts.personal.imap.auth]
-type = "password"
-# Raw password (not recommended for shared machines)
-password = "your-password"
-# Or use a command to fetch from keychain
-# command = "security find-generic-password -a your@email.com -s eddie -w"
-
-[accounts.personal.smtp]
-host = "smtp.example.com"
-port = 587
-encryption = "starttls"
-
-[accounts.personal.smtp.auth]
-type = "password"
-password = "your-password"
-```
-
-### Adding Accounts via UI
-
-You can also add and configure accounts directly through the application's settings interface without editing the TOML file manually.
+App settings (theme, Ollama model preferences, etc.) are stored in a key-value `settings` table in the same local database.
 
 ---
 
@@ -439,48 +409,6 @@ bun run build
 bun run preview
 ```
 
-### Code Structure Guidelines
-
-**Frontend Architecture:**
-
-The frontend follows a **feature-based architecture** with these principles:
-
-1. **Feature Modules** (`src/features/`)
-   - Group code by domain (accounts, conversations) not by type
-   - Each feature has its own components, hooks, and utilities
-   - Features export via barrel `index.ts` files for clean imports
-
-2. **Tauri Layer** (`src/tauri/`)
-   - **Never call `invoke()` directly in components**
-   - All backend communication goes through `tauri/commands.ts`
-   - Event subscriptions go through `tauri/events.ts`
-   - Types matching Rust backend in `tauri/types.ts`
-
-3. **Shared Code** (`src/shared/`)
-   - Generic UI components (Avatar, LoadingSpinner, EmptyState)
-   - Utility functions used across multiple features
-   - Import via `from '@/shared'` or relative paths
-
-4. **Import Pattern:**
-   ```typescript
-   // Feature imports
-   import { useAccounts, AccountSetupWizard } from './features/accounts';
-   import { ConversationView, useConversations } from './features/conversations';
-
-   // Tauri layer
-   import { saveAccount, onSyncEvent } from './tauri';
-   import type { EmailAccount, SyncStatus } from './tauri';
-
-   // Shared utilities
-   import { Avatar, getAvatarColor } from './shared';
-   ```
-
-**Backend:**
-- New IPC commands go in `src-tauri/src/commands/`
-- Register commands in `src-tauri/src/lib.rs`
-- Business logic in `src-tauri/src/services/`
-- State management in `src-tauri/src/state/`
-
 ### Debugging
 
 **Frontend:**
@@ -499,7 +427,7 @@ eddie.chat is designed with privacy as a core principle:
 - **Local-First**: All data processing happens on your machine
 - **No Cloud Sync**: Your emails are never uploaded to third-party servers
 - **Standard Protocols**: Uses IMAP/SMTP directly with your email provider
-- **Keychain Integration**: Support for secure password storage via system keychain
+- **Encrypted Storage**: Account credentials encrypted with device-specific keys
 - **Open Source**: Full transparency - audit the code yourself
 
 ---

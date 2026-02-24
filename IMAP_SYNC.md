@@ -103,7 +103,7 @@ Commands like `sync_now` and `connect_account` send a `()` signal on the wake ch
 Connections are established in `adapters/imap/connection.rs`:
 
 1. TCP connection to `host:port`
-2. TLS handshake using the OS-native TLS stack (`async-native-tls`)
+2. TLS handshake via `tokio-rustls`
 3. IMAP LOGIN with username/password
 4. Folder selected via `EXAMINE` (read-only — never modifies mailbox state)
 

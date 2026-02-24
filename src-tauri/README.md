@@ -1,17 +1,12 @@
 # Eddie Chat - Tauri Backend
 
-This directory contains the Rust backend for the Eddie Chat email client, built with [Tauri](https://tauri.app/).
+This directory contains the Rust backend for the Eddie Chat email client, built with [Tauri v2](https://tauri.app/).
 
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [Module Structure](#module-structure)
 - [Sync Engine](#sync-engine)
-  - [Core Concepts](#core-concepts)
-  - [Data Flow](#data-flow)
-  - [Database Integration](#database-integration)
-  - [IMAP Operations](#imap-operations)
-  - [UI Updates](#ui-updates)
 - [Error Handling](#error-handling)
 - [Development](#development)
 
@@ -19,25 +14,29 @@ This directory contains the Rust backend for the Eddie Chat email client, built 
 
 ## Architecture Overview
 
-The backend follows a **separation of concerns** pattern:
+The backend follows a **separation of concerns** pattern with four top-level modules:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           Frontend (Vue/TypeScript)                      │
+│                        Frontend (React/TypeScript)                       │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                              Tauri IPC Bridge                            │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  commands/          │  state/           │  services/                     │
-│  (thin wrappers)    │  (app state)      │  (business logic)              │
+│  commands/          │  services/          │  autodiscovery/              │
+│  (thin wrappers)    │  (business logic)   │  (provider detection)        │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  sync/              │  backend/         │  types/                        │
-│  (sync engine)      │  (IMAP/SMTP)      │  (shared types)                │
+│  adapters/                                                               │
+│  (imap protocol, sqlite persistence, ollama AI)                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                           SQLite Database                                │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key Design Principle**: The UI renders from the SQLite cache, not directly from IMAP. This enables offline support and fast UI rendering.
+**Key Design Principles:**
+- The UI renders from the SQLite cache, not directly from IMAP
+- Commands are thin wrappers that delegate to services and adapters
+- All errors use `EddieError`, never `Result<T, String>`
+- The sync worker runs as an independent async task on a 15-second tick loop
 
 ---
 
@@ -45,64 +44,71 @@ The backend follows a **separation of concerns** pattern:
 
 ```
 src/
-├── lib.rs                 # Tauri app setup and command registration
-├── main.rs                # Entry point (delegates to lib.rs)
+├── lib.rs                 # Tauri app setup, state init, worker spawn
+├── main.rs                # Binary entry point (delegates to lib.rs)
+├── error.rs               # EddieError enum
 │
 ├── commands/              # Tauri command handlers (thin wrappers)
 │   ├── mod.rs             # Module exports
-│   ├── accounts.rs        # Account listing/management
-│   ├── config.rs          # Configuration management
-│   ├── discovery.rs       # Email autodiscovery & OAuth2
-│   ├── envelopes.rs       # Email envelope listing (deprecated)
-│   ├── flags.rs           # Message flag operations
-│   ├── folders.rs         # Folder/mailbox operations
-│   ├── messages.rs        # Message read/send/delete
-│   ├── conversations.rs   # Conversation listing (deprecated)
-│   └── sync.rs            # Sync engine commands (recommended)
-│
-├── state/                 # Application state management
-│   ├── mod.rs
-│   ├── sync_manager.rs    # Manages sync engines per account
-│   └── oauth_state.rs     # OAuth2 flow management
+│   ├── account.rs         # Account connect/lookup
+│   ├── conversations.rs   # Conversation & cluster queries
+│   ├── sync.rs            # Sync control & onboarding status
+│   ├── classify.rs        # Message reclassification
+│   ├── discovery.rs       # Email autodiscovery
+│   ├── skills.rs          # Skill CRUD
+│   ├── settings.rs        # App settings & Ollama model listing
+│   ├── ollama.rs          # Ollama LLM completion
+│   └── app.rs             # App metadata (version)
 │
 ├── services/              # Business logic (Tauri-agnostic)
 │   ├── mod.rs
-│   ├── helpers.rs         # Shared utilities
-│   ├── account_service.rs # Account creation/deletion
-│   └── message_service.rs # MIME message building
+│   ├── sync/              # Sync engine
+│   │   ├── worker.rs      # Main tick loop (15s interval)
+│   │   ├── helpers/       # Processing utilities
+│   │   │   ├── email_normalization.rs
+│   │   │   ├── entity_extraction.rs
+│   │   │   ├── message_builder.rs
+│   │   │   ├── message_classification.rs
+│   │   │   ├── message_distillation.rs
+│   │   │   └── status_emit.rs
+│   │   └── tasks/         # Onboarding & recurring tasks
+│   │       ├── trust_network.rs
+│   │       ├── historical_fetch.rs
+│   │       ├── connection_history.rs
+│   │       ├── incremental_sync.rs
+│   │       ├── flag_resync.rs
+│   │       └── skill_classify.rs
+│   ├── ollama.rs          # Ollama model discovery & state
+│   └── logger.rs          # Structured logging to DB
 │
-├── types/                 # Data structures and types
-│   ├── mod.rs
-│   ├── error.rs           # EddieError enum
-│   ├── responses.rs       # DTOs for frontend
-│   └── conversation.rs    # Conversation types
-│
-├── sync/                  # Sync engine (core)
-│   ├── mod.rs
-│   ├── engine.rs          # Main sync engine
-│   ├── db.rs              # SQLite database layer
-│   ├── action_queue.rs    # Offline action queue
-│   ├── conversation.rs    # Conversation grouping
-│   ├── classifier.rs      # Message classification
-│   ├── capability.rs      # Server capability detection
-│   └── idle.rs            # IDLE/polling monitoring
-│
-├── backend/               # Email protocol implementation
-│   └── mod.rs             # IMAP/SMTP via email-lib
-│
-├── config/                # Configuration management
-│   └── mod.rs             # TOML config parsing
-│
-├── credentials/           # Secure credential storage
-│   └── mod.rs             # System keyring integration
-│
-├── oauth/                 # OAuth2 implementation
-│   └── mod.rs             # Google, Microsoft, etc.
+├── adapters/              # External service bridges
+│   ├── imap/              # IMAP protocol (async-imap)
+│   │   ├── connection.rs  # TCP + TLS (tokio-rustls) + LOGIN
+│   │   ├── envelopes.rs   # Message envelope fetching
+│   │   ├── folders.rs     # Folder discovery & classification
+│   │   ├── historical.rs  # Historical message fetch
+│   │   └── sent_scan.rs   # Sent folder scanning for trust network
+│   ├── sqlite/            # SQLite persistence (rusqlite + r2d2)
+│   │   └── sync/          # Sync database
+│   │       ├── db.rs              # Connection pool initialization
+│   │       ├── db_schema.rs       # Schema definition & migrations
+│   │       ├── messages.rs        # Message CRUD
+│   │       ├── conversations.rs   # Conversation materialization
+│   │       ├── entities.rs        # Trust network (entities table)
+│   │       ├── accounts.rs        # Account queries
+│   │       ├── folder_sync.rs     # Per-folder IMAP sync cursors
+│   │       ├── onboarding_tasks.rs# Onboarding task queue
+│   │       ├── skills.rs          # Skill persistence
+│   │       ├── skill_classify.rs  # Skill classification results
+│   │       ├── settings.rs        # App settings (key-value)
+│   │       └── line_groups.rs     # Line grouping
+│   └── ollama/            # Ollama AI adapter
+│       └── mod.rs         # HTTP calls to local Ollama
 │
 └── autodiscovery/         # Email provider auto-configuration
     ├── mod.rs             # Discovery pipeline
     ├── providers.rs       # Known provider database
-    ├── autoconfig.rs      # Mozilla autoconfig
+    ├── autoconfig.rs      # Mozilla autoconfig XML
     ├── dns.rs             # DNS SRV/MX lookup
     └── probe.rs           # Server probing
 ```
@@ -111,259 +117,67 @@ src/
 
 ## Sync Engine
 
-The sync engine (`sync/`) is the core component that maintains a local SQLite cache synchronized with IMAP servers.
+The sync engine (`services/sync/`) maintains a local SQLite cache synchronized with IMAP servers. For detailed documentation, see [IMAP_SYNC.md](../IMAP_SYNC.md).
 
 ### Core Concepts
 
 1. **Server is Source of Truth**: The local database is a cache. Server state wins all conflicts.
+2. **UI Reads from Cache**: The frontend renders from SQLite, not IMAP, for instant responsiveness.
+3. **Event-Driven Updates**: Changes are pushed to the UI via Tauri events.
+4. **Tick-Based Worker**: A 15-second tick loop processes sync tasks; commands can wake it immediately via an mpsc channel.
 
-2. **Offline-First with Action Queue**: User actions are queued locally and replayed on reconnect.
+### Sync Phases
 
-3. **UI Reads from Cache**: The frontend renders from SQLite, not IMAP, for instant responsiveness.
+**Onboarding** — When a new account is added, three sequential tasks build initial state:
+1. `trust_network` — Scan Sent folder for contacts
+2. `historical_fetch` — Fetch 12 months of messages
+3. `connection_history` — Expand threads with known connections
 
-4. **Event-Driven Updates**: Changes are pushed to the UI via Tauri events.
+**Recurring** — On every tick (even during onboarding), incremental sync and flag resync run for all onboarded accounts.
 
-### Data Flow
+### UI Events
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                              USER ACTION                                  │
-│                    (mark as read, delete, send, etc.)                    │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           TAURI COMMAND                                   │
-│            (commands/sync.rs, commands/messages.rs, etc.)                │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-┌────────────────────────────┐    ┌────────────────────────────────────────┐
-│     UPDATE LOCAL CACHE     │    │         QUEUE ACTION (if offline)       │
-│        (SQLite)            │    │         (action_queue.rs)               │
-└────────────────────────────┘    └────────────────────────────────────────┘
-                    │                               │
-                    ▼                               │
-┌────────────────────────────┐                     │
-│      EMIT UI EVENT         │                     │
-│   (sync-event channel)     │                     │
-└────────────────────────────┘                     │
-                    │                               │
-                    ▼                               ▼
-┌────────────────────────────┐    ┌────────────────────────────────────────┐
-│      FRONTEND UPDATES      │    │        EXECUTE ON IMAP SERVER          │
-│    (Vue reactive state)    │    │     (on reconnect or immediately)      │
-└────────────────────────────┘    └────────────────────────────────────────┘
-```
-
-### Database Integration
-
-The sync engine uses SQLite with connection pooling (`r2d2`) for all local storage.
-
-#### Database Schema
-
-| Table | Purpose |
+| Event | Purpose |
 |-------|---------|
-| `messages` | Cached email envelopes and metadata |
-| `message_bodies` | Full message content (fetched on-demand) |
-| `conversations` | Conversation grouping by participants |
-| `conversation_messages` | Message-to-conversation mapping |
-| `actions` | Queued offline actions |
-| `folder_sync_state` | Sync progress per folder (UIDVALIDITY, etc.) |
-| `message_classifications` | Auto-categorization results |
-| `connection_configs` | Account configurations |
+| `sync:status` | Progress messages during sync phases |
+| `sync:conversations-updated` | Triggers frontend data refresh |
+| `onboarding:complete` | Signals onboarding finished for an account |
 
-#### Key Database Operations
+### Frontend Integration
 
-```rust
-// Upserting a message (sync/db.rs)
-db.upsert_message(&cached_message)?;
-
-// Getting conversations (sync/db.rs)
-db.get_conversations(&account_id, include_hidden)?;
-
-// Updating flags (sync/db.rs)
-db.add_message_flags(&account_id, folder, uid, &["\\Seen"])?;
-
-// Queueing an action (sync/action_queue.rs)
-action_queue.queue(&account_id, ActionType::AddFlags { ... })?;
-```
-
-### IMAP Operations
-
-#### Events that Trigger IMAP Operations
-
-| Event | IMAP Operation | Description |
-|-------|----------------|-------------|
-| `init_sync_engine` | Full sync | Fetches all messages and rebuilds cache |
-| `sync_folder` | Folder sync | Incremental sync of a single folder |
-| `fetch_message_body` | FETCH BODY | Downloads message content on-demand |
-| `mark_as_read/unread` | STORE +FLAGS | Queued and executed on server |
-| `delete_messages` | STORE +FLAGS, EXPUNGE | Marks deleted, then expunges |
-| `move_messages` | COPY, STORE +FLAGS, EXPUNGE | Move via IMAP |
-| `send_message` | SMTP SEND | Sends via SMTP, saves to Sent |
-| Monitor notification | Quick sync | Re-syncs when changes detected |
-| Action queue replay | Various | Executes queued offline actions |
-
-#### Action Queue (Offline Support)
-
-The action queue (`sync/action_queue.rs`) persists user actions to SQLite and replays them on reconnect:
-
-```rust
-pub enum ActionType {
-    AddFlags { folder, uids, flags },    // Uses +FLAGS (additive)
-    RemoveFlags { folder, uids, flags }, // Uses -FLAGS (subtractive)
-    Delete { folder, uids },              // Mark \Deleted, EXPUNGE
-    Move { source_folder, target_folder, uids },
-    Copy { source_folder, target_folder, uids },
-    Send { raw_message, save_to_sent },
-    Save { folder, raw_message },
-}
-```
-
-**Conflict Resolution**: Uses additive flag operations (`+FLAGS`/`-FLAGS`) instead of overwriting, which merges cleanly with server-side changes.
-
-#### Monitoring (IDLE/Polling)
-
-The monitor (`sync/idle.rs`) detects mailbox changes:
-
-```rust
-pub enum ChangeNotification {
-    NewMessages { folder },      // New mail arrived
-    MessagesExpunged { folder }, // Messages deleted externally
-    FlagsChanged { folder },     // Flags changed externally
-    FolderChanged { folder },    // General change detected
-    PollTrigger,                 // Periodic poll timer
-    ConnectionLost { error },    // Need to reconnect
-    Shutdown,                    // Monitor stopping
-}
-```
-
-- **Desktop**: Uses IMAP IDLE for push notifications (when supported)
-- **Mobile/Fallback**: Polls at configurable intervals (default: 60s)
-
-### UI Updates
-
-#### Tauri Event Channel
-
-The sync engine emits events to the frontend via Tauri's event system:
-
-```rust
-// Event emission (sync/engine.rs)
-fn emit_event(&self, event: SyncEvent) {
-    if let Some(handle) = &self.app_handle {
-        handle.emit("sync-event", &event)?;
-    }
-}
-```
-
-#### Events that Update the UI
-
-| Event | Payload | UI Action |
-|-------|---------|-----------|
-| `StatusChanged` | `SyncStatus` | Updates sync indicator, progress bar |
-| `NewMessages` | `{ folder, count }` | Shows notification, refreshes list |
-| `MessagesDeleted` | `{ folder, uids }` | Removes messages from UI |
-| `FlagsChanged` | `{ folder, uids }` | Updates read/flagged indicators |
-| `ConversationsUpdated` | `{ conversation_ids }` | Refreshes conversation list |
-| `Error` | `{ message }` | Shows error toast |
-| `SyncComplete` | - | Hides progress, enables actions |
-
-#### Frontend Integration (TypeScript)
+Events are consumed via the centralized `src/tauri/events.ts` layer:
 
 ```typescript
-// Listening for sync events
-import { listen } from '@tauri-apps/api/event';
+import { onSyncStatus, onConversationsUpdated } from '../tauri';
 
-listen<SyncEvent>('sync-event', (event) => {
-  switch (event.payload.type) {
-    case 'StatusChanged':
-      updateSyncStatus(event.payload.data);
-      break;
-    case 'ConversationsUpdated':
-      refreshConversations(event.payload.data.conversation_ids);
-      break;
-    case 'NewMessages':
-      showNotification(event.payload.data.count);
-      break;
-    // ...
-  }
+onSyncStatus((status) => {
+  // Update progress indicator
 });
-```
 
-#### Response Types (types/responses.rs)
-
-DTOs for frontend consumption:
-
-```rust
-pub struct SyncStatusResponse {
-    pub state: String,           // "idle", "syncing", "error"
-    pub account_id: String,
-    pub current_folder: Option<String>,
-    pub progress_current: Option<u32>,
-    pub progress_total: Option<u32>,
-    pub progress_message: Option<String>,
-    pub last_sync: Option<String>,
-    pub error: Option<String>,
-    pub is_online: bool,
-    pub pending_actions: u32,
-    pub monitor_mode: Option<String>,
-}
-
-pub struct ConversationResponse {
-    pub id: i64,
-    pub participants: Vec<ParticipantInfo>,
-    pub last_message_date: Option<String>,
-    pub last_message_preview: Option<String>,
-    pub message_count: u32,
-    pub unread_count: u32,
-    pub is_outgoing: bool,
-}
-
-pub struct CachedChatMessageResponse {
-    pub id: i64,
-    pub uid: u32,
-    pub from_address: String,
-    pub subject: Option<String>,
-    pub date: Option<String>,
-    pub flags: Vec<String>,
-    pub text_body: Option<String>,
-    pub html_body: Option<String>,
-    pub body_cached: bool,
-}
+onConversationsUpdated((data) => {
+  // Refresh conversation list
+});
 ```
 
 ---
 
 ## Error Handling
 
-All commands return `Result<T, EddieError>` with serializable errors:
+All commands return `Result<T, EddieError>`:
 
 ```rust
-#[derive(Debug, Clone, Error, Serialize, Deserialize)]
-#[serde(tag = "type", content = "message")]
+#[derive(Debug, thiserror::Error)]
 pub enum EddieError {
+    Database(String),
+    Backend(String),
     Config(String),
+    InvalidInput(String),
     AccountNotFound(String),
     NoActiveAccount,
-    FolderNotFound(String),
-    MessageNotFound(String),
-    Backend(String),
-    Auth(String),
-    Network(String),
-    Database(String),
-    Credential(String),
-    OAuth(String),
-    InvalidInput(String),
-    Other(String),
 }
 ```
 
-Frontend receives errors as JSON:
-```json
-{ "type": "AccountNotFound", "message": "user@example.com" }
-```
+Errors are serialized as plain strings for the frontend.
 
 ---
 
@@ -397,14 +211,18 @@ RUST_LOG=eddie_chat_lib=debug cargo tauri dev
 
 | Crate | Purpose |
 |-------|---------|
-| `tauri` | Desktop framework |
-| `email-lib` | IMAP/SMTP protocol (Pimalaya) |
+| `tauri` | Desktop framework (v2) |
+| `async-imap` | IMAP protocol |
+| `mailparse` | Email message parsing |
+| `imap-proto` | IMAP protocol types |
+| `tokio-rustls` | TLS connections |
 | `rusqlite` + `r2d2` | SQLite with connection pooling |
 | `tokio` | Async runtime |
 | `serde` | Serialization |
 | `tracing` | Structured logging |
-| `keyring` | Secure credential storage |
-| `oauth2` | OAuth2 protocol |
+| `reqwest` | HTTP client (Ollama, autodiscovery) |
+| `html2text` | HTML to plain text conversion |
+| `sentry` | Error tracking |
 
 ---
 
@@ -414,19 +232,14 @@ RUST_LOG=eddie_chat_lib=debug cargo tauri dev
 
 1. Add function in appropriate `commands/*.rs` file
 2. Return `Result<T, EddieError>`
-3. Use services for business logic
+3. Delegate to services/adapters for business logic
 4. Register in `lib.rs` `invoke_handler`
+5. Add frontend wrapper in `src/tauri/commands.ts`
+6. Add types in `src/tauri/types.ts` if needed
 
-### Adding a New Sync Event
+### Adding a New Sync Task
 
-1. Add variant to `SyncEvent` enum in `sync/engine.rs`
-2. Emit via `self.emit_event(SyncEvent::NewVariant { ... })`
-3. Handle in frontend event listener
-
-### Offline Action Flow
-
-1. User action → Command handler
-2. Update local cache (SQLite)
-3. Queue action (`action_queue.queue()`)
-4. Emit UI event
-5. On reconnect: `action_queue.replay_pending()`
+1. Create task in `services/sync/tasks/`
+2. Wire into worker in `services/sync/worker.rs`
+3. Add event emission via `services/sync/helpers/status_emit.rs`
+4. Add listener in `src/tauri/events.ts` if the frontend needs to react

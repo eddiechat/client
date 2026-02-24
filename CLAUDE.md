@@ -8,7 +8,7 @@ Eddie Chat is a cross-platform email client built with:
 - **Frontend**: React 19 + TypeScript + Tailwind CSS
 - **Backend**: Rust + Tauri 2
 - **Database**: SQLite (local cache)
-- **Protocols**: IMAP/SMTP via `email-lib`
+- **Protocols**: IMAP/SMTP via `async-imap` + `mailparse`
 
 ---
 
