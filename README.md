@@ -4,7 +4,7 @@
 
 # eddie
 
-**eddie** is a modern, lightweight desktop email client that reimagines email as a conversation-first experience. Inspired by the clean aesthetics of Signal, eddie groups your emails into threaded conversations by participant, making email feel as natural as messaging.
+**eddie** is a modern, lightweight email client that reimagines email as a conversation-first experience. Inspired by the clean aesthetics of Signal, eddie groups your emails into threaded conversations by participant, making email feel as natural as messaging.
 
 Built on standard email protocols, eddie brings the simplicity of modern chat to your inbox, without locking you into another platform.
 
@@ -25,7 +25,7 @@ We believe that an open and shared repository of agent skills, and the ability f
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Desktop Application                    │
+│                       Client Application                    │
 ├─────────────────────────┬───────────────────────────────────┤
 │     React Frontend      │           Rust Backend            │
 │     (TypeScript)        │            (Tauri v2)             │
@@ -49,7 +49,7 @@ We believe that an open and shared repository of agent skills, and the ability f
 |-------|------------|---------|
 | **Frontend** | React 19 + TypeScript | UI components and state management |
 | **Build Tool** | Vite 7 | Fast development and bundling |
-| **Desktop Runtime** | Tauri v2 | Cross-platform native shell |
+| **Client Runtime** | Tauri v2 | Cross-platform native shell |
 | **Backend** | Rust (Edition 2021) | Core email operations |
 | **Async Runtime** | Tokio | Non-blocking I/O |
 | **Email Protocol** | email-lib (pimalaya) | IMAP/SMTP implementation |
@@ -323,7 +323,7 @@ npm run tauri dev
 This will:
 1. Start the Vite dev server on port 1420
 2. Compile the Rust backend
-3. Launch the desktop application with hot reload
+3. Launch the application with hot reload
 
 ### Production Build
 
