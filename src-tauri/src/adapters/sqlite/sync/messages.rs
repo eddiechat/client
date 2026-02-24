@@ -398,6 +398,54 @@ fn fetch_messages_by_senders(
     Ok(messages)
 }
 
+pub fn fetch_skill_match_messages(
+    pool: &DbPool,
+    account_id: &str,
+    skill_id: &str,
+) -> Result<Vec<Message>, EddieError> {
+    let self_emails = entities::get_self_emails(pool, account_id)?;
+    let conn = pool.get()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT m.id, m.date, m.from_address, m.from_name, m.to_addresses, m.cc_addresses,
+                m.subject, m.body_text, m.body_html, m.has_attachments, m.imap_flags, m.distilled_text,
+                m.gmail_labels, m.imap_folder
+         FROM messages m
+         JOIN skill_matches sm ON sm.message_id = m.id
+         WHERE sm.skill_id = ?1 AND m.account_id = ?2
+         ORDER BY m.date DESC",
+    )?;
+
+    let rows = stmt.query_map(params![skill_id, account_id], |row| {
+        let gmail_labels: String = row.get(12)?;
+        let imap_folder: String = row.get(13)?;
+        let from_address: String = row.get(2)?;
+        Ok((Message {
+            id: row.get(0)?,
+            date: row.get(1)?,
+            from_address: from_address.clone(),
+            from_name: row.get(3)?,
+            to_addresses: row.get(4)?,
+            cc_addresses: row.get(5)?,
+            subject: row.get(6)?,
+            body_text: row.get(7)?,
+            body_html: row.get(8)?,
+            has_attachments: row.get::<_, i32>(9)? != 0,
+            imap_flags: row.get(10)?,
+            distilled_text: row.get(11)?,
+            is_sent: false,
+        }, gmail_labels, imap_folder, from_address))
+    })?;
+
+    let mut messages = Vec::new();
+    for row in rows {
+        let (mut msg, labels, folder, from) = row?;
+        msg.is_sent = is_sent(&labels, &folder, &from, &self_emails);
+        messages.push(msg);
+    }
+    Ok(messages)
+}
+
 pub fn fetch_thread_messages(
     pool: &DbPool,
     account_id: &str,

@@ -163,20 +163,43 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
 
         -- User-defined classification skills
         CREATE TABLE IF NOT EXISTS skills (
-            id          TEXT PRIMARY KEY,
-            account_id  TEXT NOT NULL REFERENCES accounts(id),
-            name        TEXT NOT NULL,
-            icon        TEXT NOT NULL DEFAULT '⚡',
-            icon_bg     TEXT NOT NULL DEFAULT '#5b4fc7',
-            enabled     INTEGER NOT NULL DEFAULT 1,
-            prompt      TEXT NOT NULL DEFAULT '',
-            modifiers   TEXT NOT NULL DEFAULT '{}',
-            settings    TEXT NOT NULL DEFAULT '{}',
-            created_at  INTEGER NOT NULL,
-            updated_at  INTEGER NOT NULL
+            id              TEXT PRIMARY KEY,
+            account_id      TEXT NOT NULL REFERENCES accounts(id),
+            name            TEXT NOT NULL,
+            icon            TEXT NOT NULL DEFAULT '⚡',
+            icon_bg         TEXT NOT NULL DEFAULT '#5b4fc7',
+            enabled         INTEGER NOT NULL DEFAULT 1,
+            prompt          TEXT NOT NULL DEFAULT '',
+            modifiers       TEXT NOT NULL DEFAULT '{}',
+            settings        TEXT NOT NULL DEFAULT '{}',
+            revision_hash   TEXT NOT NULL DEFAULT '',
+            created_at      INTEGER NOT NULL,
+            updated_at      INTEGER NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_skills_account ON skills(account_id);
+
+        -- Skill classification cursors (per-skill, per-folder)
+        CREATE TABLE IF NOT EXISTS folder_classify (
+            skill_id                TEXT NOT NULL,
+            account_id              TEXT NOT NULL,
+            folder                  TEXT NOT NULL,
+            skill_rev               TEXT NOT NULL DEFAULT '',
+            highest_classified_uid  INTEGER NOT NULL DEFAULT 0,
+            lowest_classified_uid   INTEGER NOT NULL DEFAULT 0,
+            last_classify           INTEGER,
+            PRIMARY KEY (skill_id, account_id, folder)
+        );
+
+        -- Skill match results (many-to-many, only matches persisted)
+        CREATE TABLE IF NOT EXISTS skill_matches (
+            skill_id    TEXT NOT NULL,
+            message_id  TEXT NOT NULL,
+            matched_at  INTEGER NOT NULL,
+            PRIMARY KEY (skill_id, message_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_skill_matches_message ON skill_matches(message_id);
 
         -- Line groups (Lines view)
         CREATE TABLE IF NOT EXISTS line_groups (
@@ -203,6 +226,9 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
     let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN imap_tls INTEGER NOT NULL DEFAULT 1;");
     // Add thread_id column to messages (computed during rebuild_conversations)
     let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN thread_id TEXT;");
+
+    // Add revision_hash column to skills (for skill classification engine)
+    let _ = conn.execute_batch("ALTER TABLE skills ADD COLUMN revision_hash TEXT NOT NULL DEFAULT '';");
 
     // Migration: clear domain-based line_groups (Lines now group by sender, not domain).
     // The 'domain' column is reused to store sender emails.

@@ -27,7 +27,11 @@ pub async fn fetch_cluster_messages(
     account_id: String,
     cluster_id: String,
 ) -> Result<Vec<Message>, EddieError> {
-    sqlite::messages::fetch_cluster_messages(&pool, &account_id, &cluster_id)
+    if let Some(skill_id) = cluster_id.strip_prefix("skill:") {
+        sqlite::messages::fetch_skill_match_messages(&pool, &account_id, skill_id)
+    } else {
+        sqlite::messages::fetch_cluster_messages(&pool, &account_id, &cluster_id)
+    }
 }
 
 #[tauri::command]

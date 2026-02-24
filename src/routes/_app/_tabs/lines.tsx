@@ -79,6 +79,7 @@ function LinesList() {
   }
 
   function handlePointerDown(c: Cluster) {
+    if (c.is_skill) return; // skill clusters can't be grouped/ungrouped
     didLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
@@ -226,7 +227,7 @@ function LinesList() {
         {filteredClusters.length === 0 && (
           <div className="text-center py-15 px-5 text-text-muted text-[14px]">No lines yet</div>
         )}
-        {filteredClusters.map((c) => {
+        {filteredClusters.map((c, i) => {
           const isExpanded = expandedLines.has(c.id);
           const isSelected = selectedIds.has(c.id);
           const isRevealed = revealedIds.has(c.id);
@@ -238,9 +239,12 @@ function LinesList() {
           // For grouped clusters when long-pressed, show sender list instead of message count
           const senderList = c.is_join ? (JSON.parse(c.domains) as string[]).join(", ") : "";
           const subtitle = c.is_join && isRevealed ? senderList : `${msgCount} messages`;
+          const displayIcon = c.is_skill && c.icon ? c.icon : lineEmoji(c.name);
+          const displayColor = c.is_skill && c.icon_bg ? c.icon_bg : lineColor(c.name);
+          const isLastSkill = c.is_skill && (!filteredClusters[i + 1]?.is_skill);
 
           return (
-            <div key={c.id} className="border-b border-divider">
+            <div key={c.id} className="border-b border-divider" style={isLastSkill ? { borderBottomColor: "var(--color-accent-green)", borderBottomWidth: 1, borderImage: "linear-gradient(to right, transparent, var(--color-accent-green) 30%, var(--color-accent-green) 70%, transparent) 1" } : undefined}>
               <div
                 className={`flex items-center px-5 py-3 gap-3 cursor-pointer transition-colors ${isSelected ? "bg-bg-hover" : isExpanded ? "bg-bg-tertiary" : ""}`}
                 onPointerDown={() => handlePointerDown(c)}
@@ -253,15 +257,19 @@ function LinesList() {
                 <div className={`relative shrink-0 ${c.is_join ? "w-12 h-11" : "w-9.5 h-9.5"}`}>
                   {c.is_join && (
                     <>
-                      <div className="absolute w-9.5 h-9.5 rounded-[10px] top-0 left-0.5" style={{ background: `linear-gradient(${lineColor(c.name)}10,${lineColor(c.name)}10),var(--color-bg-primary)`, border: `1px solid ${lineColor(c.name)}30`, transform: "rotate(-8deg)", transformOrigin: "center bottom" }} />
-                      <div className="absolute w-9.5 h-9.5 rounded-[10px] top-0 left-0.5" style={{ background: `linear-gradient(${lineColor(c.name)}15,${lineColor(c.name)}15),var(--color-bg-primary)`, border: `1px solid ${lineColor(c.name)}35`, transform: "rotate(4deg)", transformOrigin: "center bottom" }} />
+                      <div className="absolute w-9.5 h-9.5 rounded-[10px] top-0 left-0.5" style={{ background: `linear-gradient(${displayColor}10,${displayColor}10),var(--color-bg-primary)`, border: `1px solid ${displayColor}30`, transform: "rotate(-8deg)", transformOrigin: "center bottom" }} />
+                      <div className="absolute w-9.5 h-9.5 rounded-[10px] top-0 left-0.5" style={{ background: `linear-gradient(${displayColor}15,${displayColor}15),var(--color-bg-primary)`, border: `1px solid ${displayColor}35`, transform: "rotate(4deg)", transformOrigin: "center bottom" }} />
                     </>
                   )}
                   <div
                     className={`w-9.5 h-9.5 rounded-[10px] flex items-center justify-center text-[20px] ${c.is_join ? "absolute bottom-0 left-1" : ""}`}
-                    style={{ background: `linear-gradient(${lineColor(c.name)}20,${lineColor(c.name)}20),var(--color-bg-primary)`, border: `1px solid ${lineColor(c.name)}40` }}
+                    style={c.is_skill
+                      ? { background: "var(--color-green-bg)", border: "1px solid var(--color-accent-green)" }
+                      : { background: `linear-gradient(${displayColor}20,${displayColor}20),var(--color-bg-primary)`, border: `1px solid ${displayColor}40` }}
                   >
-                    {lineEmoji(c.name)}
+                    {c.is_skill
+                      ? <span style={{ filter: "grayscale(1) brightness(0.6) sepia(1) hue-rotate(90deg) saturate(3)" }}>{displayIcon}</span>
+                      : displayIcon}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">

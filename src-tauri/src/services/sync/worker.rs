@@ -6,7 +6,7 @@ use crate::error::EddieError;
 
 use crate::services::logger;
 
-/// Run one unit of work. Returns true if work was done (onboarding in progress).
+/// Run one unit of work. Returns true if work was done (onboarding or skill classification).
 pub async fn tick(
     app: &tauri::AppHandle,
     pool: &DbPool,
@@ -18,26 +18,29 @@ pub async fn tick(
     let _ = tasks::run_incremental_sync_all(app, pool).await;
     let _ = tasks::run_flag_resync_all(app, pool).await;
 
-    // Step 2: Find an account that needs onboarding
+    // Step 2: Run skill classification (one batch per tick)
+    let skill_did_work = tasks::run_skill_classify_all(app, pool).await.unwrap_or(false);
+
+    // Step 3: Find an account that needs onboarding
     let account_id = match accounts::find_account_for_onboarding(pool)? {
         Some(id) => id,
-        None => return Ok(false),
+        None => return Ok(skill_did_work),
     };
 
-    // Step 3: Get tasks for this account, seed if missing
+    // Step 4: Get tasks for this account, seed if missing
     let tasks = onboarding_tasks::get_tasks(pool, &account_id)?;
     if tasks.is_empty() {
         onboarding_tasks::seed_tasks(pool, &account_id)?;
         return Ok(true);
     }
 
-    // Step 4: Find first non-done task
+    // Step 5: Find first non-done task
     let task = match tasks.iter().find(|t| t.status != "done") {
         Some(t) => t,
         None => return Ok(false), // all tasks done, incremental sync already ran above
     };
 
-    // Step 5: Run it
+    // Step 6: Run it
     match task.name.as_str() {
         "trust_network" => tasks::run_trust_network(app, pool, &account_id, &task).await?,
         "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task).await?,

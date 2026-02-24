@@ -35,6 +35,10 @@ export type Cluster = {
   account_id: string;
   is_join: boolean;
   domains: string; // JSON array of sender email strings
+  is_skill: boolean;
+  skill_id: string | null;
+  icon: string | null;
+  icon_bg: string | null;
 };
 
 export type Thread = {

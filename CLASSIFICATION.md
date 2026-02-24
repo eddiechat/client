@@ -23,7 +23,7 @@ The engine is designed to run inside the existing sync worker tick loop (see [IM
 │  │  for each onboarded account:                  │               │
 │  │    for each enabled skill:                    │               │
 │  │      ensure folder_classify cursors           │               │
-│  │      check revision → reset if stale          │               │
+│  │      check revision_hash → reset if stale      │               │
 │  │                                               │               │
 │  │    Phase 1: forward batch (new messages)      │               │
 │  │    Phase 2: backward batch (historical)       │               │
@@ -33,11 +33,11 @@ The engine is designed to run inside the existing sync worker tick loop (see [IM
 │  │    → advance cursor                           │               │
 │  └───────────────────────────────────────────────┘               │
 │                                                                  │
-│           ┌──────────────┐    ┌──────────────────┐               │
+│           ┌──────────────┐    ┌─────────────────-─┐              │
 │           │ Ollama API   │    │  SQLite (sync.db) │              │
 │           │ /v1/chat/    │    │  folder_classify  │              │
 │           │ completions  │    │  skill_matches    │              │
-│           └──────────────┘    └──────────────────┘               │
+│           └──────────────┘    └──────────────────-┘              │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -45,7 +45,7 @@ The engine is designed to run inside the existing sync worker tick loop (see [IM
 
 - **Many-to-many:** One message can match many skills; one skill can match many messages.
 - **Only matches persisted:** Messages that don't match a skill leave no trace — no "tested but didn't match" records.
-- **Revision-tracked:** Every skill has a `revision` counter. When the skill's prompt or modifiers change, the revision increments and all previous matches are discarded, triggering full reclassification.
+- **Revision-tracked:** Every skill has a `revision_hash` derived from its classification-affecting inputs (prompt, model, temperature). Matches are discarded and reclassification begins only when the hash actually changes — saving a skill without meaningful changes is a no-op.
 - **Batch-oriented:** 10 messages per tick. Small batches keep the tick responsive (Ollama calls take ~1–2s each).
 - **Priority:** New messages (forward cursor) are always classified before historical messages (backward cursor).
 
@@ -68,30 +68,43 @@ All paths are relative to `src-tauri/src/`.
 
 ### `skills` table (modified)
 
-A new `revision` column is added to the existing `skills` table. It starts at 1 and increments on every update to the skill's prompt, modifiers, or settings.
+A `revision_hash` column is added to the `skills` table. It stores a SHA-256 hash (truncated to 16 hex characters) of the fields that affect classification output: **prompt**, **model**, and **temperature**. The hash is recomputed on every save — if the result is the same as the stored value, no reclassification occurs.
+
+The existing `skills` table is replaced in the schema (DROP + CREATE). No migration needed — skills are lightweight user config that can be recreated.
 
 ```sql
 CREATE TABLE IF NOT EXISTS skills (
-    id          TEXT PRIMARY KEY,
-    account_id  TEXT NOT NULL REFERENCES accounts(id),
-    name        TEXT NOT NULL,
-    icon        TEXT NOT NULL DEFAULT '⚡',
-    icon_bg     TEXT NOT NULL DEFAULT '#5b4fc7',
-    enabled     INTEGER NOT NULL DEFAULT 1,
-    prompt      TEXT NOT NULL DEFAULT '',
-    modifiers   TEXT NOT NULL DEFAULT '{}',   -- JSON (SkillModifiers)
-    settings    TEXT NOT NULL DEFAULT '{}',   -- JSON (ollamaModel, temperature)
-    revision    INTEGER NOT NULL DEFAULT 1,   -- incremented on update
-    created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL
+    id              TEXT PRIMARY KEY,
+    account_id      TEXT NOT NULL REFERENCES accounts(id),
+    name            TEXT NOT NULL,
+    icon            TEXT NOT NULL DEFAULT '⚡',
+    icon_bg         TEXT NOT NULL DEFAULT '#5b4fc7',
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    prompt          TEXT NOT NULL DEFAULT '',
+    modifiers       TEXT NOT NULL DEFAULT '{}',   -- JSON (SkillModifiers)
+    settings        TEXT NOT NULL DEFAULT '{}',   -- JSON (ollamaModel, temperature)
+    revision_hash   TEXT NOT NULL DEFAULT '',      -- SHA-256 of prompt+model+temperature
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL
 );
 ```
 
-Migration for existing databases:
+### Revision hash computation
 
-```sql
-ALTER TABLE skills ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+The hash is computed from the three fields that determine classification behavior:
+
 ```
+input  = "{prompt}\0{ollamaModel}\0{temperature}"
+hash   = SHA-256(input)[..16]   -- first 16 hex characters
+```
+
+- **prompt** — the classification instruction
+- **ollamaModel** — extracted from the `settings` JSON field `ollamaModel` (empty string if absent)
+- **temperature** — extracted from the `settings` JSON field `temperature` (stringified, `"0"` if absent)
+
+The null byte (`\0`) separator prevents collisions between fields (e.g., prompt "ab" + model "cd" vs prompt "a" + model "bcd").
+
+The hash is computed in Rust during `create_skill()` and `update_skill()`. Cosmetic changes (name, icon, icon_bg) do not affect the hash and therefore do not trigger reclassification.
 
 ### `skill_matches` table (new)
 
@@ -111,7 +124,7 @@ CREATE INDEX IF NOT EXISTS idx_skill_matches_message
 
 The composite primary key enforces one match record per skill–message pair. `INSERT OR IGNORE` prevents duplicates if a message is re-encountered.
 
-When a skill is deleted, all its matches are cascade-deleted. When a skill's revision changes, all its matches are explicitly deleted before reclassification begins.
+When a skill is deleted, all its matches are cascade-deleted. When a skill's `revision_hash` changes, all its matches are explicitly deleted before reclassification begins.
 
 ### `folder_classify` table (new)
 
@@ -122,7 +135,7 @@ CREATE TABLE IF NOT EXISTS folder_classify (
     skill_id                TEXT NOT NULL,
     account_id              TEXT NOT NULL,
     folder                  TEXT NOT NULL,
-    skill_rev               INTEGER NOT NULL DEFAULT 0,
+    skill_rev               TEXT NOT NULL DEFAULT '',      -- revision_hash at time of classification
     highest_classified_uid  INTEGER NOT NULL DEFAULT 0,   -- forward cursor
     lowest_classified_uid   INTEGER NOT NULL DEFAULT 0,   -- backward cursor
     last_classify           INTEGER,                      -- unix epoch ms
@@ -132,7 +145,7 @@ CREATE TABLE IF NOT EXISTS folder_classify (
 
 | Column | Purpose |
 |--------|---------|
-| `skill_rev` | The skill revision this cursor state corresponds to. When `skill.revision != skill_rev`, the cursors are stale and must be reset. |
+| `skill_rev` | The `revision_hash` value this cursor state was classified under. When `skill.revision_hash != skill_rev`, the cursors are stale and must be reset. |
 | `highest_classified_uid` | Forward cursor: messages with `imap_uid > highest_classified_uid` are "new" and have not been classified by this skill. |
 | `lowest_classified_uid` | Backward cursor: messages with `imap_uid < lowest_classified_uid` are "historical" and have not been classified by this skill. |
 | `last_classify` | Timestamp of the most recent classification pass on this folder for this skill. |
@@ -223,20 +236,39 @@ When no more forward or backward work exists for any enabled skill in any folder
 
 ## Revision Tracking & Reset
 
-### Revision increment
+### Hash computation on save
 
-When `update_skill()` is called (prompt, modifiers, or settings changed), the SQL sets `revision = revision + 1`:
+When `create_skill()` or `update_skill()` is called, the `revision_hash` is recomputed from the current prompt, model, and temperature:
+
+```rust
+fn compute_revision_hash(prompt: &str, settings_json: &str) -> String {
+    let parsed: serde_json::Value = serde_json::from_str(settings_json)
+        .unwrap_or(serde_json::Value::Object(Default::default()));
+    let model = parsed.get("ollamaModel")
+        .and_then(|v| v.as_str()).unwrap_or("");
+    let temperature = parsed.get("temperature")
+        .and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+    let input = format!("{}\0{}\0{}", prompt, model, temperature);
+    let digest = sha2::Sha256::digest(input.as_bytes());
+    hex::encode(&digest[..8])  // 16 hex chars
+}
+```
+
+The SQL stores the result:
 
 ```sql
-UPDATE skills SET ..., revision = revision + 1 WHERE id = ?
+UPDATE skills SET ..., revision_hash = ? WHERE id = ?
 ```
+
+If the computed hash equals the existing `revision_hash`, the classification state is unaffected — no reclassification occurs. This means saving a skill with only cosmetic changes (name, icon) is a no-op from the classification engine's perspective.
 
 ### Reset detection
 
-On each tick, the engine checks every `folder_classify` row for the skill. If `folder_classify.skill_rev != skill.revision`:
+On each tick, the engine checks every `folder_classify` row for the skill. If `folder_classify.skill_rev != skill.revision_hash`:
 
 ```
-reset_skill_cursors(skill_id, new_revision):
+reset_skill_cursors(skill_id, new_hash):
     1. DELETE FROM skill_matches WHERE skill_id = ?
     2. UPDATE folder_classify
        SET highest_classified_uid = 0,
@@ -418,9 +450,9 @@ If an Ollama call fails mid-batch:
 
 | Table | Role |
 |-------|------|
-| `skills` | Skill definitions with `revision` column |
+| `skills` | Skill definitions with `revision_hash` column |
 | `skill_matches` | Many-to-many junction: `(skill_id, message_id)` — only matches |
-| `folder_classify` | Per-skill, per-folder UID cursors with revision tracking |
+| `folder_classify` | Per-skill, per-folder UID cursors with revision hash tracking |
 | `messages` | Source of messages to classify (read-only from this engine's perspective) |
 | `entities` | Trust network, used by `onlyKnownSenders` modifier filter |
 | `settings` | Global Ollama URL and model settings |
@@ -431,7 +463,7 @@ The engine survives app restarts at any point:
 
 - **Cursors** are persisted in `folder_classify`. On restart, classification resumes from the last committed cursor position.
 - **Matches** are committed incrementally. Any matches found before a crash are retained.
-- **Revision tracking** is durable. If a skill was updated but the reset didn't complete, the next tick will detect the revision mismatch and complete the reset.
+- **Revision tracking** is durable. If a skill was updated but the reset didn't complete, the next tick will detect the hash mismatch and complete the reset.
 
 ---
 
@@ -441,15 +473,15 @@ The engine survives app restarts at any point:
 
 | File | Contents |
 |------|----------|
-| `adapters/sqlite/sync/skill_classify.rs` | `ClassifyCursor` struct, `Modifiers` struct + `from_json()`, cursor CRUD (`ensure_cursor`, `get_cursor`, `reset_skill_cursors`, `update_highest_classified_uid`, `update_lowest_classified_uid`), batch queries (`get_forward_batch`, `get_backward_batch`), match CRUD (`insert_matches_batch`, `delete_skill_data`, `count_matches`), `get_message_folders()` |
+| `adapters/sqlite/sync/skill_classify.rs` | `ClassifyCursor` struct (with `skill_rev: String` for hash comparison), `Modifiers` struct + `from_json()`, cursor CRUD (`ensure_cursor`, `get_cursor`, `reset_skill_cursors`, `update_highest_classified_uid`, `update_lowest_classified_uid`), batch queries (`get_forward_batch`, `get_backward_batch`), match CRUD (`insert_matches_batch`, `delete_skill_data`, `count_matches`), `get_message_folders()` |
 | `services/sync/tasks/skill_classify.rs` | `run_skill_classify_all()` (entry point called from worker), `run_skill_classify_one()` (per-skill orchestration), `classify_batch()` (Ollama calls + match persistence), `resolve_ollama_config()`, `SYSTEM_PROMPT` constant, `BATCH_SIZE` constant (10), `BODY_SNIPPET_LEN` constant (2000) |
 
 ### Modified files
 
 | File | Changes |
 |------|---------|
-| `adapters/sqlite/sync/db_schema.rs` | Add `folder_classify` table, `skill_matches` table + index to schema. Add `ALTER TABLE skills ADD COLUMN revision` migration. |
-| `adapters/sqlite/sync/skills.rs` | Add `revision: i64` to `Skill` struct. Update all SELECT queries to include `revision`. Change `update_skill()` to set `revision = revision + 1`. Change `delete_skill()` to also delete from `skill_matches` and `folder_classify`. |
+| `adapters/sqlite/sync/db_schema.rs` | Replace `skills` table definition to include `revision_hash`. Add `folder_classify` table, `skill_matches` table + index to schema. |
+| `adapters/sqlite/sync/skills.rs` | Add `revision_hash: String` to `Skill` struct. Update all SELECT queries to include `revision_hash`. Add `compute_revision_hash()` helper. Change `create_skill()` and `update_skill()` to compute and store the hash. Change `delete_skill()` to also delete from `skill_matches` and `folder_classify`. |
 | `adapters/sqlite/sync/mod.rs` | Add `pub mod skill_classify;` |
 | `services/sync/tasks/mod.rs` | Add `mod skill_classify;` and `pub use skill_classify::run_skill_classify_all;` |
 | `services/sync/worker.rs` | Add `tasks::run_skill_classify_all(app, pool).await` call between flag_resync and onboarding. Wire `skill_did_work` into the return value. |

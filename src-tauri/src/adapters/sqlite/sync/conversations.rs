@@ -384,6 +384,10 @@ pub struct Cluster {
     pub account_id: String,
     pub is_join: bool,
     pub domains: String, // JSON array of sender emails
+    pub is_skill: bool,
+    pub skill_id: Option<String>,
+    pub icon: Option<String>,
+    pub icon_bg: Option<String>,
 }
 pub fn fetch_clusters(
     pool: &DbPool,
@@ -464,6 +468,10 @@ pub fn fetch_clusters(
             account_id: members[0].account_id.clone(),
             is_join: true,
             domains: senders_json,
+            is_skill: false,
+            skill_id: None,
+            icon: None,
+            icon_bg: None,
         });
     }
 
@@ -483,11 +491,60 @@ pub fn fetch_clusters(
             account_id: rc.account_id.clone(),
             is_join: false,
             domains: senders_json,
+            is_skill: false,
+            skill_id: None,
+            icon: None,
+            icon_bg: None,
         });
     }
 
-    // Sort by last_activity descending
-    clusters.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
+    // 4. Skill clusters — virtual clusters from skill_matches
+    {
+        let mut skill_stmt = conn.prepare(
+            "SELECT s.id, s.name, s.icon, s.icon_bg,
+                    COUNT(sm.message_id) AS message_count,
+                    SUM(CASE WHEN NOT EXISTS (
+                        SELECT 1 FROM json_each(m.imap_flags) WHERE value = 'Seen'
+                    ) THEN 1 ELSE 0 END) AS unread_count,
+                    MAX(m.date) AS last_activity
+             FROM skills s
+             JOIN skill_matches sm ON sm.skill_id = s.id
+             JOIN messages m ON m.id = sm.message_id
+             WHERE s.account_id = ?1 AND s.enabled = 1
+             GROUP BY s.id",
+        )?;
+
+        let skill_rows = skill_stmt.query_map(params![account_id], |row| {
+            Ok(Cluster {
+                id: format!("skill:{}", row.get::<_, String>(0)?),
+                name: row.get(1)?,
+                from_name: None,
+                message_count: row.get(4)?,
+                unread_count: row.get(5)?,
+                keywords: "[]".to_string(),
+                last_activity: row.get(6)?,
+                account_id: account_id.to_string(),
+                is_join: false,
+                domains: "[]".to_string(),
+                is_skill: true,
+                skill_id: Some(row.get(0)?),
+                icon: Some(row.get(2)?),
+                icon_bg: Some(row.get(3)?),
+            })
+        })?;
+
+        for row in skill_rows {
+            if let Ok(c) = row {
+                clusters.push(c);
+            }
+        }
+    }
+
+    // Sort: skill clusters first (by last_activity desc), then regular (by last_activity desc)
+    clusters.sort_by(|a, b| {
+        b.is_skill.cmp(&a.is_skill)
+            .then(b.last_activity.cmp(&a.last_activity))
+    });
 
     Ok(clusters)
 }
