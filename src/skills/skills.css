@@ -1,0 +1,637 @@
+/* ══════════════════════════════════════════
+   SKILLS — Soft Geometric Light
+   ══════════════════════════════════════════ */
+
+:root {
+  --sg-bg: #FAFBFE;
+  --sg-surface: #FFFFFF;
+  --sg-surface-alt: #F0F2FA;
+  --sg-border: #E4E6F0;
+  --sg-border-light: #ECEDF5;
+  --sg-text: #2C2E3A;
+  --sg-text2: #5B5D6B;
+  --sg-text3: #9B9DAA;
+  --sg-text4: #C0C3D0;
+  --sg-green: #6EC6A5;
+  --sg-green-dim: #5AB894;
+  --sg-green-bg: #E5F5EE;
+  --sg-green-border: #B8E4D0;
+  --sg-skill: #7CAED9;
+  --sg-skill-bg: #E4F0FA;
+  --sg-skill-border: #B8D6EE;
+  --sg-red: #E88E8E;
+  --sg-red-bg: #FDE8E8;
+  --sg-purple: #B5A4E0;
+  --sg-amber: #F2A365;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+html.dark {
+  --sg-bg: #1a1a1a;
+  --sg-surface: #1f1f1f;
+  --sg-surface-alt: #2c2c2e;
+  --sg-border: #2c2c2e;
+  --sg-border-light: #333333;
+  --sg-text: #ffffff;
+  --sg-text2: #b3b3b3;
+  --sg-text3: #8e8e93;
+  --sg-text4: #6e6e73;
+  --sg-green: #34c759;
+  --sg-green-dim: #2da44e;
+  --sg-green-bg: rgba(52, 199, 89, 0.1);
+  --sg-green-border: rgba(52, 199, 89, 0.3);
+  --sg-skill: #3478f6;
+  --sg-skill-bg: rgba(52, 120, 246, 0.1);
+  --sg-skill-border: rgba(52, 120, 246, 0.3);
+  --sg-red: #ff3b30;
+  --sg-red-bg: rgba(255, 59, 48, 0.1);
+  --sg-purple: #a78bfa;
+  --sg-amber: #f59e0b;
+}
+
+/* ── Shared Layout ── */
+
+.skills-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--sg-bg);
+}
+
+.skills-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--sg-border);
+  flex-shrink: 0;
+  background: var(--sg-surface);
+}
+
+.skills-header-title {
+  font-weight: 800;
+  font-size: 17px;
+  flex: 1;
+  color: var(--sg-text);
+  letter-spacing: -0.02em;
+}
+
+.skills-back {
+  border: none;
+  background: none;
+  font-size: 32px;
+  cursor: pointer;
+  color: var(--sg-green);
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -8px;
+  font-weight: 300;
+}
+.skills-back:hover {
+  color: var(--sg-green-dim);
+}
+
+.skills-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 40px;
+}
+
+.skills-section-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--sg-text4);
+  padding: 20px 20px 10px;
+  text-transform: uppercase;
+}
+
+/* Green action buttons */
+.skills-new-btn {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--sg-green);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.skills-new-btn:hover {
+  background: var(--sg-green-dim);
+}
+
+.skills-save-btn {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--sg-green);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: var(--font-body);
+  flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════
+   SKILLS HUB — Skill Cards
+   ══════════════════════════════════════════ */
+
+.skill-card {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 12px;
+  border: 1px solid var(--sg-border);
+  border-radius: 16px;
+  margin: 6px 20px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  background: var(--sg-surface);
+}
+.skill-card:hover {
+  background: var(--sg-surface-alt);
+}
+
+.skill-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  flex-shrink: 0;
+}
+
+.skill-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.skill-card-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--sg-text);
+}
+.skill-card-meta {
+  font-size: 12px;
+  color: var(--sg-text3);
+  margin-top: 2px;
+}
+
+/* Toggle switch */
+.skill-toggle {
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.skill-toggle.on {
+  background: var(--sg-green);
+}
+.skill-toggle.off {
+  background: var(--sg-border);
+}
+.skill-toggle-knob {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  top: 3px;
+  transition: left 0.2s;
+}
+.skill-toggle.on .skill-toggle-knob {
+  left: 21px;
+}
+.skill-toggle.off .skill-toggle-knob {
+  left: 3px;
+}
+.skill-toggle.no-model {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Create skill dashed button */
+.skill-create-dashed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 40px);
+  margin: 10px 20px;
+  padding: 12px;
+  border: 2px dashed var(--sg-text4);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--sg-text3);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: border-color 0.15s, color 0.15s;
+}
+.skill-create-dashed:hover {
+  border-color: var(--sg-green);
+  color: var(--sg-green);
+}
+
+/* ══════════════════════════════════════════
+   SKILL STUDIO
+   ══════════════════════════════════════════ */
+
+.studio-icon-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+}
+.studio-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+.studio-name-group {
+  flex: 1;
+}
+.studio-name-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--sg-text4);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.studio-name-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--sg-border);
+  border-radius: 12px;
+  background: var(--sg-surface-alt);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sg-text);
+  outline: none;
+  font-family: var(--font-body);
+}
+.studio-name-input:focus {
+  border-color: var(--sg-green);
+}
+
+/* Studio tabs */
+.studio-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--sg-border);
+  padding: 0 20px;
+}
+.studio-tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sg-text4);
+  cursor: pointer;
+  font-family: var(--font-body);
+  border-bottom: 2.5px solid transparent;
+  transition: color 0.15s;
+  text-align: center;
+  text-transform: capitalize;
+  margin-bottom: -1px;
+}
+.studio-tab.active {
+  color: var(--sg-skill);
+  font-weight: 800;
+  border-bottom-color: var(--sg-skill);
+}
+
+/* Edit tab */
+.studio-prompt-textarea {
+  display: block;
+  width: calc(100% - 40px);
+  margin: 0 20px;
+  min-height: 100px;
+  padding: 13px 16px;
+  border: 1.5px solid var(--sg-border);
+  border-radius: 14px;
+  background: var(--sg-surface);
+  font-family: "DM Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 13px;
+  color: var(--sg-text);
+  resize: vertical;
+  outline: none;
+  line-height: 1.6;
+}
+.studio-prompt-textarea::placeholder {
+  color: var(--sg-text4);
+}
+.studio-prompt-textarea:focus {
+  border-color: var(--sg-skill);
+}
+
+.studio-prompt-note {
+  padding: 8px 20px;
+  font-size: 11px;
+  color: var(--sg-text3);
+  line-height: 1.4;
+}
+
+/* Quick modifiers */
+.modifier-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 20px;
+}
+.modifier-chip {
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--sg-border);
+  background: var(--sg-surface-alt);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--sg-text3);
+  font-family: var(--font-body);
+  transition: all 0.15s;
+}
+.modifier-chip:hover {
+  border-color: var(--sg-green);
+}
+.modifier-chip.active {
+  background: var(--sg-green-bg);
+  color: var(--sg-green-dim);
+  border-color: var(--sg-green-border);
+}
+
+/* Test button */
+.studio-test-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(100% - 40px);
+  margin: 16px 20px;
+  padding: 12px;
+  border: 1.5px solid var(--sg-skill);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--sg-skill);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s;
+}
+.studio-test-btn:hover {
+  background: var(--sg-skill-bg);
+}
+
+/* Preview tab — empty state */
+.preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+.preview-empty-text {
+  font-size: 13px;
+  color: var(--sg-text3);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Preview tab — progress */
+.preview-progress {
+  padding: 30px 20px;
+  text-align: center;
+}
+.preview-progress-text {
+  font-size: 13px;
+  color: var(--sg-text2);
+  margin-bottom: 4px;
+}
+.preview-match-count {
+  font-size: 12px;
+  color: var(--sg-green);
+  font-weight: 600;
+}
+
+/* Preview tab — error */
+.preview-error {
+  padding: 20px;
+}
+.preview-error-text {
+  font-size: 13px;
+  color: var(--sg-red);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Preview tab — sub-tabs (matches / misses) */
+.preview-subtabs {
+  display: flex;
+  gap: 16px;
+  padding: 20px 20px 0;
+}
+.preview-subtab {
+  padding: 0 0 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sg-text4);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: color 0.15s, border-color 0.15s;
+}
+.preview-subtab.active {
+  color: var(--sg-text);
+  border-bottom-color: var(--sg-text);
+}
+
+/* Preview tab — cards */
+.preview-card {
+  margin: 6px 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--sg-border);
+  border-radius: 14px;
+  background: var(--sg-surface);
+}
+.preview-card-sender {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sg-text);
+  margin-bottom: 2px;
+}
+.preview-card-subject {
+  font-size: 12px;
+  color: var(--sg-text2);
+  margin-bottom: 4px;
+}
+.preview-card-snippet {
+  font-size: 11px;
+  color: var(--sg-text3);
+  line-height: 1.4;
+}
+
+/* Preview tab — miss card (muted) */
+.preview-card-miss {
+  opacity: 0.4;
+}
+
+/* Preview tab — done summary */
+.preview-summary {
+  text-align: center;
+  font-size: 11px;
+  color: var(--sg-text3);
+  padding: 12px 20px;
+}
+
+/* Settings — slider */
+.setting-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.setting-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sg-border);
+  outline: none;
+}
+.setting-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sg-green);
+  cursor: pointer;
+}
+.setting-slider-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sg-text);
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Settings tab */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--sg-border-light);
+}
+.setting-info {
+  flex: 1;
+}
+.setting-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--sg-text);
+}
+.setting-desc {
+  font-size: 11px;
+  color: var(--sg-text3);
+  margin-top: 2px;
+}
+
+/* Section headers */
+.setting-section-header {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--sg-text4);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 16px 20px 4px;
+  margin-top: 8px;
+}
+
+/* Input fields */
+.setting-input-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  border-bottom: none;
+}
+.setting-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--sg-border);
+  background: var(--sg-surface-alt);
+  color: var(--sg-text);
+  font-size: 13px;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.setting-input::placeholder {
+  color: var(--sg-text4);
+}
+.setting-input:focus {
+  border-color: var(--sg-green);
+}
+select.setting-input {
+  appearance: none;
+  cursor: pointer;
+}
+.setting-input-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: var(--sg-text4);
+}
+
+/* Delete skill */
+.setting-delete-row {
+  margin-top: 20px;
+  border-bottom: none;
+  border-top: 1px solid var(--sg-border);
+}
+.setting-delete-name {
+  color: var(--sg-red);
+}
+.skill-delete-btn {
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: 1px solid #E88E8E40;
+  background: var(--sg-red-bg);
+  color: var(--sg-red);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.skill-delete-btn:hover {
+  background: #FDD5D5;
+}

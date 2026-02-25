@@ -1,93 +1,51 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { getAvatarColor, getInitials, getGravatarUrl } from "../lib/utils";
+import { useGravatar } from "../lib/gravatar";
+import { avatarBg, avatarTextColor, initials } from "../lib/helpers";
 
 interface AvatarProps {
-  email: string | null;
   name: string;
-  size?: number;
+  email?: string;
+  /** Tailwind spacing unit (7 = w-7 h-7 = 28px, 11 = w-11 h-11 = 44px) */
+  size: number;
+  /** Font size class for initials, e.g. "text-[15px]" */
+  fontSize?: string;
+  /** Extra className for the outer container */
   className?: string;
-  title?: string;
-  onClick?: () => void;
 }
 
+const SIZE_PX: Record<number, number> = {
+  7: 28,
+  8: 32,
+  9: 36,
+  10: 40,
+  11: 44,
+  12: 48,
+  13: 52,
+};
+
 export function Avatar({
-  email,
   name,
-  size = 40,
+  email,
+  size,
+  fontSize = "text-[15px]",
   className = "",
-  title,
-  onClick,
 }: AvatarProps) {
-  const [imageStatus, setImageStatus] = useState<"loading" | "loaded" | "error">(
-    "loading"
-  );
-
-  // Memoize expensive calculations to avoid recalculating on every render
-  const gravatarUrl = useMemo(
-    () => {
-      if (email) {
-        const url = getGravatarUrl(email, size);
-        return url;
-      }
-      return null;
-    },
-    [email, size]
-  );
-  const avatarColor = useMemo(
-    () => getAvatarColor(email || name),
-    [email, name]
-  );
-  const initials = useMemo(() => getInitials(name), [name]);
-
-  // Reset image loading state when gravatar URL changes
-  // Track the URL to reset status when it actually changes
-  const prevUrlRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (prevUrlRef.current !== gravatarUrl) {
-      setImageStatus("loading");
-      prevUrlRef.current = gravatarUrl;
-    }
-  }, [gravatarUrl]);
-
-  const sizeClass = size <= 32 ? "text-xs" : size <= 40 ? "text-sm" : "text-lg";
-
-  const baseClasses = `flex items-center justify-center rounded-full text-white font-semibold uppercase overflow-hidden relative ${sizeClass}`;
-  const interactiveClasses = onClick ? "cursor-pointer" : "";
+  const px = SIZE_PX[size] ?? size * 4;
+  const gravatarSrc = useGravatar(email, px * 2);
 
   return (
     <div
-      className={`${baseClasses} ${interactiveClasses} ${className}`}
-      style={{
-        backgroundColor: imageStatus === "loaded" ? "transparent" : avatarColor,
-        width: size,
-        height: size,
-        minWidth: size,
-      }}
-      title={title}
-      onClick={onClick}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      className={`w-${size} h-${size} avatar-shape flex items-center justify-center font-bold ${fontSize} ${className}`}
+      style={{ background: avatarBg(name), color: avatarTextColor(name) }}
     >
-      {gravatarUrl && (
+      {gravatarSrc ? (
         <img
-          src={gravatarUrl}
-          alt={name}
-          className="absolute inset-0 w-full h-full object-cover rounded-full"
-          style={{ display: imageStatus === "loaded" ? "block" : "none" }}
-          onError={() => {
-            setImageStatus("error");
-          }}
-          onLoad={() => {
-            setImageStatus("loaded");
-          }}
+          src={gravatarSrc}
+          alt=""
+          className={`w-${size} h-${size} avatar-shape object-cover`}
         />
+      ) : (
+        initials(name)
       )}
-      <span
-        className="avatar-initials"
-        style={{ display: imageStatus === "loaded" ? "none" : "block" }}
-      >
-        {initials}
-      </span>
     </div>
   );
 }

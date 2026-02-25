@@ -8,7 +8,7 @@ Eddie Chat is a cross-platform email client built with:
 - **Frontend**: React 19 + TypeScript + Tailwind CSS
 - **Backend**: Rust + Tauri 2
 - **Database**: SQLite (local cache)
-- **Protocols**: IMAP/SMTP via `email-lib`
+- **Protocols**: IMAP/SMTP via `async-imap` + `mailparse`
 
 ---
 
@@ -91,38 +91,56 @@ After making changes, verify:
 
 ## Frontend Architecture
 
-The frontend uses a **feature-based architecture**. Follow these rules strictly:
+The frontend uses **file-based routing** with TanStack Router and a shared context layer. Follow these rules strictly:
 
 ### Directory Structure
 
 ```
 src/
-├── features/           # Feature modules (domain-based)
-│   ├── accounts/       # Account management
-│   └── conversations/  # Email conversations
-├── shared/             # Reusable utilities & components
-├── tauri/              # Tauri communication layer
-└── lib/                # Static data (emoji, etc.)
+├── main.tsx               # Entry point (providers + router)
+├── router.tsx             # TanStack Router config (hash history)
+├── routes/                # File-based routing (TanStack Router)
+│   ├── __root.tsx         # Root layout
+│   ├── login.tsx          # Login screen
+│   ├── _app.tsx           # Auth guard (beforeLoad)
+│   ├── _app/_tabs.tsx     # Tab layout (header, tabs, account drawer)
+│   ├── _app/_tabs/        # Tab routes (points, circles, lines)
+│   ├── _app/settings.tsx  # Settings screen
+│   ├── _app/conversation.$id.tsx  # Conversation detail
+│   ├── _app/cluster.$id.tsx       # Cluster detail
+│   └── _app/skills.*.tsx  # Skills routes (hub, studio, community)
+├── skills/                # Standalone skill components
+├── shared/                # Reusable utilities, components & context
+│   ├── components/        # Generic UI components (Icons, etc.)
+│   ├── context/           # Global state (AuthContext, DataContext, SearchContext)
+│   └── lib/               # Utility functions (helpers)
+└── tauri/                 # Tauri communication layer
+    ├── commands.ts        # Type-safe command wrappers
+    ├── events.ts          # Event listeners
+    └── types.ts           # Frontend type definitions
 ```
 
-### Rule 1: Feature-Based Organization
+### Rule 1: Route-Based Organization
 
-**DO:** Group code by domain/feature, not by type.
+Routes live in `src/routes/` following TanStack Router file-based conventions:
+- Prefix `_` for layout routes (`_app.tsx`, `_tabs.tsx`)
+- `$param` for dynamic segments (`conversation.$id.tsx`)
+- Dot notation for nested paths (`skills.hub.tsx` → `/skills/hub`)
+- `routeTree.gen.ts` is auto-generated (gitignored)
 
+**Route files should be thin** — delegate to standalone components for complex UI:
+
+```typescript
+// src/routes/_app/skills.hub.tsx — thin route wrapper
+function SkillsHubRoute() {
+  const navigate = useNavigate();
+  return <SkillsHub onNewSkill={() => navigate({ to: '/skills/studio' })} />;
+}
 ```
-src/features/accounts/
-├── components/         # UI components for this feature
-├── hooks/              # React hooks for this feature
-├── context/            # Context providers (if needed)
-├── utils.ts            # Feature-specific utilities
-└── index.ts            # Barrel exports
-```
-
-**DON'T:** Create top-level `components/`, `hooks/`, or `types/` directories.
 
 ### Rule 2: Centralized Tauri Communication
 
-**NEVER call `invoke()` directly in components or hooks.**
+**NEVER call `invoke()` directly in components or routes.**
 
 All Tauri communication must go through the `tauri/` layer:
 
@@ -132,8 +150,8 @@ import { invoke } from '@tauri-apps/api/core';
 const data = await invoke('get_accounts');
 
 // CORRECT - Use tauri layer
-import { listAccounts } from '../tauri';
-const data = await listAccounts();
+import { connectAccount } from '../tauri';
+const data = await connectAccount(params);
 ```
 
 **Adding new Tauri commands:**
@@ -152,17 +170,17 @@ const data = await listAccounts();
 Every directory with multiple files needs an `index.ts` barrel export:
 
 ```typescript
-// src/features/accounts/components/index.ts
-export { SidebarHeader } from './SidebarHeader';
-export { AccountSetupWizard } from './AccountSetupWizard';
-export { AccountConfigModal } from './AccountConfigModal';
+// src/shared/context/index.ts
+export { AuthProvider, useAuth } from './AuthContext';
+export { DataProvider, useData } from './DataContext';
+export { SearchProvider, useTabSearch } from './SearchContext';
 ```
 
 ```typescript
-// src/features/accounts/index.ts
-export * from './components';
-export * from './hooks';
-export * from './context';
+// src/skills/index.ts
+export { SkillsHub } from './SkillsHub';
+export { SkillStudio } from './SkillStudio';
+export { CommunitySkills } from './CommunitySkills';
 ```
 
 ### Rule 4: Import Patterns
@@ -170,30 +188,37 @@ export * from './context';
 Use these import patterns consistently:
 
 ```typescript
-// Feature imports
-import { useAccounts, AccountSetupWizard } from './features/accounts';
-import { ConversationView, useConversations } from './features/conversations';
-
 // Tauri layer (commands, events, types)
-import { saveAccount, listAccounts, onSyncEvent } from './tauri';
-import type { EmailAccount, SyncStatus, Conversation } from './tauri';
+import { connectAccount, fetchConversations, onSyncStatus } from '../tauri';
+import type { Conversation, Cluster, SyncStatus } from '../tauri';
+
+// Shared context
+import { useAuth } from '../shared/context';
+import { useData } from '../shared/context';
 
 // Shared utilities and components
-import { Avatar, LoadingSpinner, EmptyState } from './shared/components';
-import { extractEmail, getAvatarColor, formatMessageTime } from './shared/lib';
+import { ComposeIcon } from '../shared/components';
+import { relTime, avatarBg, displayName } from '../shared/lib';
+
+// Skills (from route wrappers)
+import { SkillsHub } from '../skills';
 ```
 
-### Rule 5: Shared vs Feature Code
+### Rule 5: Shared vs Skills vs Routes
 
 **Put in `shared/`:**
-- Generic UI components (Avatar, LoadingSpinner, EmptyState)
-- Utility functions used by multiple features
-- Common types used across features
+- Generic UI components (Icons, etc.)
+- Context providers (AuthContext, DataContext, SearchContext)
+- Utility functions used across routes
 
-**Put in `features/{name}/`:**
-- Components specific to that feature
-- Hooks that manage feature state
-- Feature-specific utilities
+**Put in `skills/`:**
+- Standalone skill components (SkillsHub, SkillStudio, etc.)
+- Skill types and mock data
+- Skill-specific styling
+
+**Put in `routes/`:**
+- Route definitions with thin wrappers
+- Navigation logic (passing `navigate()` callbacks to components)
 
 ### Rule 6: Type Safety
 
@@ -203,48 +228,37 @@ import { extractEmail, getAvatarColor, formatMessageTime } from './shared/lib';
 
 ```typescript
 // src/tauri/commands.ts
-export async function listAccounts(): Promise<EmailAccount[]> {
-  return invoke<EmailAccount[]>('list_accounts');
+export async function fetchConversations(accountId: string): Promise<Conversation[]> {
+  return invoke<Conversation[]>('fetch_conversations', { accountId });
 }
 ```
 
-### Rule 7: Hook Patterns
+### Rule 7: State Management
 
-Hooks should return consistent shapes:
+Global state is managed through React Context in `src/shared/context/`:
 
-```typescript
-interface UseAccountsResult {
-  accounts: EmailAccount[];
-  currentAccount: string | null;
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-}
+- **AuthContext** — login credentials, account ID, authentication flow
+- **DataContext** — conversations, clusters, sync status; auto-refreshes on Tauri events
+- **SearchContext** — tab search string (shared across tab routes)
 
-export function useAccounts(): UseAccountsResult {
-  // implementation
-}
-```
+Routes and components access state via hooks: `useAuth()`, `useData()`, `useTabSearch()`.
 
-### Creating New Features
+### Adding New Routes
 
-When adding a new feature:
-
-1. Create the feature directory: `src/features/{feature-name}/`
-2. Add subdirectories as needed: `components/`, `hooks/`, `context/`
-3. Create barrel exports at each level
+1. Create the route file in `src/routes/` following TanStack Router conventions
+2. For complex UI, create a standalone component in the appropriate directory
+3. Route file wraps the component, passing navigation callbacks
 4. Add any Tauri commands to `src/tauri/commands.ts`
 5. Add any new types to `src/tauri/types.ts`
-6. Export the feature from `src/features/index.ts`
 
 ### Frontend Mistakes to Avoid
 
 1. **Don't** create new top-level directories in `src/`
 2. **Don't** call `invoke()` outside of `src/tauri/commands.ts`
-3. **Don't** put feature-specific code in `shared/`
+3. **Don't** put route-specific code in `shared/`
 4. **Don't** forget barrel exports when adding new files
-5. **Don't** use `any` types - define proper interfaces
-6. **Don't** mix concerns - keep UI separate from data fetching
+5. **Don't** use `any` types — define proper interfaces
+6. **Don't** put heavy logic in route files — delegate to components
 
 ---
 
@@ -256,20 +270,52 @@ Follow the established separation of concerns:
 
 ```
 src-tauri/src/
-├── commands/     # Tauri command handlers (thin wrappers)
-├── services/     # Business logic (Tauri-agnostic)
-├── state/        # Application state management
-├── types/        # Data structures and types
-├── sync/         # Sync engine
-├── backend/      # IMAP/SMTP protocol
-└── ...
+├── commands/          # Tauri command handlers (thin wrappers)
+│   ├── account.rs     # Account management (connect_account)
+│   ├── conversations.rs # Conversation/cluster queries
+│   ├── sync.rs        # Sync control (sync_now)
+│   └── classify.rs    # Message classification
+├── services/          # Business logic (Tauri-agnostic)
+│   └── sync/          # Sync engine
+│       ├── worker.rs  # Main tick loop (15s interval)
+│       ├── helpers/   # Processing utilities
+│       │   ├── email_normalization.rs
+│       │   ├── message_builder.rs
+│       │   ├── message_classification.rs
+│       │   ├── message_distillation.rs
+│       │   └── status_emit.rs
+│       └── tasks/     # Onboarding & sync tasks
+│           ├── trust_network.rs
+│           ├── historical_fetch.rs
+│           ├── connection_history.rs
+│           └── incremental_sync.rs
+├── adapters/          # External service adapters
+│   ├── imap/          # IMAP protocol implementation
+│   │   ├── connection.rs
+│   │   ├── envelopes.rs
+│   │   ├── folders.rs
+│   │   ├── sent_scan.rs
+│   │   └── historical.rs
+│   └── sqlite/        # SQLite persistence
+│       └── sync/      # Sync database
+│           ├── db.rs          # Connection pool init
+│           ├── db_schema.rs   # Schema definition
+│           ├── messages.rs    # Message queries
+│           ├── accounts.rs    # Account queries
+│           ├── entities.rs    # Email entity queries
+│           ├── conversations.rs # Conversation materialization
+│           ├── folder_sync.rs # Folder sync tracking
+│           └── onboarding_tasks.rs
+├── error.rs           # EddieError enum
+├── lib.rs             # Tauri app setup (state, worker spawn)
+└── main.rs            # Binary entry point
 ```
 
 **Rules:**
-- Keep `commands/` as thin wrappers that delegate to `services/`
+- Keep `commands/` as thin wrappers that delegate to `services/` and `adapters/`
 - Business logic should live in `services/` and be Tauri-agnostic
-- State types belong in `state/`, not scattered in command files
-- Response DTOs for the frontend go in `types/responses.rs`
+- Protocol and persistence code belongs in `adapters/`
+- Serializable types are defined in the adapter or command modules that use them
 
 ### 2. Command Design
 
@@ -280,25 +326,20 @@ Commands should be thin wrappers that:
 4. Return serializable responses
 
 ```rust
-// ✅ Good: Thin wrapper
+// ✅ Good: Thin wrapper delegating to adapters
 #[tauri::command]
-pub async fn delete_messages(
-    account: Option<String>,
-    folder: Option<String>,
-    ids: Vec<String>,
-    sync_manager: State<'_, SyncManager>,
-) -> Result<(), EddieError> {
-    let account_id = resolve_account_id_string(account)?;
-    let backend = backend::get_backend(Some(&account_id)).await?;
-    backend.delete_messages(folder.as_deref(), &ids).await?;
-    update_cache(&sync_manager, &account_id, &ids).await;
-    Ok(())
+pub async fn fetch_conversations(
+    pool: State<'_, Pool>,
+    account_id: String,
+) -> Result<Vec<Conversation>, EddieError> {
+    let convos = adapters::sqlite::sync::conversations::get_conversations(&pool, &account_id)?;
+    Ok(convos)
 }
 
 // ❌ Bad: Business logic in command
 #[tauri::command]
-pub async fn delete_messages(...) -> Result<(), String> {
-    // 50+ lines of MIME parsing, database queries, etc.
+pub async fn fetch_conversations(...) -> Result<(), String> {
+    // 50+ lines of IMAP fetching, parsing, database writes, etc.
 }
 ```
 
@@ -330,29 +371,24 @@ pub async fn my_command() -> Result<Data, String> {
 
 ### 4. State Management
 
-**Use the `state/` module for managed state:**
+State is managed via Tauri's `app.manage()` in `lib.rs`:
 
 ```rust
-// State lives in state/sync_manager.rs
-pub struct SyncManager {
-    engines: RwLock<HashMap<String, Arc<RwLock<SyncEngine>>>>,
-    // ...
-}
+// lib.rs — managed state
+app.manage(pool);      // SQLite connection pool (for DB access)
+app.manage(wake_tx);   // Channel to wake the sync worker
 
 // Commands access via State extractor
 #[tauri::command]
-pub async fn init_sync_engine(
-    manager: State<'_, SyncManager>,
-    account: Option<String>,
-) -> Result<SyncStatusResponse, EddieError> {
-    manager.get_or_create(&account_id).await?;
+pub async fn sync_now(
+    wake_tx: State<'_, mpsc::Sender<()>>,
+) -> Result<(), EddieError> {
+    let _ = wake_tx.send(()).await;
+    Ok(())
 }
 ```
 
-**Rules:**
-- Use `RwLock` for state that's read more than written
-- Use `Mutex` for write-heavy state
-- Wrap engines in `Arc<RwLock<T>>` for shared async access
+**The sync worker** runs as an independent async task (spawned in `lib.rs`) that ticks every 15 seconds or when woken via the channel.
 
 ### 5. Async Operations
 
@@ -361,38 +397,39 @@ pub async fn init_sync_engine(
 ```rust
 // ✅ Good: async command for I/O
 #[tauri::command]
-pub async fn fetch_message_body(
-    manager: State<'_, SyncManager>,
-    message_id: i64,
-) -> Result<CachedMessageResponse, EddieError> {
-    let engine = manager.get_or_create(&account_id).await?;
-    engine.read().await.fetch_message_body(message_id).await?
+pub async fn connect_account(
+    pool: State<'_, Pool>,
+    wake_tx: State<'_, mpsc::Sender<()>>,
+    params: ConnectAccountParams,
+) -> Result<String, EddieError> {
+    // Store account, then wake sync worker
+    let account_id = adapters::sqlite::sync::accounts::insert(&pool, &params)?;
+    let _ = wake_tx.send(()).await;
+    Ok(account_id)
 }
 ```
 
-**Emit events for long-running operations:**
-
-```rust
-// Emit progress updates
-self.emit_event(SyncEvent::StatusChanged(status.clone()));
-```
+**Emit events for long-running operations** (from the sync worker via `services/sync/helpers/status_emit.rs`).
 
 ### 6. Database Operations
 
-**The sync database is a cache, not source of truth:**
+**The sync database is a cache, not source of truth.** All database access goes through `adapters/sqlite/sync/`:
 
 ```rust
-// Pattern: Update cache, then sync to server
-db.add_message_flags(&account_id, folder, uid, &flags)?;  // Local first
-action_queue.queue(ActionType::AddFlags { ... })?;         // Queue for server
+// Pattern: Store messages from IMAP into local cache
+db::messages::upsert_message(&pool, &message)?;
+
+// Query materialized conversations
+db::conversations::get_conversations(&pool, &account_id)?;
 ```
 
-**Use the action queue for offline support:**
-
-```rust
-// Queue actions that will replay on reconnect
-engine.queue_action(ActionType::Delete { folder, uids })?;
-```
+**Key database modules:**
+- `db.rs` — connection pool initialization (r2d2 + rusqlite)
+- `db_schema.rs` — schema definition and migrations
+- `messages.rs` — message CRUD and classification updates
+- `conversations.rs` — conversation materialization and cluster queries
+- `folder_sync.rs` — IMAP UID/modseq tracking per folder
+- `onboarding_tasks.rs` — initial sync task queue
 
 ### 7. Event Emission
 
@@ -404,16 +441,8 @@ self.emit_event(SyncEvent::ConversationsUpdated {
     conversation_ids: affected_ids,
 });
 
-// Event types (sync/engine.rs)
-pub enum SyncEvent {
-    StatusChanged(SyncStatus),
-    NewMessages { folder: String, count: u32 },
-    MessagesDeleted { folder: String, uids: Vec<u32> },
-    FlagsChanged { folder: String, uids: Vec<u32> },
-    ConversationsUpdated { conversation_ids: Vec<i64> },
-    Error { message: String },
-    SyncComplete,
-}
+// Events emitted via services/sync/helpers/status_emit.rs
+// Frontend listens via src/tauri/events.ts
 ```
 
 ### 8. Type Design
@@ -465,15 +494,13 @@ error!("Sync failed: {}", e);
 When adding or modifying code, verify:
 
 - [ ] Commands are thin wrappers (< 30 lines typically)
-- [ ] Business logic is in `services/` or domain modules
+- [ ] Business logic is in `services/`, not in commands
+- [ ] Protocol code is in `adapters/imap/`, DB code in `adapters/sqlite/`
 - [ ] Returns `Result<T, EddieError>`, not `Result<T, String>`
-- [ ] State types are in `state/` module
-- [ ] Response DTOs are in `types/responses.rs`
 - [ ] No `.unwrap()` or `.expect()` in command handlers
 - [ ] Async operations use `async/await`
 - [ ] Long operations emit progress events
-- [ ] Database operations go through `sync/db.rs`
-- [ ] Offline-capable actions use the action queue
+- [ ] Database operations go through `adapters/sqlite/sync/`
 
 ---
 
@@ -485,10 +512,10 @@ When adding or modifying code, verify:
    ```rust
    #[tauri::command]
    pub async fn new_command(
-       manager: State<'_, SyncManager>,
+       pool: State<'_, Pool>,
        param: String,
    ) -> Result<ResponseType, EddieError> {
-       // Thin wrapper logic
+       // Thin wrapper — delegate to adapters/services
    }
    ```
 
@@ -500,70 +527,45 @@ When adding or modifying code, verify:
    ])
    ```
 
-3. **Add response type if needed in `types/responses.rs`**
-
-4. **Add frontend wrapper in `src/tauri/commands.ts`:**
+3. **Add frontend wrapper in `src/tauri/commands.ts`:**
    ```typescript
    export async function newCommand(param: string): Promise<ResponseType> {
      return invoke<ResponseType>('new_command', { param });
    }
    ```
 
-5. **Add types in `src/tauri/types.ts` if needed**
+4. **Add types in `src/tauri/types.ts` if needed**
 
-### Adding a New Sync Event
+### Adding a New Sync Task
 
-1. **Add variant in `sync/engine.rs`:**
+1. **Create task in `services/sync/tasks/`:**
    ```rust
-   pub enum SyncEvent {
-       // ...existing
-       NewEventType { data: String },
+   pub async fn run(pool: &Pool, account_id: &str) -> Result<(), EddieError> {
+       // Task logic using adapters
    }
    ```
 
-2. **Emit where appropriate:**
-   ```rust
-   self.emit_event(SyncEvent::NewEventType { data });
-   ```
+2. **Wire into worker in `services/sync/worker.rs`**
 
-3. **Add listener in `src/tauri/events.ts`:**
-   ```typescript
-   export async function onNewEventType(
-     callback: (data: string) => void
-   ): Promise<UnlistenFn> {
-     return listen<SyncEventPayload>('sync-event', (event) => {
-       if ('NewEventType' in event.payload) {
-         callback(event.payload.NewEventType.data);
-       }
-     });
-   }
-   ```
+3. **Add event emission via `services/sync/helpers/status_emit.rs`**
 
-### Adding Offline Support for an Action
+4. **Add listener in `src/tauri/events.ts` if the frontend needs to react**
 
-1. **Add action type in `sync/action_queue.rs`:**
-   ```rust
-   pub enum ActionType {
-       // ...existing
-       NewAction { params },
-   }
-   ```
+### Adding a New IMAP Adapter Function
 
-2. **Implement replay logic in `ActionQueue::execute_action()`**
-
-3. **Queue from command:**
-   ```rust
-   engine.queue_action(ActionType::NewAction { params })?;
-   ```
+1. **Add function in `adapters/imap/<module>.rs`**
+2. **Call from `services/sync/tasks/` or `commands/`**
+3. **Store results via `adapters/sqlite/sync/`**
 
 ---
 
 ## File Naming Conventions
 
 ### Frontend
-- Components: PascalCase (`ConversationView.tsx`)
+- Components: PascalCase (`SkillsHub.tsx`, `CommunitySkills.tsx`)
+- Routes: TanStack Router conventions (`_app.tsx`, `_tabs.tsx`, `conversation.$id.tsx`, `skills.hub.tsx`)
 - Hooks: camelCase with `use` prefix (`useConversations.ts`)
-- Utilities: camelCase (`utils.ts`)
+- Utilities: camelCase (`helpers.ts`, `commands.ts`)
 - Types: PascalCase for types/interfaces, camelCase for type files
 
 ### Backend

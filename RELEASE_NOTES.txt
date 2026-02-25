@@ -1,7 +1,3 @@
 ### Added
-- Resizable sidebar on desktop
-- Database diagram documentation
-- Sync engine specification and requirements
-
-### Fixed
-- Duplicated ingestion spinner
+- Show full message content with HTML rendering
+- Skills reintroduced

@@ -1,194 +1,141 @@
-/**
- * Types that mirror the Rust backend types.
- * This file serves as the contract between frontend and backend.
- */
+export type SyncStatus = {
+  phase: string;
+  message: string;
+};
 
-// ========== Email Core Types ==========
-
-export interface Envelope {
-  id: string;
-  message_id?: string;
-  in_reply_to?: string;
-  from: string;
-  to: string[];
-  cc: string[];
-  subject: string;
-  date: string;
-  flags: string[];
-  has_attachment: boolean;
-}
-
-export interface ChatMessage {
-  id: string;
-  envelope: Envelope;
-  headers: [string, string][];
-  text_body?: string;
-  html_body?: string;
-  attachments: Attachment[];
-}
-
-export interface Attachment {
-  filename?: string;
-  mime_type: string;
-  size: number;
-}
-
-// ========== Account Types ==========
-
-export interface EmailAccount {
-  name: string;
-  is_default: boolean;
-  backend: string;
-}
-
-export interface EmailAccountDetails {
-  name: string;
-  email: string;
-  display_name?: string;
-  aliases?: string;
-  imap_host: string;
-  imap_port: number;
-  imap_tls: boolean;
-  imap_tls_cert?: string;
-  smtp_host: string;
-  smtp_port: number;
-  smtp_tls: boolean;
-  smtp_tls_cert?: string;
-  username: string;
-}
-
-export interface SaveEmailAccountRequest {
-  name: string;
-  email: string;
-  display_name?: string;
-  aliases?: string;
-  imap_host: string;
-  imap_port: number;
-  imap_tls: boolean;
-  imap_tls_cert?: string;
-  smtp_host: string;
-  smtp_port: number;
-  smtp_tls: boolean;
-  smtp_tls_cert?: string;
-  username: string;
-  password?: string;
-}
-
-export interface SaveDiscoveredEmailAccountRequest {
-  name: string;
-  email: string;
-  displayName?: string;
-  imapHost: string;
-  imapPort: number;
-  imapTls: boolean;
-  smtpHost: string;
-  smtpPort: number;
-  smtpTls: boolean;
-  authMethod: string;
-  password?: string;
-}
-
-// ========== Conversation Types ==========
-
-export interface Conversation {
-  id: string;
-  participants: string[];
-  participant_names: string[];
-  last_message_date: string;
-  last_message_preview: string;
-  last_message_from: string;
-  unread_count: number;
-  message_ids: string[];
-  is_outgoing: boolean;
-  user_name: string;
-  user_in_conversation: boolean;
-  /** Internal: cached conversation ID for database operations */
-  _cached_id?: number;
-}
-
-// ========== Sync Engine Types ==========
-
-export interface SyncStatus {
-  state: string;
+export type ConversationsUpdated = {
   account_id: string;
-  current_folder: string | null;
-  progress_current: number | null;
-  progress_total: number | null;
-  progress_message: string | null;
-  last_sync: string | null;
-  error: string | null;
-  is_online: boolean;
-  pending_actions: number;
-}
+  count: number;
+};
 
-export interface CachedConversation {
-  id: number;
+export type Conversation = {
+  id: string;
+  account_id: string;
   participant_key: string;
-  participants: { email: string; name: string | null }[];
-  last_message_date: string | null;
+  participant_names: string | null;
+  classification: string;
+  last_message_date: number;
   last_message_preview: string | null;
-  last_message_from: string | null;
+  unread_count: number;
+  total_count: number;
+  is_muted: boolean;
+  is_pinned: boolean;
+  is_important: boolean;
+  updated_at: number;
+};
+
+export type Cluster = {
+  id: string;
+  name: string;
+  from_name: string | null;
   message_count: number;
   unread_count: number;
-  is_outgoing: boolean;
-}
+  keywords: string;
+  last_activity: number;
+  account_id: string;
+  is_join: boolean;
+  domains: string; // JSON array of sender email strings
+  is_skill: boolean;
+  skill_id: string | null;
+  icon: string | null;
+  icon_bg: string | null;
+};
 
-export interface CachedChatMessage {
-  id: number;
-  folder: string;
-  uid: number;
-  message_id: string | null;
+export type Thread = {
+  thread_id: string;
+  subject: string | null;
+  message_count: number;
+  unread_count: number;
+  last_activity: number;
+  from_name: string | null;
+  from_address: string;
+  preview: string | null;
+};
+
+export type Message = {
+  id: string;
+  date: number;
   from_address: string;
   from_name: string | null;
-  to_addresses: string[];
-  cc_addresses: string[];
+  to_addresses: string;
+  cc_addresses: string;
   subject: string | null;
-  date: string | null;
-  flags: string[];
-  has_attachment: boolean;
-  text_body: string | null;
-  html_body: string | null;
-  body_cached: boolean;
-}
+  body_text: string | null;
+  body_html: string | null;
+  has_attachments: boolean;
+  imap_flags: string;
+  distilled_text: string | null;
+  is_sent: boolean;
+};
 
-// ========== Message Compose Types ==========
+export type ConnectAccountParams = {
+  email: string;
+  password: string;
+  imapHost: string;
+  imapPort: number;
+  imapTls?: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  aliases?: string;
+};
 
-export interface ComposeAttachment {
-  path: string;
+export type Skill = {
+  id: string;
+  account_id: string;
   name: string;
-  mime_type: string;
-  size: number;
-}
+  icon: string;
+  icon_bg: string;
+  enabled: boolean;
+  prompt: string;
+  modifiers: string;
+  settings: string;
+  created_at: number;
+  updated_at: number;
+  has_model: boolean;
+};
 
-export interface ComposeMessageData {
-  from?: string;
-  to: string[];
-  cc?: string[];
-  subject: string;
-  body: string;
-  in_reply_to?: string;
-  attachments?: ComposeAttachment[];
-}
+export type SkillModifiers = {
+  excludeNewsletters: boolean;
+  onlyKnownSenders: boolean;
+  hasAttachments: boolean;
+  recentSixMonths: boolean;
+  excludeAutoReplies: boolean;
+};
 
-export interface SendMessageResult {
-  message_id: string;
-  sent_folder: string;
-}
+export type SkillSettings = Record<string, unknown>;
 
-// ========== Attachment Types ==========
+export type OllamaModels = {
+  models: string[];
+  selected_model: string | null;
+};
 
-export interface AttachmentInfo {
-  index: number;
-  filename: string;
-  mime_type: string;
-  size: number;
-}
+export type TaskStatus = {
+  name: string;
+  status: string;
+};
 
-// ========== Email Discovery Types ==========
+export type TrustContact = {
+  name: string;
+  email: string;
+  message_count: number;
+};
 
-export interface DiscoveryResult {
-  provider?: string;
-  provider_id?: string;
+export type OnboardingStatus = {
+  tasks: TaskStatus[];
+  message_count: number;
+  trust_contacts: TrustContact[];
+  trust_contact_count: number;
+  is_complete: boolean;
+};
+
+export type ExistingAccount = {
+  id: string;
+  email: string;
+};
+
+export type DiscoveryResult = {
+  provider: string | null;
+  provider_id: string | null;
   imap_host: string;
   imap_port: number;
   imap_tls: boolean;
@@ -199,7 +146,7 @@ export interface DiscoveryResult {
   requires_app_password: boolean;
   username_hint: string;
   source: string;
-}
+};
 
 // ========== LLM Types ==========
 
@@ -229,18 +176,4 @@ export interface OllamaSettings {
   url: string | null;
   apiKey?: string | null;
   timeoutSecs?: number;
-}
-
-// ========== Sync Event Types ==========
-
-export type SyncActionType = "add_flags" | "remove_flags" | "delete" | "move" | "copy";
-
-export interface SyncEventPayload {
-  StatusChanged?: SyncStatus;
-  NewMessages?: { folder: string; count: number };
-  MessagesDeleted?: { folder: string; uids: number[] };
-  FlagsChanged?: { folder: string; uids: number[] };
-  ConversationsUpdated?: { conversation_ids: number[] };
-  Error?: { message: string };
-  SyncComplete?: {};
 }

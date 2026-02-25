@@ -1,6 +1,6 @@
 [package]
 name = "eddie-chat"
-version = "0.1.0"
+version = "0.2.15"
 description = "eddie.chat - Email Client"
 authors = ["you"]
 edition = "2021"
@@ -13,58 +13,51 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-dialog = "2"
+tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-deep-link = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "6"
 
-# Email protocol library (vendored)
-email-lib = { path = "vendor/pimalaya-core/email", default-features = false, features = ["tokio-rustls", "derive", "imap", "smtp"] }
-secret-lib = { path = "vendor/pimalaya-core/secret", default-features = false, features = ["tokio", "rustls", "command"] }
-
-# Config and utilities
-toml = "0.8"
-once_cell = "1.16"
 thiserror = "1"
-dirs = "5"
-chrono = { version = "0.4", features = ["serde"] }
 
-# Database and sync engine
-rusqlite = { version = "0.32", features = ["bundled", "blob"] }
-r2d2 = "0.8"
-r2d2_sqlite = "0.25"
-uuid = { version = "1.10", features = ["v4"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net", "time"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+futures = "0.3"
 
-# Async channels for sync notifications
-flume = "0.11"
-
-# Email address parsing
+async-imap = "0.11.2"
 mailparse = "0.15"
+quoted_printable = "0.5"
+webpki-roots = "1"
 
-# Email autodiscovery and OAuth2
+rusqlite = { version = "0.38", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.32"
+
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+imap-proto = "0.16"
+
+base64 = "0.22"
+
+html2text = "0.14"
+
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
 hickory-resolver = { version = "0.24", features = ["tokio-runtime"] }
 quick-xml = { version = "0.36", features = ["serialize"] }
-oauth2 = { version = "4.4", features = ["reqwest"] }
-base64 = "0.22"
-sha2 = "0.10"
-rand = "0.8"
-url = "2"
-
-# Device-specific encryption for password storage (replaces keyring)
-aes-gcm = "0.10"
-argon2 = "0.5"
-
-# TLS support for probing
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["aws-lc-rs"] }
-
-# Tauri plugins for OAuth
-tauri-plugin-deep-link = "2"
+sentry = { version = "0.46.2", default-features = false, features = [
+    "backtrace", "contexts", "debug-images", "panic", "release-health",
+    "reqwest", "rustls",
+    "tracing", "logs",
+] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 # LLM inference plugin
 tauri-plugin-llm = { path = "../tauri-plugin-llm" }
@@ -72,21 +65,8 @@ tauri-plugin-llm = { path = "../tauri-plugin-llm" }
 # Desktop-only features (tray icon not supported on mobile)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
-# machine-uid has iOS compilation issues, use only on desktop
-machine-uid = "0.5"
 
 [features]
 default = []
 # Mobile feature flag for conditional compilation
 mobile = []
-
-[patch.crates-io]
-# Keep upstream IMAP patches
-imap-client.git = "https://github.com/pimalaya/imap-client"
-imap-codec.git = "https://github.com/duesee/imap-codec"
-
-# Redirect workspace crates to vendored paths
-email-lib = { path = "vendor/pimalaya-core/email" }
-secret-lib = { path = "vendor/pimalaya-core/secret" }
-mml-lib = { path = "vendor/pimalaya-core/mml" }
-process-lib = { path = "vendor/pimalaya-core/process" }

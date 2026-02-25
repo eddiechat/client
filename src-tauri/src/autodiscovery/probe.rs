@@ -9,7 +9,7 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use tracing::{debug, info, warn};
+use crate::services::logger;
 
 use super::{
     AuthMethod, AutodiscoveryError, EmailDiscoveryConfig, Security, ServerConfig, UsernameHint,
@@ -39,7 +39,7 @@ pub async fn probe_common_servers(domain: &str) -> Result<EmailDiscoveryConfig, 
     for hostname in &hostname_patterns {
         // Try IMAPS (port 993) first - implicit TLS
         if let Ok(()) = probe_imap_server(hostname, 993, Security::Tls).await {
-            info!("Found IMAP server: {}:993 (TLS)", hostname);
+            logger::info(&format!("Found IMAP server: {}:993 (TLS)", hostname));
             imap_config = Some(ServerConfig {
                 hostname: hostname.clone(),
                 port: 993,
@@ -50,7 +50,7 @@ pub async fn probe_common_servers(domain: &str) -> Result<EmailDiscoveryConfig, 
 
         // Try IMAP with STARTTLS (port 143)
         if let Ok(()) = probe_imap_server(hostname, 143, Security::Starttls).await {
-            info!("Found IMAP server: {}:143 (STARTTLS)", hostname);
+            logger::info(&format!("Found IMAP server: {}:143 (STARTTLS)", hostname));
             imap_config = Some(ServerConfig {
                 hostname: hostname.clone(),
                 port: 143,
@@ -69,7 +69,7 @@ pub async fn probe_common_servers(domain: &str) -> Result<EmailDiscoveryConfig, 
     for hostname in &smtp_patterns {
         // Try port 587 with STARTTLS first (modern submission standard)
         if let Ok(()) = probe_smtp_server(hostname, 587, Security::Starttls).await {
-            info!("Found SMTP server: {}:587 (STARTTLS)", hostname);
+            logger::info(&format!("Found SMTP server: {}:587 (STARTTLS)", hostname));
             smtp_config = Some(ServerConfig {
                 hostname: hostname.clone(),
                 port: 587,
@@ -80,7 +80,7 @@ pub async fn probe_common_servers(domain: &str) -> Result<EmailDiscoveryConfig, 
 
         // Try port 465 with implicit TLS (legacy but still widely used)
         if let Ok(()) = probe_smtp_server(hostname, 465, Security::Tls).await {
-            info!("Found SMTP server: {}:465 (TLS)", hostname);
+            logger::info(&format!("Found SMTP server: {}:465 (TLS)", hostname));
             smtp_config = Some(ServerConfig {
                 hostname: hostname.clone(),
                 port: 465,
@@ -91,7 +91,7 @@ pub async fn probe_common_servers(domain: &str) -> Result<EmailDiscoveryConfig, 
 
         // Try port 25 as last resort (often blocked by ISPs)
         if let Ok(()) = probe_smtp_server(hostname, 25, Security::Starttls).await {
-            info!("Found SMTP server: {}:25 (STARTTLS)", hostname);
+            logger::info(&format!("Found SMTP server: {}:25 (STARTTLS)", hostname));
             smtp_config = Some(ServerConfig {
                 hostname: hostname.clone(),
                 port: 25,
@@ -103,7 +103,7 @@ pub async fn probe_common_servers(domain: &str) -> Result<EmailDiscoveryConfig, 
 
     // If no SMTP server found, use the same host as IMAP
     let smtp = smtp_config.unwrap_or_else(|| {
-        warn!("No SMTP server found, using IMAP host with port 587");
+        logger::warn("No SMTP server found, using IMAP host with port 587");
         ServerConfig {
             hostname: imap.hostname.clone(),
             port: 587,
@@ -129,7 +129,7 @@ async fn probe_imap_server(
     port: u16,
     security: Security,
 ) -> Result<(), AutodiscoveryError> {
-    debug!("Probing IMAP server {}:{}", hostname, port);
+    logger::debug(&format!("Probing IMAP server {}:{}", hostname, port));
 
     let addr = format!("{}:{}", hostname, port);
 
@@ -174,7 +174,7 @@ async fn check_imap_banner(mut stream: TcpStream) -> Result<(), AutodiscoveryErr
         .map_err(|e| AutodiscoveryError::ConnectionFailed(e.to_string()))?;
 
     let response = String::from_utf8_lossy(&buf[..n]);
-    debug!("IMAP banner: {}", response.trim());
+    logger::debug(&format!("IMAP banner: {}", response.trim()));
 
     // IMAP greeting starts with "* OK" or "* PREAUTH"
     if response.starts_with("* OK") || response.starts_with("* PREAUTH") {
@@ -219,7 +219,7 @@ async fn check_imap_tls_banner(hostname: &str, stream: TcpStream) -> Result<(), 
         .map_err(|e| AutodiscoveryError::ConnectionFailed(e.to_string()))?;
 
     let response = String::from_utf8_lossy(&buf[..n]);
-    debug!("IMAP TLS banner: {}", response.trim());
+    logger::debug(&format!("IMAP TLS banner: {}", response.trim()));
 
     if response.starts_with("* OK") || response.starts_with("* PREAUTH") {
         return Ok(());
@@ -236,7 +236,7 @@ async fn probe_smtp_server(
     port: u16,
     security: Security,
 ) -> Result<(), AutodiscoveryError> {
-    debug!("Probing SMTP server {}:{}", hostname, port);
+    logger::debug(&format!("Probing SMTP server {}:{}", hostname, port));
 
     let addr = format!("{}:{}", hostname, port);
 
@@ -280,7 +280,7 @@ async fn check_smtp_banner(mut stream: TcpStream) -> Result<(), AutodiscoveryErr
         .map_err(|e| AutodiscoveryError::ConnectionFailed(e.to_string()))?;
 
     let response = String::from_utf8_lossy(&buf[..n]);
-    debug!("SMTP banner: {}", response.trim());
+    logger::debug(&format!("SMTP banner: {}", response.trim()));
 
     // SMTP greeting starts with "220"
     if response.starts_with("220") {
@@ -325,7 +325,7 @@ async fn check_smtp_tls_banner(hostname: &str, stream: TcpStream) -> Result<(), 
         .map_err(|e| AutodiscoveryError::ConnectionFailed(e.to_string()))?;
 
     let response = String::from_utf8_lossy(&buf[..n]);
-    debug!("SMTP TLS banner: {}", response.trim());
+    logger::debug(&format!("SMTP TLS banner: {}", response.trim()));
 
     if response.starts_with("220") {
         return Ok(());

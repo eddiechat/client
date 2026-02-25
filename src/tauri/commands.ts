@@ -1,268 +1,173 @@
-/**
- * Type-safe wrappers for all Tauri invoke commands.
- * All backend communication should go through this module.
- */
-
 import { invoke } from "@tauri-apps/api/core";
-import type {
-  EmailAccount,
-  EmailAccountDetails,
-  SaveEmailAccountRequest,
-  SaveDiscoveredEmailAccountRequest,
-  SendMessageResult,
-  SyncStatus,
-  CachedConversation,
-  CachedChatMessage,
-  DiscoveryResult,
-  AttachmentInfo,
-  ComposeAttachment,
-  SyncActionType,
-  LlmModelInfo,
-  LlmGenerateOptions,
-  LlmGenerateResponse,
-  OllamaSettings,
-} from "./types";
+import type { Conversation, Message, ConnectAccountParams, Cluster, Thread, Skill, OllamaModels, OnboardingStatus, DiscoveryResult, ExistingAccount, LlmModelInfo, LlmGenerateOptions, LlmGenerateResponse, OllamaSettings } from "./types";
 
-// ========== App Commands ==========
+export async function connectAccount(
+  params: ConnectAccountParams
+): Promise<string> {
+  return invoke<string>("connect_account", params);
+}
+
+export async function fetchConversations(
+  accountId: string
+): Promise<Conversation[]> {
+  return invoke<Conversation[]>("fetch_conversations", { accountId });
+}
+
+export async function fetchClusters(
+  accountId: string
+): Promise<Cluster[]> {
+  return invoke<Cluster[]>("fetch_clusters", { accountId });
+}
+export async function syncNow(): Promise<string> {
+  return invoke<string>("sync_now");
+}
+
+export async function fetchConversationMessages(
+  accountId: string,
+  conversationId: string
+): Promise<Message[]> {
+  return invoke<Message[]>("fetch_conversation_messages", {
+    accountId,
+    conversationId,
+  });
+}
+
+export async function fetchClusterMessages(
+  accountId: string,
+  clusterId: string
+): Promise<Message[]> {
+  return invoke<Message[]>("fetch_cluster_messages", {
+    accountId,
+    clusterId,
+  });
+}
+
+export async function reclassify(accountId: string): Promise<string> {
+  return invoke<string>("reclassify", { accountId });
+}
+
+export async function listSkills(accountId: string): Promise<Skill[]> {
+  return invoke<Skill[]>("list_skills", { accountId });
+}
+
+export async function getSkill(skillId: string): Promise<Skill> {
+  return invoke<Skill>("get_skill", { skillId });
+}
+
+export async function createSkill(
+  accountId: string,
+  name: string,
+  icon: string,
+  iconBg: string,
+  prompt: string,
+  modifiers: string,
+  settings: string,
+): Promise<string> {
+  return invoke<string>("create_skill", { accountId, name, icon, iconBg, prompt, modifiers, settings });
+}
+
+export async function updateSkill(
+  id: string,
+  name: string,
+  icon: string,
+  iconBg: string,
+  prompt: string,
+  modifiers: string,
+  settings: string,
+): Promise<void> {
+  return invoke<void>("update_skill", { id, name, icon, iconBg, prompt, modifiers, settings });
+}
+
+export async function toggleSkill(skillId: string, enabled: boolean): Promise<void> {
+  return invoke<void>("toggle_skill", { skillId, enabled });
+}
+
+export async function deleteSkill(skillId: string): Promise<void> {
+  return invoke<void>("delete_skill", { skillId });
+}
+
+export async function fetchClusterThreads(
+  accountId: string,
+  clusterId: string
+): Promise<Thread[]> {
+  return invoke<Thread[]>("fetch_cluster_threads", { accountId, clusterId });
+}
+
+export async function fetchThreadMessages(
+  accountId: string,
+  threadId: string
+): Promise<Message[]> {
+  return invoke<Message[]>("fetch_thread_messages", { accountId, threadId });
+}
+
+export async function groupDomains(accountId: string, name: string, domains: string[]): Promise<string> {
+  return invoke<string>("group_domains", { accountId, name, domains });
+}
+
+export async function ungroupDomains(accountId: string, groupId: string): Promise<void> {
+  return invoke<void>("ungroup_domains", { accountId, groupId });
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  return invoke<string | null>("get_setting", { key });
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  return invoke<void>("set_setting", { key, value });
+}
+
+export async function getOllamaModels(key: string): Promise<OllamaModels> {
+  return invoke<OllamaModels>("get_ollama_models", { key });
+}
+
+export async function fetchRecentMessages(
+  accountId: string,
+  limit: number
+): Promise<Message[]> {
+  return invoke<Message[]>("fetch_recent_messages", { accountId, limit });
+}
+
+export async function ollamaComplete(
+  url: string,
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  temperature: number = 0
+): Promise<string> {
+  return invoke<string>("ollama_complete", { url, model, systemPrompt, userPrompt, temperature });
+}
+
+export async function getOnboardingStatus(
+  accountId: string
+): Promise<OnboardingStatus> {
+  return invoke<OnboardingStatus>("get_onboarding_status", { accountId });
+}
+
+export async function discoverEmailConfig(
+  email: string
+): Promise<DiscoveryResult> {
+  return invoke<DiscoveryResult>("discover_email_config", { email });
+}
+
+export async function getExistingAccount(): Promise<ExistingAccount | null> {
+  return invoke<ExistingAccount | null>("get_existing_account");
+}
+
+export async function moveToLines(
+  accountId: string,
+  emails: string[]
+): Promise<void> {
+  return invoke<void>("move_to_lines", { accountId, emails });
+}
 
 export async function getAppVersion(): Promise<string> {
-  return invoke("get_app_version");
+  return invoke<string>("get_app_version");
 }
 
-// ========== Account Commands ==========
-
-export async function saveAccount(request: SaveEmailAccountRequest): Promise<void> {
-  return invoke("save_account", { request });
-}
-
-export async function listAccounts(): Promise<EmailAccount[]> {
-  return invoke("list_accounts");
-}
-
-export async function getDefaultAccount(): Promise<string | null> {
-  return invoke("get_default_account");
-}
-
-export async function removeAccount(name: string): Promise<void> {
-  return invoke("remove_account", { name });
-}
-
-export async function getAccountDetails(name: string): Promise<EmailAccountDetails> {
-  return invoke("get_account_details", { name });
-}
-
-export async function saveDiscoveredAccount(
-  request: SaveDiscoveredEmailAccountRequest
-): Promise<void> {
-  return invoke("save_discovered_account", {
-    name: request.name,
-    email: request.email,
-    displayName: request.displayName,
-    imapHost: request.imapHost,
-    imapPort: request.imapPort,
-    imapTls: request.imapTls,
-    smtpHost: request.smtpHost,
-    smtpPort: request.smtpPort,
-    smtpTls: request.smtpTls,
-    authMethod: request.authMethod,
-    password: request.password,
-  });
-}
-
-// ========== Message Commands ==========
-
-export async function sendMessage(
-  message: string,
-  account?: string
-): Promise<SendMessageResult | null> {
-  return invoke("send_message", { account, message });
-}
-
-export async function sendMessageWithAttachments(
-  from: string,
-  to: string[],
-  subject: string,
-  body: string,
-  attachments: ComposeAttachment[],
-  cc?: string[],
-  account?: string
-): Promise<SendMessageResult | null> {
-  return invoke("send_message_with_attachments", {
-    account,
-    from,
-    to,
-    cc,
-    subject,
-    body,
-    attachments,
-  });
-}
-
-export async function getConversationMessages(
-  messageIds: string[],
-  account?: string
-): Promise<CachedChatMessage[]> {
-  if (messageIds.length === 0) return [];
-  return invoke("get_conversation_messages", { account, messageIds });
-}
-
-// ========== Sync Engine Commands ==========
-
-export async function initSyncEngine(account?: string): Promise<SyncStatus> {
-  return invoke("init_sync_engine", { account });
-}
-
-export async function getSyncStatus(account?: string): Promise<SyncStatus> {
-  return invoke("get_sync_status", { account });
-}
-
-export async function syncFolder(folder?: string, account?: string): Promise<void> {
-  return invoke("sync_folder", { account, folder });
-}
-
-export async function initialSync(account?: string): Promise<void> {
-  return invoke("initial_sync", { account });
-}
-
-export async function getCachedConversations(
-  tab?: 'connections' | 'all' | 'others',
-  account?: string
-): Promise<CachedConversation[]> {
-  return invoke("get_cached_conversations", { account, tab });
-}
-
-export async function getCachedConversationMessages(
-  conversationId: number,
-  account?: string
-): Promise<CachedChatMessage[]> {
-  return invoke("get_cached_conversation_messages", { account, conversationId });
-}
-
-export async function fetchMessageBody(
-  messageId: number,
-  account?: string
-): Promise<CachedChatMessage> {
-  return invoke("fetch_message_body", { account, messageId });
-}
-
-export async function rebuildConversations(
-  userEmail: string,
-  account?: string
-): Promise<number> {
-  return invoke("rebuild_conversations", { account, userEmail });
-}
-
-export async function dropAndResync(account?: string): Promise<void> {
-  return invoke("drop_and_resync", { account });
-}
-
-export async function queueSyncAction(
-  actionType: SyncActionType,
-  folder: string,
-  uids: number[],
-  flags?: string[],
-  targetFolder?: string,
-  account?: string
-): Promise<number> {
-  return invoke("queue_sync_action", {
-    account,
-    actionType,
-    folder,
-    uids,
-    flags,
-    targetFolder,
-  });
-}
-
-export async function setSyncOnline(online: boolean, account?: string): Promise<void> {
-  return invoke("set_sync_online", { account, online });
-}
-
-export async function hasPendingSyncActions(account?: string): Promise<boolean> {
-  return invoke("has_pending_sync_actions", { account });
-}
-
-export async function shutdownSyncEngine(account?: string): Promise<void> {
-  return invoke("shutdown_sync_engine", { account });
-}
-
-export async function markConversationRead(
-  conversationId: number,
-  account?: string
-): Promise<void> {
-  return invoke("mark_conversation_read", { account, conversationId });
-}
-
-// ========== Email Discovery Commands ==========
-
-export async function discoverEmailConfig(email: string): Promise<DiscoveryResult> {
-  return invoke("discover_email_config", { email });
-}
-
-// ========== Attachment Commands ==========
-
-export async function getMessageAttachments(
-  folder: string,
-  id: string,
-  account?: string
-): Promise<AttachmentInfo[]> {
-  return invoke("get_message_attachments", { account, folder, id });
-}
-
-export async function downloadAttachment(
-  folder: string,
-  id: string,
-  attachmentIndex: number,
-  downloadDir?: string,
-  account?: string
-): Promise<string> {
-  return invoke("download_attachment", {
-    account,
-    folder,
-    id,
-    attachmentIndex,
-    downloadDir,
-  });
-}
-
-// ========== Entity (Participant) Commands ==========
-
-export interface EntitySuggestion {
-  id: number;
-  email: string;
-  name: string | null;
-  is_connection: boolean;
-  latest_contact: string;
-  contact_count: number;
-}
-
-/** Search entities for autocomplete suggestions
- * Returns up to `limit` entities matching the query, prioritizing connections and recent contacts
- */
-export async function searchEntities(
-  query: string,
-  limit?: number,
-  account?: string
-): Promise<EntitySuggestion[]> {
-  return invoke("search_entities", { account, query, limit });
-}
-
-// ========== Read-Only Mode Commands ==========
-
-/**
- * Get the read-only mode setting.
- * When enabled, all operations that modify data on the server are blocked.
- */
-export async function getReadOnlyMode(): Promise<boolean> {
-  return invoke("get_read_only_mode");
-}
-
-/**
- * Set the read-only mode setting.
- * When enabled, all operations that modify data on the server are blocked.
- */
-export async function setReadOnlyMode(enabled: boolean): Promise<void> {
-  return invoke("set_read_only_mode", { enabled });
+export async function fetchMessageHtml(
+  messageId: string
+): Promise<string | null> {
+  return invoke<string | null>("fetch_message_html", { messageId });
 }
 
 // ========== LLM Commands ==========
