@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { useAuth, useData, useTabSearch, useTheme } from "../../../shared/context";
+import { useAuth, useData, useTabSearch, useTheme, useChatFilter } from "../../../shared/context";
 import {
   displayName,
   participantCount,
+  participantEntries,
   participantEmails,
   relTime,
 } from "../../../shared/lib";
@@ -21,6 +22,7 @@ function PointsList() {
   useTheme(); // subscribe to theme changes for avatar colors
   const navigate = useNavigate();
   const search = useTabSearch();
+  const chatFilter = useChatFilter();
   const { accountId } = useAuth();
   const { conversations, refresh } = useData();
 
@@ -31,9 +33,13 @@ function PointsList() {
   const didLongPress = useRef(false);
 
   const conns = conversations.filter((c) => c.classification === "connections");
-  const points = conns.filter((c) => participantCount(c) === 1);
+  const byFilter = chatFilter === "1:1"
+    ? conns.filter((c) => participantCount(c) === 1)
+    : chatFilter === "3+"
+      ? conns.filter((c) => participantCount(c) > 1)
+      : conns;
   const q = search.toLowerCase();
-  const filtered = points.filter(
+  const filtered = byFilter.filter(
     (c) => !q || displayName(c).toLowerCase().includes(q)
   );
 
@@ -120,9 +126,24 @@ function PointsList() {
                 }
               }}
             >
-              <div className="relative shrink-0">
-                <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[14px]" />
-              </div>
+              {participantCount(c) > 1 ? (
+                <div className="avatar-group w-11 h-11 relative shrink-0">
+                  {participantEntries(c).slice(0, 3).map(([email, n], i) => (
+                    <Avatar
+                      key={i}
+                      name={n || email}
+                      email={email}
+                      size={7}
+                      fontSize="text-[10px]"
+                      className="avatar-sm absolute border-[1.5px] border-bg-primary"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="relative shrink-0">
+                  <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[14px]" />
+                </div>
+              )}
 
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline gap-2">

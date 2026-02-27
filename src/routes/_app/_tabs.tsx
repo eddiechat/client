@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
-import { useAuth, useData, SearchContext } from "../../shared/context";
+import { useAuth, useData, SearchContext, ChatFilterContext } from "../../shared/context";
+import type { ChatFilter } from "../../shared/context";
 import { participantCount } from "../../shared/lib";
 import { Avatar } from "../../shared/components";
 import { getAppVersion } from "../../tauri";
@@ -28,6 +29,7 @@ function TabsLayout() {
   const { status, conversations, clusters } = useData();
   const [showAccountDrawer, setShowAccountDrawer] = useState(false);
   const [search, setSearch] = useState("");
+  const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
   const [dismissed, setDismissed] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
 
@@ -49,9 +51,11 @@ function TabsLayout() {
   const conns = conversations.filter((c) => c.classification === "connections");
   const tabUnread = activeTab === "lines"
     ? clusters.reduce((sum, c) => sum + c.unread_count, 0)
-    : activeTab === "circles"
-      ? conns.filter((c) => participantCount(c) > 1).reduce((sum, c) => sum + c.unread_count, 0)
-      : conns.filter((c) => participantCount(c) === 1).reduce((sum, c) => sum + c.unread_count, 0);
+    : chatFilter === "1:1"
+      ? conns.filter((c) => participantCount(c) === 1).reduce((sum, c) => sum + c.unread_count, 0)
+      : chatFilter === "3+"
+        ? conns.filter((c) => participantCount(c) > 1).reduce((sum, c) => sum + c.unread_count, 0)
+        : conns.reduce((sum, c) => sum + c.unread_count, 0);
   const subtitle = tabUnread > 0 ? `${tabUnread} unread messages` : "All caught up";
 
   return (
@@ -66,8 +70,10 @@ function TabsLayout() {
             <h1 className="text-[28px] text-text-primary" style={{ letterSpacing: "-0.5px", fontWeight: 900 }}>{title}</h1>
           </div>
           <div className="text-[10px] font-semibold text-text-muted mt-0.5">{subtitle}</div>
-          {/* Search */}
-          <div className="mt-2 flex items-center gap-2 px-3 py-[8px] rounded-[10px] bg-bg-tertiary border border-divider">
+        </div>
+        {/* Search + Filter */}
+        <div className="px-2.5 pb-2 flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-[10px] bg-bg-tertiary border border-divider">
             <span className="text-text-dim text-[13px]">{"\u2315"}</span>
             <input
               className="flex-1 bg-transparent border-none outline-none text-[13px] font-medium text-text-primary placeholder:text-text-dim"
@@ -76,10 +82,20 @@ function TabsLayout() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          {activeTab === "points" && (
+            <button
+              className="shrink-0 w-12 self-stretch rounded-[10px] border border-divider bg-bg-tertiary text-accent-green text-[11px] font-extrabold cursor-pointer text-center"
+              onClick={() => setChatFilter((prev) => prev === "all" ? "1:1" : prev === "1:1" ? "3+" : "all")}
+            >
+              {chatFilter === "all" ? "All" : chatFilter}
+            </button>
+          )}
         </div>
 
         <SearchContext.Provider value={search}>
-          <Outlet />
+          <ChatFilterContext.Provider value={chatFilter}>
+            <Outlet />
+          </ChatFilterContext.Provider>
         </SearchContext.Provider>
       </div>
 
@@ -110,14 +126,6 @@ function TabsLayout() {
           <span className="flex items-center justify-center w-7 h-7 text-[17px]">{"\uD83D\uDCAC"}</span>
           Chats
           {activeTab === "points" && <span className="w-1 h-1 rounded-full bg-accent-green" />}
-        </button>
-        <button
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors ${activeTab === "circles" ? "text-accent-purple" : "text-text-dim"}`}
-          onClick={() => navigate({ to: "/circles" })}
-        >
-          <span className="flex items-center justify-center w-7 h-7 text-[17px]">{"\uD83D\uDC65"}</span>
-          Groups
-          {activeTab === "circles" && <span className="w-1 h-1 rounded-full bg-accent-purple" />}
         </button>
         <button
           className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors ${activeTab === "lines" ? "text-accent-amber" : "text-text-dim"}`}
