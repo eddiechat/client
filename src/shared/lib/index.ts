@@ -3,6 +3,8 @@ export {
   avatarBg,
   avatarBorder,
   avatarTextColor,
+  avatarGroupPalette,
+  textColorForBg,
   firstName,
   initials,
   relTime,

@@ -6,63 +6,63 @@ export function hash(s: string): number {
   return Math.abs(h);
 }
 
-const AVATAR_PALETTE = [
-  "linear-gradient(135deg, #FF5A5F, #FF8A65)",
-  "linear-gradient(135deg, #4A90E2, #50C9F5)",
-  "linear-gradient(135deg, #43B89C, #56D9BE)",
-  "linear-gradient(135deg, #9B72CF, #C387E8)",
-  "linear-gradient(135deg, #FF9F1C, #FFB74D)",
-  "linear-gradient(135deg, #2EC4B6, #4DD0E1)",
-  "linear-gradient(135deg, #FF6584, #FF8FA3)",
-  "linear-gradient(135deg, #6D28D9, #7C3AED)",
+const COLOR_SETS = [
+  ["#2c2775", "#7873b3", "#8ac4eb", "#aedcc5"],
+  ["#feefb0", "#fedb55", "#71cbe5", "#0badd0"],
+  ["#869bcd", "#fdcee5", "#fbf6ba", "#6eb7df"],
+  ["#fdf8df", "#f8c568", "#dd6b25", "#6c1148"],
+  ["#f9cf82", "#e35d25", "#b71e75", "#63246a"],
+  ["#f6c952", "#f8e8b2", "#0c6748", "#76bc79"],
+  ["#f5f8f9", "#f4ce17", "#476058", "#46464d"],
+  ["#e2c69e", "#ae8260", "#833d3e", "#312d29"],
+  ["#182d58", "#d9c0a0", "#eadbc7", "#fdfcf8"],
+  ["#ad6eae", "#a4dcf9", "#cbecf7", "#fefad3"],
+  ["#9c2d21", "#fdc75a", "#1e275c", "#2b4d84"],
+  ["#b5c092", "#f8dcba", "#ddac7f", "#b89570"],
+  ["#746aab", "#ab88bc", "#e2add2", "#fde4e3"],
+  ["#8c322e", "#de5643", "#fdc26e", "#4791b0"],
+  ["#141d48", "#3cb170", "#9bd1ab", "#fdf6df"],
+  ["#fccdd0", "#dfadac", "#ca8688", "#a67778"],
+  ["#cbe090", "#7ecac7", "#1478ac", "#144173"],
+  ["#ddd0bc", "#928976", "#3a5d71", "#103249"],
+  ["#f57522", "#e0ded1", "#534c42", "#310e2e"],
+  ["#ea7db2", "#ad62ab", "#7856a5", "#15479b"],
 ];
 
-const DARK_AVATAR_PALETTE = [
-  "linear-gradient(135deg, #e91e63, #f06292)",
-  "linear-gradient(135deg, #9c27b0, #ba68c8)",
-  "linear-gradient(135deg, #673ab7, #9575cd)",
-  "linear-gradient(135deg, #3f51b5, #7986cb)",
-  "linear-gradient(135deg, #2196f3, #64b5f6)",
-  "linear-gradient(135deg, #03a9f4, #4fc3f7)",
-  "linear-gradient(135deg, #00bcd4, #4dd0e1)",
-  "linear-gradient(135deg, #009688, #4db6ac)",
-  "linear-gradient(135deg, #4caf50, #81c784)",
-  "linear-gradient(135deg, #8bc34a, #aed581)",
-  "linear-gradient(135deg, #ff9800, #ffb74d)",
-  "linear-gradient(135deg, #ff5722, #ff8a65)",
-];
+const ALL_COLORS = COLOR_SETS.flat();
 
 function charCodeSum(name: string): number {
   return name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
 }
 
-function isDark(): boolean {
-  return document.documentElement.classList.contains("dark");
-}
-
 export function avatarBg(name: string): string {
-  const palette = isDark() ? DARK_AVATAR_PALETTE : AVATAR_PALETTE;
-  return palette[charCodeSum(name) % palette.length];
+  return ALL_COLORS[charCodeSum(name) % ALL_COLORS.length];
 }
 
-const AVATAR_FLAT_PALETTE = [
-  "#FF5A5F", "#4A90E2", "#43B89C", "#9B72CF",
-  "#FF9F1C", "#2EC4B6", "#FF6584", "#6D28D9",
-];
-
-const DARK_AVATAR_FLAT_PALETTE = [
-  "#e91e63", "#9c27b0", "#673ab7", "#3f51b5",
-  "#2196f3", "#03a9f4", "#00bcd4", "#009688",
-  "#4caf50", "#8bc34a", "#ff9800", "#ff5722",
-];
+/** Pick a random palette based on a group hash, then assign colors within it. */
+export function avatarGroupPalette(groupHash: number): string[] {
+  return COLOR_SETS[groupHash % COLOR_SETS.length];
+}
 
 export function avatarBorder(name: string): string {
-  const palette = isDark() ? DARK_AVATAR_FLAT_PALETTE : AVATAR_FLAT_PALETTE;
-  return palette[charCodeSum(name) % palette.length];
+  return ALL_COLORS[charCodeSum(name) % ALL_COLORS.length];
 }
 
-export function avatarTextColor(_name: string): string {
-  return "#fff";
+/** Return white or dark text depending on perceived luminance of the background. */
+export function avatarTextColor(name: string): string {
+  const bg = avatarBg(name);
+  return luminance(bg) > 0.45 ? "#1a1a1a" : "#fff";
+}
+
+export function textColorForBg(hex: string): string {
+  return luminance(hex) > 0.45 ? "#1a1a1a" : "#fff";
+}
+
+function luminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
 export function firstName(name: string): string {
