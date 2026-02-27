@@ -166,7 +166,8 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
     let conv_map = {
         let mut stmt = conn
             .prepare(
-                "SELECT m.conversation_id, m.participant_key, m.date, m.subject,
+                "SELECT m.conversation_id, m.participant_key, m.date,
+                        m.distilled_text,
                         m.from_address, m.from_name, m.classification, m.is_important,
                         m.imap_flags,
                         CASE WHEN e.id IS NOT NULL THEN 1 ELSE 0 END AS is_trusted
@@ -180,31 +181,36 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
         let rows = stmt
             .query_map(params![account_id], |row| {
                 Ok((
-                    row.get::<_, String>(0)?,    // conversation_id
-                    row.get::<_, String>(1)?,    // participant_key
-                    row.get::<_, i64>(2)?,       // date
-                    row.get::<_, Option<String>>(3)?, // subject
-                    row.get::<_, String>(4)?,    // from_address
+                    row.get::<_, String>(0)?,         // conversation_id
+                    row.get::<_, String>(1)?,         // participant_key
+                    row.get::<_, i64>(2)?,            // date
+                    row.get::<_, Option<String>>(3)?, // distilled_text
+                    row.get::<_, String>(4)?,         // from_address
                     row.get::<_, Option<String>>(5)?, // from_name
                     row.get::<_, Option<String>>(6)?, // classification
-                    row.get::<_, i32>(7)?,       // is_important
-                    row.get::<_, String>(8)?,    // imap_flags
-                    row.get::<_, i32>(9)?,       // is_trusted
+                    row.get::<_, i32>(7)?,            // is_important
+                    row.get::<_, String>(8)?,         // imap_flags
+                    row.get::<_, i32>(9)?,            // is_trusted
                 ))
             })?;
 
         let mut map: HashMap<String, ConversationBuilder> = HashMap::new();
         for row in rows {
-            let (conv_id, participant_key, date, subject, _from_address, _from_name,
-                 classification, is_important, imap_flags, is_trusted) =
+            let (conv_id, participant_key, date, distilled_text,
+                 _from_address, _from_name, classification, is_important, imap_flags, is_trusted) =
                 row?;
+
+            let preview = distilled_text
+                .as_deref()
+                .and_then(|t| t.lines().map(|l| l.trim()).find(|l| !l.is_empty()))
+                .map(|s| s.to_string());
 
             let builder = map.entry(conv_id.clone()).or_insert_with(|| {
                 ConversationBuilder {
                     id: conv_id,
                     participant_key,
                     last_message_date: date,
-                    last_message_preview: subject,
+                    last_message_preview: preview,
                     has_chat: false,
                     has_trusted: false,
                     has_important: false,
@@ -337,13 +343,16 @@ pub fn fetch_conversations(
     let conn = pool.get()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, account_id, participant_key, participant_names,
-                    classification, last_message_date, last_message_preview,
-                    unread_count, is_muted, is_pinned, is_important, updated_at,
-                    total_count
-             FROM conversations
-             WHERE account_id = ?1
-             ORDER BY last_message_date DESC",
+            "SELECT c.id, c.account_id, c.participant_key, c.participant_names,
+                    c.classification, c.last_message_date,
+                    (SELECT m.distilled_text FROM messages m
+                     WHERE m.conversation_id = c.id
+                     ORDER BY m.date DESC LIMIT 1) AS last_message_preview,
+                    c.unread_count, c.is_muted, c.is_pinned, c.is_important, c.updated_at,
+                    c.total_count
+             FROM conversations c
+             WHERE c.account_id = ?1
+             ORDER BY c.last_message_date DESC",
         )?;
 
     let rows = stmt
