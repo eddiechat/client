@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- No background — transparent outside, white fill only in gaps -->
+  <!-- White backing behind logo area to make gaps white -->
+  <g transform="translate(128,128) scale(7.68)">
+    <!-- White rectangle behind the full logo bounds -->
+    <rect x="0" y="0" width="100" height="100" rx="13" fill="#FFFFFF"/>
+  </g>
+  <!-- Padding: 128px on each side, logo area = 768x768, offset at (128,128) -->
+  <!-- Scale factor: 768/100 = 7.68, translate by 128 -->
+  <g transform="translate(128,128) scale(7.68)">
+    <!-- Blue left piece — TL and BL rounded (r=13), right side sharp -->
+    <path
+      fill="#5BBCF5"
+      d="M 13 0 L 44 0 L 44 100 L 13 100 A 13 13 0 0 1 0 87 L 0 13 A 13 13 0 0 1 13 0 Z"
+    />
+    <!-- Yellow top piece — TR rounded (r=11), all other corners sharp -->
+    <path
+      fill="#F5C43A"
+      d="M 52 0 L 89 0 A 11 11 0 0 1 100 11 L 100 46 L 52 46 Z"
+    />
+    <!-- Yellow bottom piece — BR rounded (r=11), all other corners sharp -->
+    <path
+      fill="#F5C43A"
+      d="M 52 54 L 100 54 L 100 89 A 11 11 0 0 1 89 100 L 52 100 Z"
+    />
+  </g>
+</svg>
