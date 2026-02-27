@@ -66,6 +66,9 @@
   /* Card styling */
   --shadow-card: 0 2px 12px rgba(0,0,0,0.08);
   --radius-card: 14px;
+
+  /* Screen background gradient */
+  --color-bg-gradient: linear-gradient(to right, #FFFFFF 20%, #FFF6E0 100%);
 }
 
 /* Dark mode overrides — values from eddie-client-clean */
@@ -105,6 +108,8 @@ html.dark {
   --color-red-bg: rgba(255, 59, 48, 0.1);
   --color-skill-bg: rgba(52, 120, 246, 0.1);
   --color-skill-border: rgba(52, 120, 246, 0.3);
+
+  --color-bg-gradient: linear-gradient(to right, #1a1a1a 20%, #1a1a1a 100%);
 }
 
 @layer base {

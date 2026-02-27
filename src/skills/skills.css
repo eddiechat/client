@@ -55,7 +55,7 @@ html.dark {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--sg-bg);
+  background: var(--color-bg-gradient);
 }
 
 .skills-header {

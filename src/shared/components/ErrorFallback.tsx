@@ -7,8 +7,8 @@ export function ErrorFallback({ error }: { error: Error }) {
 
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-screen bg-bg-primary px-6 text-center"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      className="flex flex-col items-center justify-center min-h-screen px-6 text-center"
+      style={{ background: "var(--color-bg-gradient)", paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <div className="text-[40px] mb-4">:(</div>
       <h2 className="text-[18px] font-semibold text-text-primary mb-2">

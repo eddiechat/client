@@ -61,7 +61,7 @@ function ConversationView() {
 
   if (!conversation) {
     return (
-      <div className="flex flex-col h-screen bg-bg-primary items-center justify-center text-text-muted font-semibold">
+      <div className="flex flex-col h-screen items-center justify-center text-text-muted font-semibold" style={{ background: "var(--color-bg-gradient)" }}>
         Conversation not found
       </div>
     );
@@ -109,9 +109,9 @@ function ConversationView() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-bg-primary">
+    <div className="flex flex-col h-screen" style={{ background: "var(--color-bg-gradient)" }}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pb-3 border-b border-divider shrink-0 bg-bg-primary" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
+      <div className="flex items-center gap-3 px-4 pb-3 border-b border-divider shrink-0" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
         <button className="border-none bg-transparent text-[28px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold" onClick={() => router.history.back()}>
           &#8249;
         </button>

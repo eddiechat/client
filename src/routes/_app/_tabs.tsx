@@ -84,7 +84,7 @@ function TabsLayout() {
   return (
     <div
       className="relative flex flex-col h-screen"
-      style={{ background: "linear-gradient(to right, #FFFFFF 20%, #FFF6E0 100%)" }}
+      style={{ background: "var(--color-bg-gradient)" }}
     >
       <div className="flex-1 overflow-y-auto">
         {/* Header */}

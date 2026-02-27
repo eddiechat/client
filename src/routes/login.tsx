@@ -82,7 +82,7 @@ function LoginScreen() {
     "w-full py-3 px-3.5 border border-divider rounded-[10px] bg-bg-tertiary text-[14px] font-medium text-text-primary outline-none placeholder:text-text-dim focus:border-accent-green";
 
   return (
-    <div className="h-screen overflow-y-auto bg-bg-primary">
+    <div className="h-screen overflow-y-auto" style={{ background: "var(--color-bg-gradient)" }}>
       <div className="min-h-full flex flex-col items-center justify-center p-10">
       <div className="max-w-[380px] w-full flex flex-col items-center">
         <img src="/eddie-swirl-green.svg" alt="Eddie" className="w-[88px] h-[88px] mb-7" />
