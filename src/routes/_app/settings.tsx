@@ -14,12 +14,14 @@ const SETTING_KEYS = {
   notifCircles: "notif_circles",
   notifLines: "notif_lines",
   hideOlderChats: "hide_older_chats",
+  showToaster: "show_toaster",
 } as const;
 
 const TOGGLE_DEFAULTS: Record<string, boolean> = {
   [SETTING_KEYS.notifPoints]: true,
   [SETTING_KEYS.notifCircles]: true,
   [SETTING_KEYS.notifLines]: false,
+  [SETTING_KEYS.showToaster]: false,
 };
 
 const CHAT_AGE_STEPS = ["1", "2", "3", "4", "all"] as const;
@@ -68,7 +70,9 @@ function SettingsScreen() {
   }, []);
 
   const settingsSections = [
-    { section: "Appearance", items: [] as { label: string; desc: string; key: string }[] },
+    { section: "Appearance", items: [
+      { label: "Show status toaster", desc: "Show sync status at the bottom", key: SETTING_KEYS.showToaster },
+    ]},
   ];
 
   const notificationItems = [

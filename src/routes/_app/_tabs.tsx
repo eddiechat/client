@@ -4,7 +4,7 @@ import { useAuth, useData, SearchContext, ChatFilterContext } from "../../shared
 import type { ChatFilter } from "../../shared/context";
 import { participantCount } from "../../shared/lib";
 import { Avatar, LogoPill } from "../../shared/components";
-import { getAppVersion } from "../../tauri";
+import { getAppVersion, getSetting } from "../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs")({
   component: TabsLayout,
@@ -48,7 +48,14 @@ function TabsLayout() {
   const [search, setSearch] = useState("");
   const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
   const [dismissed, setDismissed] = useState(false);
+  const [showToaster, setShowToaster] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    getSetting("show_toaster").then((v) => {
+      if (v !== null) setShowToaster(v === "true");
+    });
+  }, []);
 
   useEffect(() => {
     getAppVersion()
@@ -132,7 +139,7 @@ function TabsLayout() {
 
       {/* Bottom Tab Bar */}
       <nav className="relative flex flex-col border-t border-divider bg-bg-secondary shrink-0">
-        {import.meta.env.DEV && status && !dismissed && (
+        {showToaster && status && !dismissed && (
           <div className="absolute left-3 right-3 -top-12 z-10 flex items-center gap-2 px-4 py-2.5 text-[12px] text-text-muted bg-bg-secondary border border-divider rounded-[10px]" style={{ boxShadow: "var(--shadow-card)" }}>
             <span className="flex-1 text-center">{status}</span>
             <button className="shrink-0 text-text-dim hover:text-text-secondary text-[15px] leading-none bg-transparent border-none cursor-pointer p-0" onClick={() => setDismissed(true)}>&times;</button>
