@@ -192,7 +192,11 @@ html.dark {
     box-shadow: none;
   }
 
-
+  /* Compose input focus ring */
+  .compose-input:focus {
+    border-color: var(--color-accent-green) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-green) 20%, transparent);
+  }
 }
 
 @keyframes spin {
