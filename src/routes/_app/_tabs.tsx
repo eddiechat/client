@@ -84,7 +84,7 @@ function TabsLayout() {
           </div>
           {activeTab === "points" && (
             <button
-              className="shrink-0 w-12 self-stretch rounded-[10px] border border-divider bg-bg-tertiary text-accent-green text-[11px] font-extrabold cursor-pointer text-center"
+              className="shrink-0 w-12 self-stretch rounded-[10px] card-row text-accent-green text-[11px] font-extrabold cursor-pointer text-center"
               onClick={() => setChatFilter((prev) => prev === "all" ? "1:1" : prev === "1:1" ? "3+" : "all")}
             >
               {chatFilter === "all" ? "All" : chatFilter}
