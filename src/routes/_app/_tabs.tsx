@@ -92,7 +92,7 @@ function TabsLayout() {
         </div>
         {/* Search + Filter */}
         <div className="px-2.5 pb-2 flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-[10px] bg-bg-tertiary border border-divider">
+          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-[10px] border border-divider">
             <span className="text-text-dim text-[13px]">{"\u2315"}</span>
             <input
               className="flex-1 bg-transparent border-none outline-none text-[13px] font-medium text-text-primary placeholder:text-text-dim"
