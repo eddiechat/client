@@ -3,18 +3,13 @@ import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/rea
 import { useAuth, useData, SearchContext, ChatFilterContext } from "../../shared/context";
 import type { ChatFilter } from "../../shared/context";
 import { participantCount } from "../../shared/lib";
-import { Avatar } from "../../shared/components";
+import { LogoPill } from "../../shared/components";
 import { getAppVersion } from "../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs")({
   component: TabsLayout,
 });
 
-const TAB_TITLES: Record<string, { emoji: string; label: string }> = {
-  points: { emoji: "\uD83D\uDCAC", label: "Chats" },
-  circles: { emoji: "\uD83D\uDC65", label: "Groups" },
-  lines: { emoji: "\uD83C\uDFF7", label: "Lanes" },
-};
 
 const TAB_ACCENT: Record<string, string> = {
   points: "var(--color-accent-green)",
@@ -47,7 +42,6 @@ function TabsLayout() {
     : path.includes("/lines") ? "lines"
       : "points";
 
-  const { label: title } = TAB_TITLES[activeTab];
   const conns = conversations.filter((c) => c.classification === "connections");
   const tabUnread = activeTab === "lines"
     ? clusters.reduce((sum, c) => sum + c.unread_count, 0)
@@ -59,17 +53,20 @@ function TabsLayout() {
   const subtitle = tabUnread > 0 ? `${tabUnread} unread messages` : "All caught up";
 
   return (
-    <div className="relative flex flex-col h-screen bg-bg-primary">
+    <div
+      className="relative flex flex-col h-screen"
+      style={{ background: "linear-gradient(to right, #FFFFFF 20%, #FFF6E0 100%)" }}
+    >
       <div className="flex-1 overflow-y-auto">
         {/* Header */}
-        <div className="px-4 pb-2.5 bg-bg-primary" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
-          <div className="flex items-start gap-3">
-            <div onClick={() => setShowAccountDrawer(true)} className="cursor-pointer shrink-0 mt-0.5">
-              <Avatar name={email || "E"} email={email || undefined} size={9} fontSize="text-[13px]" />
+        <div className="px-4 pb-2.5" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
+          <div className="flex items-center gap-3" onClick={() => setShowAccountDrawer(true)} style={{ cursor: "pointer" }}>
+            <LogoPill height={44} />
+            <div className="flex flex-col">
+              <span style={{ color: "#5BBCF5", fontSize: "28px", fontWeight: 900, letterSpacing: "-0.5px", lineHeight: 1 }}>eddie</span>
+              <span style={{ color: "#F5C43A", fontSize: "10px", fontWeight: 700, marginTop: "3px" }}>{subtitle}</span>
             </div>
-            <h1 className="text-[28px] text-text-primary" style={{ letterSpacing: "-0.5px", fontWeight: 900 }}>{title}</h1>
           </div>
-          <div className="text-[10px] font-semibold text-text-muted mt-0.5">{subtitle}</div>
         </div>
         {/* Search + Filter */}
         <div className="px-2.5 pb-2 flex items-center gap-2">
