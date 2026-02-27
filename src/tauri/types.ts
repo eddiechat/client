@@ -16,6 +16,8 @@ export type Conversation = {
   classification: string;
   last_message_date: number;
   last_message_preview: string | null;
+  last_message_is_sent: boolean;
+  last_message_from_name: string | null;
   unread_count: number;
   total_count: number;
   is_muted: boolean;

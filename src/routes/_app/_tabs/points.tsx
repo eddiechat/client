@@ -9,6 +9,7 @@ import {
   relTime,
   avatarGroupPalette,
   storeConversationColors,
+  previewPrefix,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
 import { moveToLines, getSetting } from "../../../tauri";
@@ -167,7 +168,7 @@ function PointsList() {
                 </div>
                 <div className="flex justify-between items-center gap-2 mt-px">
                   <span className="text-[10px] text-text-muted truncate flex-1 font-medium">
-                    {c.last_message_preview || ""}
+                    {previewPrefix(c)}
                   </span>
                   {hasUnread && (
                     <span className="min-w-[16px] h-4 rounded-[8px] bg-accent-green text-white text-[9px] font-extrabold flex items-center justify-center px-1 shrink-0">

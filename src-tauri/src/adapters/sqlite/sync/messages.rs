@@ -6,7 +6,7 @@ use super::DbPool;
 use super::entities;
 use crate::error::EddieError;
 
-fn is_sent(gmail_labels: &str, imap_folder: &str, from_address: &str, self_emails: &[String]) -> bool {
+pub fn is_sent(gmail_labels: &str, imap_folder: &str, from_address: &str, self_emails: &[String]) -> bool {
     // Gmail: check labels
     if gmail_labels.contains("Sent") {
         return true;

@@ -206,6 +206,14 @@ export function participantEntries(c: Conversation): [string, string][] {
   }
 }
 
+export function previewPrefix(c: Conversation): string {
+  const text = c.last_message_preview || "";
+  if (!text) return "";
+  if (c.last_message_is_sent) return `me: ${text}`;
+  if (c.last_message_from_name) return `${firstName(c.last_message_from_name)}: ${text}`;
+  return text;
+}
+
 export function dedup(msgs: Message[]): Message[] {
   const seen = new Set<string>();
   return msgs.filter((m) => {

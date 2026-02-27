@@ -3,6 +3,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, BTreeSet};
 
 use super::DbPool;
+use super::{entities, messages};
 use crate::error::EddieError;
 
 pub fn compute_conversation_id(participant_key: &str) -> String {
@@ -328,6 +329,8 @@ pub struct Conversation {
     pub classification: String,
     pub last_message_date: i64,
     pub last_message_preview: Option<String>,
+    pub last_message_is_sent: bool,
+    pub last_message_from_name: Option<String>,
     pub unread_count: i32,
     pub total_count: i32,
     pub is_muted: bool,
@@ -340,23 +343,39 @@ pub fn fetch_conversations(
     pool: &DbPool,
     account_id: &str,
 ) -> Result<Vec<Conversation>, EddieError> {
+    let self_emails = entities::get_self_emails(pool, account_id)?;
     let conn = pool.get()?;
     let mut stmt = conn
         .prepare(
             "SELECT c.id, c.account_id, c.participant_key, c.participant_names,
                     c.classification, c.last_message_date,
-                    (SELECT m.distilled_text FROM messages m
-                     WHERE m.conversation_id = c.id
-                     ORDER BY m.date DESC LIMIT 1) AS last_message_preview,
+                    lm.distilled_text,
                     c.unread_count, c.is_muted, c.is_pinned, c.is_important, c.updated_at,
-                    c.total_count
+                    c.total_count,
+                    lm.from_name, lm.from_address, lm.gmail_labels, lm.imap_folder
              FROM conversations c
+             LEFT JOIN (
+                 SELECT conversation_id, distilled_text, from_name, from_address,
+                        gmail_labels, imap_folder,
+                        ROW_NUMBER() OVER (PARTITION BY conversation_id ORDER BY date DESC) AS rn
+                 FROM messages
+                 WHERE account_id = ?1
+             ) lm ON lm.conversation_id = c.id AND lm.rn = 1
              WHERE c.account_id = ?1
              ORDER BY c.last_message_date DESC",
         )?;
 
     let rows = stmt
         .query_map(params![account_id], |row| {
+            let from_name: Option<String> = row.get(13)?;
+            let from_address: Option<String> = row.get(14)?;
+            let gmail_labels: Option<String> = row.get(15)?;
+            let imap_folder: Option<String> = row.get(16)?;
+            let is_sent = match (&from_address, &gmail_labels, &imap_folder) {
+                (Some(addr), Some(labels), Some(folder)) =>
+                    messages::is_sent(labels, folder, addr, &self_emails),
+                _ => false,
+            };
             Ok(Conversation {
                 id: row.get(0)?,
                 account_id: row.get(1)?,
@@ -365,6 +384,8 @@ pub fn fetch_conversations(
                 classification: row.get(4)?,
                 last_message_date: row.get(5)?,
                 last_message_preview: row.get(6)?,
+                last_message_is_sent: is_sent,
+                last_message_from_name: from_name,
                 unread_count: row.get(7)?,
                 is_muted: row.get::<_, i32>(8)? != 0,
                 is_pinned: row.get::<_, i32>(9)? != 0,

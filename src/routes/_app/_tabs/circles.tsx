@@ -5,6 +5,7 @@ import {
   participantCount,
   participantEntries,
   relTime,
+  previewPrefix,
 } from "../../../shared/lib";
 import { PartitionedAvatar } from "../../../shared/components";
 
@@ -52,7 +53,7 @@ function CirclesList() {
               </div>
               <div className="flex justify-between items-center gap-2 mt-px">
                 <span className="text-[10px] text-text-muted truncate flex-1 font-medium">
-                  {c.last_message_preview || ""}
+                  {previewPrefix(c)}
                 </span>
                 {hasUnread && (
                   <span className="min-w-4 h-4 rounded-lg bg-accent-purple text-white text-[9px] font-extrabold flex items-center justify-center px-1 shrink-0">
