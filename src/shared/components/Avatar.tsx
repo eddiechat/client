@@ -40,17 +40,16 @@ export function Avatar({
   return (
     <div
       className={`avatar-shape flex items-center justify-center font-extrabold ${fontSize} ${className}`}
-      style={{ width: px, height: px, flexShrink: 0, background: bg, color: fg, letterSpacing: "-0.5px" }}
+      style={{ width: px, height: px, flexShrink: 0, background: bg, color: fg, letterSpacing: "-0.5px", position: "relative" }}
     >
-      {gravatarSrc ? (
+      {initials(name)}
+      {gravatarSrc && (
         <img
           src={gravatarSrc}
           alt=""
-          style={{ width: px, height: px }}
+          style={{ width: px, height: px, position: "absolute", top: 0, left: 0 }}
           className="avatar-shape object-cover"
         />
-      ) : (
-        initials(name)
       )}
     </div>
   );

@@ -83,11 +83,11 @@ export function avatarBorder(name: string): string {
 /** Return white or dark text depending on perceived luminance of the background. */
 export function avatarTextColor(name: string): string {
   const bg = avatarBg(name);
-  return luminance(bg) > 0.45 ? "#1a1a1a" : "#fff";
+  return luminance(bg) > 0.55 ? "#1a1a1a" : "#fff";
 }
 
 export function textColorForBg(hex: string): string {
-  return luminance(hex) > 0.45 ? "#1a1a1a" : "#fff";
+  return luminance(hex) > 0.55 ? "#1a1a1a" : "#fff";
 }
 
 function luminance(hex: string): number {

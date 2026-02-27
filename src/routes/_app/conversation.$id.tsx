@@ -12,7 +12,7 @@ import {
   participantEmails,
   dedup,
   fmtTime,
-  getConversationColor,
+  avatarGroupPalette,
 } from "../../shared/lib";
 import { Avatar, PartitionedAvatar, MessageDetail } from "../../shared/components";
 
@@ -79,8 +79,16 @@ function ConversationView() {
   const name = displayName(conversation);
   const totalCount = conversation.total_count;
   const emails = participantEmails(conversation);
+  // Build email→color map locally using same logic as PartitionedAvatar
+  const entries = participantEntries(conversation);
+  const gHash = entries.reduce((acc, [email, n]) => acc + (n || email).split("").reduce((a, c) => a + c.charCodeAt(0), 0), 0);
+  const palette = avatarGroupPalette(gHash);
+  const emailColorMap = new Map<string, string>();
+  entries.forEach(([email], i) => {
+    emailColorMap.set(email.toLowerCase(), palette[i % palette.length]);
+  });
   const colorOf = (email: string): string | undefined =>
-    getConversationColor(conversation.id, email);
+    emailColorMap.get(email.toLowerCase());
   const isMultiParticipant = participantCount(conversation) > 1;
   const participantMap: Record<string, string> = (() => {
     if (!conversation.participant_names) return {};
