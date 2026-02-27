@@ -187,22 +187,7 @@ html.dark {
     box-shadow: none;
   }
 
-  /* Avatar group positioning */
-  .avatar-group .avatar-sm:nth-child(1) {
-    top: 0;
-    left: 0;
-    z-index: 3;
-  }
-  .avatar-group .avatar-sm:nth-child(2) {
-    top: 0;
-    right: 0;
-    z-index: 2;
-  }
-  .avatar-group .avatar-sm:nth-child(3) {
-    bottom: 0;
-    left: 10px;
-    z-index: 1;
-  }
+
 }
 
 @keyframes spin {

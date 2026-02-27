@@ -8,7 +8,7 @@ import {
   participantEmails,
   relTime,
 } from "../../../shared/lib";
-import { Avatar } from "../../../shared/components";
+import { Avatar, PartitionedAvatar } from "../../../shared/components";
 import { moveToLines } from "../../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs/points")({
@@ -127,18 +127,7 @@ function PointsList() {
               }}
             >
               {participantCount(c) > 1 ? (
-                <div className="avatar-group w-11 h-11 relative shrink-0">
-                  {participantEntries(c).slice(0, 3).map(([email, n], i) => (
-                    <Avatar
-                      key={i}
-                      name={n || email}
-                      email={email}
-                      size={7}
-                      fontSize="text-[10px]"
-                      className="avatar-sm absolute border-[1.5px] border-bg-primary"
-                    />
-                  ))}
-                </div>
+                <PartitionedAvatar participants={participantEntries(c)} />
               ) : (
                 <div className="relative shrink-0">
                   <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[14px]" />

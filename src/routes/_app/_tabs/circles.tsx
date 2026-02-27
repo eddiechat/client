@@ -4,10 +4,9 @@ import {
   displayName,
   participantCount,
   participantEntries,
-  participantEmails,
   relTime,
 } from "../../../shared/lib";
-import { Avatar } from "../../../shared/components";
+import { PartitionedAvatar } from "../../../shared/components";
 
 export const Route = createFileRoute("/_app/_tabs/circles")({
   component: CirclesList,
@@ -42,25 +41,7 @@ function CirclesList() {
             className="card-row flex items-center px-3 py-2.5 cursor-pointer gap-2.5"
             onClick={() => navigate({ to: "/conversation/$id", params: { id: c.id } })}
           >
-            {/* Avatar group */}
-            {entries.length > 1 ? (
-              <div className="avatar-group w-11 h-11 relative shrink-0">
-                {entries.slice(0, 3).map(([email, n], i) => (
-                  <Avatar
-                    key={i}
-                    name={n || email}
-                    email={email}
-                    size={7}
-                    fontSize="text-[10px]"
-                    className="avatar-sm absolute border-[1.5px] border-bg-primary"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="relative shrink-0">
-                <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[14px]" />
-              </div>
-            )}
+            <PartitionedAvatar participants={entries} />
 
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline gap-2">
