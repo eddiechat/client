@@ -151,6 +151,19 @@ function TabsLayout() {
             {activeTab === "points" && <span className="w-1 h-1 rounded-full" style={{ background: "#5BBCF5" }} />}
           </button>
           <button
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.5 border-none bg-transparent text-[8.5px] font-extrabold tracking-wide opacity-30"
+            style={{ color: "#A78BFA", cursor: "default" }}
+            disabled
+          >
+            <span className="flex items-center justify-center w-7 h-7">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <rect width="24" height="24" rx="5" fill="#A78BFA" />
+                <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="900" fontFamily="system-ui, sans-serif">#</text>
+              </svg>
+            </span>
+            Groups
+          </button>
+          <button
             className="flex-1 flex flex-col items-center gap-0.5 py-3.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors"
             style={{ color: "#F5C43A" }}
             onClick={() => navigate({ to: "/lines" })}
@@ -158,7 +171,7 @@ function TabsLayout() {
             <span className="flex items-center justify-center w-7 h-7">
               <LetterIcon />
             </span>
-            Mails
+            Lanes
             {activeTab === "lines" && <span className="w-1 h-1 rounded-full" style={{ background: "#F5C43A" }} />}
           </button>
         </div>
