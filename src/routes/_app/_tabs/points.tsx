@@ -7,6 +7,8 @@ import {
   participantEntries,
   participantEmails,
   relTime,
+  avatarGroupPalette,
+  storeConversationColors,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
 import { moveToLines, getSetting } from "../../../tauri";
@@ -144,10 +146,15 @@ function PointsList() {
               }}
             >
               {participantCount(c) > 1 ? (
-                <PartitionedAvatar participants={participantEntries(c)} />
+                <PartitionedAvatar participants={participantEntries(c)} conversationId={c.id} />
               ) : (
                 <div className="relative shrink-0">
-                  <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[14px]" />
+                  <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[14px]" color={(() => {
+                    const email = participantEmails(c)[0];
+                    const p = avatarGroupPalette(name.split("").reduce((a, ch) => a + ch.charCodeAt(0), 0));
+                    storeConversationColors(c.id, p, [[email, name]]);
+                    return p[0];
+                  })()}/>
                 </div>
               )}
 

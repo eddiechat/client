@@ -8,12 +8,13 @@ import {
   displayName,
   firstName,
   participantCount,
+  participantEntries,
   participantEmails,
   dedup,
   fmtTime,
-  avatarBg,
+  getConversationColor,
 } from "../../shared/lib";
-import { Avatar, MessageDetail } from "../../shared/components";
+import { Avatar, PartitionedAvatar, MessageDetail } from "../../shared/components";
 
 export const Route = createFileRoute("/_app/conversation/$id")({
   component: ConversationView,
@@ -77,6 +78,9 @@ function ConversationView() {
 
   const name = displayName(conversation);
   const totalCount = conversation.total_count;
+  const emails = participantEmails(conversation);
+  const colorOf = (email: string): string | undefined =>
+    getConversationColor(conversation.id, email);
   const isMultiParticipant = participantCount(conversation) > 1;
   const participantMap: Record<string, string> = (() => {
     if (!conversation.participant_names) return {};
@@ -103,10 +107,14 @@ function ConversationView() {
         <button className="border-none bg-transparent text-[28px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold" onClick={() => router.history.back()}>
           &#8249;
         </button>
-        <Avatar name={name} email={participantEmails(conversation)[0]} size={10} fontSize="text-[13px]" className="shrink-0" />
+        {isMultiParticipant ? (
+          <PartitionedAvatar participants={participantEntries(conversation)} sizePx={40} conversationId={conversation.id} />
+        ) : (
+          <Avatar name={name} email={emails[0]} size={10} fontSize="text-[13px]" className="shrink-0" color={colorOf(emails[0])} />
+        )}
         <div className="flex flex-col min-w-0">
           <span className="font-extrabold text-[13px] text-text-primary leading-tight truncate" style={{ letterSpacing: "-0.2px" }}>{name}</span>
-          <span className="text-[10px] text-text-muted leading-tight font-medium truncate">{participantEmails(conversation).join(", ")}</span>
+          <span className="text-[10px] text-text-muted leading-tight font-medium truncate">{emails.join(", ")}</span>
         </div>
       </div>
 
@@ -151,7 +159,7 @@ function ConversationView() {
                 )}
                 {!isSent && isMultiParticipant && (
                   <span className="text-[9px] font-bold mb-0.5 px-1 ml-8">
-                    <span style={{ color: avatarBg(sender) }}>{sender}</span>
+                    <span style={{ color: colorOf(m.from_address) }}>{sender}</span>
                     {missing.length > 0 && (
                       <span className="text-text-muted line-through ml-1">{missing.join(", ")}</span>
                     )}
@@ -162,7 +170,7 @@ function ConversationView() {
                 )}
                 <div className={`flex items-end gap-2 ${isSent ? "flex-row-reverse" : ""} max-w-[85%]`}>
                   {!isSent && isMultiParticipant && (
-                    <Avatar name={sender} email={m.from_address} size={7} fontSize="text-[10px]" className="shrink-0" />
+                    <Avatar name={sender} email={m.from_address} size={7} fontSize="text-[10px]" className="shrink-0" color={colorOf(m.from_address)} />
                   )}
                   <div className={`min-w-0 px-3 py-2 text-[11px] font-medium leading-snug break-words ${isSent
                     ? "bg-accent-green text-white rounded-[12px_12px_4px_12px]"

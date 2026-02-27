@@ -44,6 +44,38 @@ export function avatarGroupPalette(groupHash: number): string[] {
   return COLOR_SETS[groupHash % COLOR_SETS.length];
 }
 
+// ── Conversation color store ────────────────────────────────────────
+// Maps conversationId → { palette, emailColors: email→hex }.
+// Populated when rendering list views, consumed when inside a conversation.
+interface StoredColors {
+  palette: string[];
+  emailColors: Map<string, string>;
+}
+const colorStore = new Map<string, StoredColors>();
+
+/** Store the palette and per-email color mapping for a conversation. */
+export function storeConversationColors(
+  conversationId: string,
+  palette: string[],
+  participants: [string, string][], // [email, name] pairs in render order
+): void {
+  const emailColors = new Map<string, string>();
+  participants.forEach(([email], i) => {
+    emailColors.set(email.toLowerCase(), palette[i % palette.length]);
+  });
+  colorStore.set(conversationId, { palette, emailColors });
+}
+
+/** Get the color for a specific email in a conversation. */
+export function getConversationColor(conversationId: string, email: string): string | undefined {
+  return colorStore.get(conversationId)?.emailColors.get(email.toLowerCase());
+}
+
+/** Get the full stored palette for a conversation. */
+export function getStoredPalette(conversationId: string): string[] | undefined {
+  return colorStore.get(conversationId)?.palette;
+}
+
 export function avatarBorder(name: string): string {
   return ALL_COLORS[charCodeSum(name) % ALL_COLORS.length];
 }

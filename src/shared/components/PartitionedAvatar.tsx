@@ -1,11 +1,13 @@
 import type { CSSProperties } from "react";
-import { avatarGroupPalette, initials, textColorForBg } from "../lib/helpers";
+import { avatarGroupPalette, storeConversationColors, initials, textColorForBg } from "../lib/helpers";
 
 interface PartitionedAvatarProps {
   /** [email, name] pairs for the group participants */
   participants: [string, string][];
   /** Box size in pixels. Default 44 (w-11 h-11). */
   sizePx?: number;
+  /** If provided, stores the picked palette keyed by this ID for later retrieval. */
+  conversationId?: string;
 }
 
 function charSum(s: string): number {
@@ -27,11 +29,13 @@ const CELL_BASE: CSSProperties = {
   letterSpacing: "-0.5px",
 };
 
-export function PartitionedAvatar({ participants, sizePx = 44 }: PartitionedAvatarProps) {
+export function PartitionedAvatar({ participants, sizePx = 44, conversationId }: PartitionedAvatarProps) {
   const isDark = document.documentElement.classList.contains("dark");
   const count = participants.length;
   const gHash = participants.reduce((acc, [email, name]) => acc + charSum(name || email), 0);
   const palette = avatarGroupPalette(gHash);
+
+  if (conversationId) storeConversationColors(conversationId, palette, participants);
 
   /** Assign a color from the group palette based on participant index. */
   function colorAt(index: number): string {

@@ -1,5 +1,5 @@
 import { useGravatar } from "../lib/gravatar";
-import { avatarBg, avatarTextColor, initials } from "../lib/helpers";
+import { avatarBg, avatarTextColor, textColorForBg, initials } from "../lib/helpers";
 
 interface AvatarProps {
   name: string;
@@ -10,6 +10,8 @@ interface AvatarProps {
   fontSize?: string;
   /** Extra className for the outer container */
   className?: string;
+  /** Override background color (e.g. from a stored palette) */
+  color?: string;
 }
 
 const SIZE_PX: Record<number, number> = {
@@ -28,20 +30,24 @@ export function Avatar({
   size,
   fontSize = "text-[15px]",
   className = "",
+  color,
 }: AvatarProps) {
   const px = SIZE_PX[size] ?? size * 4;
   const gravatarSrc = useGravatar(email, px * 2);
+  const bg = color ?? avatarBg(name);
+  const fg = color ? textColorForBg(color) : avatarTextColor(name);
 
   return (
     <div
-      className={`w-${size} h-${size} avatar-shape flex items-center justify-center font-extrabold ${fontSize} ${className}`}
-      style={{ background: avatarBg(name), color: avatarTextColor(name), letterSpacing: "-0.5px" }}
+      className={`avatar-shape flex items-center justify-center font-extrabold ${fontSize} ${className}`}
+      style={{ width: px, height: px, flexShrink: 0, background: bg, color: fg, letterSpacing: "-0.5px" }}
     >
       {gravatarSrc ? (
         <img
           src={gravatarSrc}
           alt=""
-          className={`w-${size} h-${size} avatar-shape object-cover`}
+          style={{ width: px, height: px }}
+          className="avatar-shape object-cover"
         />
       ) : (
         initials(name)
