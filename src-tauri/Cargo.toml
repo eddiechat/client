@@ -1,6 +1,6 @@
 [package]
 name = "eddie-chat"
-version = "0.2.15"
+version = "0.3.0"
 description = "eddie.chat - Email Client"
 authors = ["you"]
 edition = "2021"

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-27
+
+### Added
+- Last message prefix in conversation list
+- Sunshine background to additional screens
+- Settings accessible from toaster
+- Groups menu item
+
+### Changed
+- Major UI facelift with new color palette
+- Improved chat layout
+- Improved avatar rendering and display
+- Render first line of message instead of subject
+- Short names in conversation list
+- New pill logo in header
+- New background styling
+- Boxed groups layout
+- Updated menu design
+- Limit number of chats shown
+- Removed background from search
+
+### Fixed
+- Onboarding background
+- Avatar display in chat view
+- Bottom safe area spacing
+
 ## [0.2.15] - 2026-02-24
 
 ### Added

@@ -1,3 +1,23 @@
 ### Added
-- Show full message content with HTML rendering
-- Skills reintroduced
+- Last message prefix in conversation list
+- Sunshine background to additional screens
+- Settings accessible from toaster
+- Groups menu item
+
+### Changed
+- Major UI facelift with new color palette
+- Improved chat layout
+- Improved avatar rendering and display
+- Render first line of message instead of subject
+- Short names in conversation list
+- New pill logo in header
+- New background styling
+- Boxed groups layout
+- Updated menu design
+- Limit number of chats shown
+- Removed background from search
+
+### Fixed
+- Onboarding background
+- Avatar display in chat view
+- Bottom safe area spacing
