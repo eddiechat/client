@@ -34,8 +34,8 @@ export function Avatar({
 
   return (
     <div
-      className={`w-${size} h-${size} avatar-shape flex items-center justify-center font-bold ${fontSize} ${className}`}
-      style={{ background: avatarBg(name), color: avatarTextColor(name) }}
+      className={`w-${size} h-${size} avatar-shape flex items-center justify-center font-extrabold ${fontSize} ${className}`}
+      style={{ background: avatarBg(name), color: avatarTextColor(name), letterSpacing: "-0.5px" }}
     >
       {gravatarSrc ? (
         <img

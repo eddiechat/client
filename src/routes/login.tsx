@@ -79,17 +79,17 @@ function LoginScreen() {
   };
 
   const inputClass =
-    "w-full py-3 px-3.5 border border-divider rounded-xl bg-bg-tertiary text-[15px] text-text-primary outline-none placeholder:text-text-dim focus:border-accent-green";
+    "w-full py-3 px-3.5 border border-divider rounded-[10px] bg-bg-tertiary text-[14px] font-medium text-text-primary outline-none placeholder:text-text-dim focus:border-accent-green";
 
   return (
     <div className="h-screen overflow-y-auto bg-bg-primary">
       <div className="min-h-full flex flex-col items-center justify-center p-10">
       <div className="max-w-[380px] w-full flex flex-col items-center">
         <img src="/eddie-swirl-green.svg" alt="Eddie" className="w-[88px] h-[88px] mb-7" />
-        <h1 className="text-[30px] font-bold mb-2.5 text-text-primary" style={{ letterSpacing: "-0.03em" }}>
+        <h1 className="text-[28px] font-black mb-2.5 text-text-primary" style={{ letterSpacing: "-0.5px" }}>
           Welcome to Eddie
         </h1>
-        <p className="text-text-muted text-center mb-8 leading-relaxed text-base whitespace-pre-line">
+        <p className="text-text-muted text-center mb-8 leading-relaxed text-[14px] font-medium whitespace-pre-line">
           {"Messaging built on email.\nNo account needed \u2014 just log in."}
         </p>
 
@@ -119,7 +119,7 @@ function LoginScreen() {
             </div>
             <button
               type="button"
-              className="w-full py-4 border-none rounded-xl bg-accent-green text-white text-[17px] font-bold cursor-pointer hover:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition"
+              className="w-full py-3.5 border-none rounded-[12px] bg-accent-green text-white text-[15px] font-extrabold cursor-pointer hover:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition"
               disabled={!auth.email.trim()}
               onClick={handleEmailSubmit}
             >
@@ -244,7 +244,7 @@ function LoginScreen() {
             <div className="flex gap-3">
               <button
                 type="button"
-                className="flex-1 py-4 border border-divider rounded-xl bg-bg-secondary text-text-primary text-[15px] font-medium cursor-pointer hover:bg-bg-tertiary transition"
+                className="flex-1 py-3.5 border border-divider rounded-[12px] bg-bg-secondary text-text-primary text-[14px] font-semibold cursor-pointer hover:bg-bg-tertiary transition"
                 onClick={() => {
                   setStep("email");
                   setDiscovery(null);
@@ -254,7 +254,7 @@ function LoginScreen() {
               </button>
               <button
                 type="button"
-                className="flex-2 py-4 border-none rounded-xl bg-accent-green text-white text-[17px] font-bold cursor-pointer hover:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                className="flex-2 py-3.5 border-none rounded-[12px] bg-accent-green text-white text-[15px] font-extrabold cursor-pointer hover:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition"
                 disabled={!auth.password.trim()}
                 onClick={handleSave}
               >
@@ -268,20 +268,20 @@ function LoginScreen() {
         {step === "manual" && (
           <div className="w-full">
             <div className="bg-bg-secondary border border-divider rounded-2xl px-5 pt-5 pb-6 mb-5">
-              <p className="text-sm text-text-muted mb-4 text-center">
+              <p className="text-[13px] text-text-muted mb-4 text-center font-medium">
                 Enter your email server settings
               </p>
               {discovery && (
                 <button
                   type="button"
-                  className="block text-sm text-accent-green hover:underline mb-4 mx-auto"
+                  className="block text-[13px] text-accent-green hover:underline mb-4 mx-auto font-semibold"
                   onClick={() => setStep("auth")}
                 >
                   {"\u2190"} Back to auto-detected settings
                 </button>
               )}
 
-              <fieldset className="border border-divider rounded-xl p-4 mb-4">
+              <fieldset className="border border-divider rounded-[10px] p-4 mb-4">
                 <legend className="px-2 text-[10px] font-bold tracking-widest text-text-dim">
                   IMAP (RECEIVING)
                 </legend>
@@ -312,7 +312,7 @@ function LoginScreen() {
                 </div>
               </fieldset>
 
-              <fieldset className="border border-divider rounded-xl p-4 mb-4">
+              <fieldset className="border border-divider rounded-[10px] p-4 mb-4">
                 <legend className="px-2 text-[10px] font-bold tracking-widest text-text-dim">
                   SMTP (SENDING)
                 </legend>
@@ -373,7 +373,7 @@ function LoginScreen() {
             <div className="flex gap-3">
               <button
                 type="button"
-                className="flex-1 py-4 border border-divider rounded-xl bg-bg-secondary text-text-primary text-[15px] font-medium cursor-pointer hover:bg-bg-tertiary transition"
+                className="flex-1 py-3.5 border border-divider rounded-[12px] bg-bg-secondary text-text-primary text-[14px] font-semibold cursor-pointer hover:bg-bg-tertiary transition"
                 onClick={() => {
                   setStep(discovery ? "auth" : "email");
                 }}
@@ -382,7 +382,7 @@ function LoginScreen() {
               </button>
               <button
                 type="button"
-                className="flex-2 py-4 border-none rounded-xl bg-accent-green text-white text-[17px] font-bold cursor-pointer hover:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                className="flex-2 py-3.5 border-none rounded-[12px] bg-accent-green text-white text-[15px] font-extrabold cursor-pointer hover:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition"
                 disabled={!imapHost || !smtpHost || !auth.password.trim()}
                 onClick={handleSave}
               >

@@ -7,14 +7,29 @@ export function hash(s: string): number {
 }
 
 const AVATAR_PALETTE = [
-  "#6EC6A5", "#F2A365", "#7CAED9", "#D98EC0",
-  "#B5A4E0", "#E8C96A", "#7BC7C7", "#E88E8E",
+  "linear-gradient(135deg, #FF5A5F, #FF8A65)",
+  "linear-gradient(135deg, #4A90E2, #50C9F5)",
+  "linear-gradient(135deg, #43B89C, #56D9BE)",
+  "linear-gradient(135deg, #9B72CF, #C387E8)",
+  "linear-gradient(135deg, #FF9F1C, #FFB74D)",
+  "linear-gradient(135deg, #2EC4B6, #4DD0E1)",
+  "linear-gradient(135deg, #FF6584, #FF8FA3)",
+  "linear-gradient(135deg, #6D28D9, #7C3AED)",
 ];
 
 const DARK_AVATAR_PALETTE = [
-  "#e91e63", "#9c27b0", "#673ab7", "#3f51b5",
-  "#2196f3", "#03a9f4", "#00bcd4", "#009688",
-  "#4caf50", "#8bc34a", "#ff9800", "#ff5722",
+  "linear-gradient(135deg, #e91e63, #f06292)",
+  "linear-gradient(135deg, #9c27b0, #ba68c8)",
+  "linear-gradient(135deg, #673ab7, #9575cd)",
+  "linear-gradient(135deg, #3f51b5, #7986cb)",
+  "linear-gradient(135deg, #2196f3, #64b5f6)",
+  "linear-gradient(135deg, #03a9f4, #4fc3f7)",
+  "linear-gradient(135deg, #00bcd4, #4dd0e1)",
+  "linear-gradient(135deg, #009688, #4db6ac)",
+  "linear-gradient(135deg, #4caf50, #81c784)",
+  "linear-gradient(135deg, #8bc34a, #aed581)",
+  "linear-gradient(135deg, #ff9800, #ffb74d)",
+  "linear-gradient(135deg, #ff5722, #ff8a65)",
 ];
 
 function charCodeSum(name: string): number {
@@ -30,8 +45,20 @@ export function avatarBg(name: string): string {
   return palette[charCodeSum(name) % palette.length];
 }
 
+const AVATAR_FLAT_PALETTE = [
+  "#FF5A5F", "#4A90E2", "#43B89C", "#9B72CF",
+  "#FF9F1C", "#2EC4B6", "#FF6584", "#6D28D9",
+];
+
+const DARK_AVATAR_FLAT_PALETTE = [
+  "#e91e63", "#9c27b0", "#673ab7", "#3f51b5",
+  "#2196f3", "#03a9f4", "#00bcd4", "#009688",
+  "#4caf50", "#8bc34a", "#ff9800", "#ff5722",
+];
+
 export function avatarBorder(name: string): string {
-  return avatarBg(name);
+  const palette = isDark() ? DARK_AVATAR_FLAT_PALETTE : AVATAR_FLAT_PALETTE;
+  return palette[charCodeSum(name) % palette.length];
 }
 
 export function avatarTextColor(_name: string): string {
@@ -160,8 +187,8 @@ export const LINE_EMOJIS = [
 ];
 
 export const LINE_COLORS = [
-  "#6EC6A5", "#F2A365", "#7CAED9", "#D98EC0",
-  "#B5A4E0", "#E8C96A", "#7BC7C7", "#E88E8E",
+  "#FF5A5F", "#4A90E2", "#43B89C", "#9B72CF",
+  "#FF9F1C", "#2EC4B6", "#FF6584", "#6D28D9",
 ];
 
 export function lineEmoji(name: string): string {

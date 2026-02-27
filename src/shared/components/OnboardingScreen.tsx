@@ -176,12 +176,12 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
   return (
     <div className="h-full flex flex-col p-7 bg-bg-primary">
       <div
-        className="text-[28px] font-extrabold text-text-primary"
-        style={{ letterSpacing: "-0.02em" }}
+        className="text-[26px] font-black text-text-primary"
+        style={{ letterSpacing: "-0.5px" }}
       >
         {done ? "You're all set!" : "Setting things up..."}
       </div>
-      <div className="text-[14px] text-text-muted mt-0.5">
+      <div className="text-[13px] text-text-muted mt-0.5 font-medium">
         Everything runs on your device
       </div>
 
@@ -213,11 +213,11 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
                   {step.done ? "\u2713" : step.active ? "\u25CF" : ""}
                 </div>
                 <span
-                  className={`text-[15px] ${step.done
-                    ? "text-text-primary font-semibold"
+                  className={`text-[13px] ${step.done
+                    ? "text-text-primary font-bold"
                     : step.active
-                      ? "text-accent-green font-bold"
-                      : "text-text-dim font-normal"
+                      ? "text-accent-green font-extrabold"
+                      : "text-text-dim font-medium"
                     }`}
                 >
                   {step.label}
@@ -248,7 +248,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
               return (
                 <div key={i} className="flex items-center gap-2.5">
                   <Avatar name={contact.name} email={contact.email} size={8} fontSize="text-[11px]" className="shrink-0" />
-                  <span className="text-[13px] text-text-secondary flex-1">
+                  <span className="text-[12px] font-medium text-text-secondary flex-1">
                     {contact.name}
                   </span>
                   <div className="flex items-center gap-1">
@@ -273,10 +273,10 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
 
       {/* On-device AI info */}
       <div className="p-3.5 rounded-2xl bg-green-bg border border-green-border">
-        <div className="text-[14px] font-extrabold text-accent-green">
+        <div className="text-[13px] font-extrabold text-accent-green">
           On-device AI
         </div>
-        <div className="text-[13px] text-text-secondary mt-1 leading-relaxed">
+        <div className="text-[12px] text-text-secondary mt-1 leading-relaxed font-medium">
           {messageCount === 0
             ? "Analyzing your email history locally..."
             : done
@@ -289,7 +289,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
       {done && (
         <button
           onClick={onComplete}
-          className="mt-4 py-3.5 rounded-2xl bg-accent-green text-white text-center text-lg font-extrabold cursor-pointer w-full border-none"
+          className="mt-4 py-3.5 rounded-[12px] bg-accent-green text-white text-center text-[15px] font-extrabold cursor-pointer w-full border-none"
         >
           Enter Eddie &rarr;
         </button>

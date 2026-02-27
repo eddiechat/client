@@ -1,48 +1,71 @@
 @import "tailwindcss";
 
-/* Theme customization for Tailwind 4 — Soft Geometric palette */
+/* Raleway font — bundled locally */
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('./assets/fonts/Raleway-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('./assets/fonts/Raleway-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Theme customization for Tailwind 4 — Vibrant Playful palette */
 @theme {
   /* Background colors */
-  --color-bg-primary: #FAFBFE;
+  --color-bg-primary: #F7F5F2;
   --color-bg-secondary: #FFFFFF;
-  --color-bg-tertiary: #F0F2FA;
-  --color-bg-hover: #E5F5EE;
-  --color-bg-active: #D8F0E4;
+  --color-bg-tertiary: #ECEAE7;
+  --color-bg-hover: rgba(255, 90, 95, 0.06);
+  --color-bg-active: rgba(255, 90, 95, 0.10);
 
   /* Text colors */
-  --color-text-primary: #2C2E3A;
-  --color-text-secondary: #5B5D6B;
-  --color-text-muted: #9B9DAA;
-  --color-text-dim: #C0C3D0;
+  --color-text-primary: #18181B;
+  --color-text-secondary: #52525B;
+  --color-text-muted: #71717A;
+  --color-text-dim: #A1A1AA;
 
   /* Message bubbles */
-  --color-bubble-sent: #6EC6A5;
+  --color-bubble-sent: #FF5A5F;
   --color-bubble-received: #FFFFFF;
 
-  /* Accents */
-  --color-accent-green: #6EC6A5;
-  --color-accent-green-dim: #5AB894;
-  --color-accent-purple: #B5A4E0;
-  --color-accent-amber: #F2A365;
-  --color-accent-red: #E88E8E;
-  --color-accent-skill: #7CAED9;
-  --color-accent-blue: #7CAED9;
+  /* Accents — Chat red / Group amber / Lane teal */
+  --color-accent-green: #FF5A5F;
+  --color-accent-green-dim: #E5484D;
+  --color-accent-purple: #FF9F1C;
+  --color-accent-amber: #2EC4B6;
+  --color-accent-red: #DC2626;
+  --color-accent-skill: #2EC4B6;
+  --color-accent-blue: #4A90E2;
 
   /* Borders */
-  --color-divider: #E4E6F0;
-  --color-divider-light: #ECEDF5;
+  --color-divider: rgba(0,0,0,0.07);
+  --color-divider-light: rgba(0,0,0,0.04);
 
   /* Glow / Transparent overlays */
-  --color-green-glow: rgba(110, 198, 165, 0.25);
-  --color-green-bg: #E5F5EE;
-  --color-green-border: #B8E4D0;
-  --color-purple-bg: #EEEAF8;
-  --color-purple-border: #D4CCF0;
-  --color-amber-bg: #FEF0E0;
-  --color-amber-border: #F5D5B0;
-  --color-red-bg: #FDE8E8;
-  --color-skill-bg: #E4F0FA;
-  --color-skill-border: #B8D6EE;
+  --color-green-glow: rgba(255, 90, 95, 0.25);
+  --color-green-bg: rgba(255, 90, 95, 0.08);
+  --color-green-border: rgba(255, 90, 95, 0.25);
+  --color-purple-bg: rgba(255, 159, 28, 0.08);
+  --color-purple-border: rgba(255, 159, 28, 0.25);
+  --color-amber-bg: rgba(46, 196, 182, 0.08);
+  --color-amber-border: rgba(46, 196, 182, 0.25);
+  --color-red-bg: #FFE4E4;
+  --color-skill-bg: rgba(46, 196, 182, 0.08);
+  --color-skill-border: rgba(46, 196, 182, 0.25);
+
+  /* Card styling */
+  --shadow-card: 0 2px 12px rgba(0,0,0,0.08);
+  --radius-card: 14px;
 }
 
 /* Dark mode overrides — values from eddie-client-clean */
@@ -97,7 +120,7 @@ html.dark {
   }
 
   body {
-    font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    font-family: "Raleway", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
       Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--color-bg-primary);
     color: var(--color-text-primary);
@@ -140,9 +163,29 @@ html.dark {
 }
 
 @layer components {
-  /* Avatar shape — squircle in light, circle in dark */
-  .avatar-shape { border-radius: 36%; }
+  /* Avatar shape — rounded rect in light, circle in dark */
+  .avatar-shape { border-radius: 11px; }
   html.dark .avatar-shape { border-radius: 9999px; }
+
+  /* Card row — shared card styling for list items */
+  .card-row {
+    background: white;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--color-divider);
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .card-row:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+  }
+  .card-row:active {
+    transform: scale(0.98);
+  }
+  html.dark .card-row {
+    background: var(--color-bg-secondary);
+    box-shadow: none;
+  }
 
   /* Avatar group positioning */
   .avatar-group .avatar-sm:nth-child(1) {

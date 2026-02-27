@@ -77,11 +77,11 @@ function SettingsScreen() {
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pb-3 border-b border-divider shrink-0 bg-bg-secondary" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
-        <button className="border-none bg-transparent text-[32px] cursor-pointer text-accent-green min-w-11 min-h-11 flex items-center justify-center -ml-2" onClick={() => router.history.back()}>
+      <div className="flex items-center gap-3 px-4 pb-3 border-b border-divider shrink-0 bg-bg-primary" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
+        <button className="border-none bg-transparent text-[28px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold" onClick={() => router.history.back()}>
           &#8249;
         </button>
-        <span className="font-bold text-[19px] text-text-primary">Settings</span>
+        <span className="font-extrabold text-[15px] text-text-primary" style={{ letterSpacing: "-0.2px" }}>Settings</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">

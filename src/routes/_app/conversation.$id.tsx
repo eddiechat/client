@@ -59,7 +59,7 @@ function ConversationView() {
 
   if (!conversation) {
     return (
-      <div className="flex flex-col h-screen bg-bg-primary items-center justify-center text-text-muted">
+      <div className="flex flex-col h-screen bg-bg-primary items-center justify-center text-text-muted font-semibold">
         Conversation not found
       </div>
     );
@@ -98,25 +98,25 @@ function ConversationView() {
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pb-3 border-b border-divider shrink-0 bg-bg-secondary" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
-        <button className="border-none bg-transparent text-[32px] cursor-pointer text-accent-green min-w-11 min-h-11 flex items-center justify-center -ml-2" onClick={() => router.history.back()}>
+      <div className="flex items-center gap-3 px-4 pb-3 border-b border-divider shrink-0 bg-bg-primary" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
+        <button className="border-none bg-transparent text-[28px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold" onClick={() => router.history.back()}>
           &#8249;
         </button>
-        <Avatar name={name} email={participantEmails(conversation)[0]} size={11} fontSize="text-[15px]" className="shrink-0" />
-        <div className="flex flex-col">
-          <span className="font-semibold text-[17px] text-text-primary leading-tight">{name}</span>
-          <span className="text-[12px] text-text-muted leading-tight">{participantEmails(conversation).join(", ")}</span>
+        <Avatar name={name} email={participantEmails(conversation)[0]} size={10} fontSize="text-[13px]" className="shrink-0" />
+        <div className="flex flex-col min-w-0">
+          <span className="font-extrabold text-[13px] text-text-primary leading-tight truncate" style={{ letterSpacing: "-0.2px" }}>{name}</span>
+          <span className="text-[10px] text-text-muted leading-tight font-medium truncate">{participantEmails(conversation).join(", ")}</span>
         </div>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-1">
-        <div className="self-center bg-bg-tertiary text-text-muted text-[13px] px-4 py-1 rounded-xl mb-4 border border-divider">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-1">
+        <div className="self-center bg-bg-tertiary text-text-muted text-[11px] font-semibold px-3 py-1 rounded-[10px] mb-4 border border-divider">
           Derived from {totalCount} emails{oldestYear ? ` since ${oldestYear}` : ""}
         </div>
 
         {messagesLoading ? (
-          <div className="text-center py-10 text-text-muted">Loading messages&hellip;</div>
+          <div className="text-center py-10 text-text-muted font-semibold text-[13px]">Loading messages&hellip;</div>
         ) : (
           dedup(messages).sort((a, b) => a.date - b.date).map((m, i, arr) => {
             const isSent = m.is_sent;
@@ -144,33 +144,35 @@ function ConversationView() {
                 onClick={() => handleSelectMessage(m)}
               >
                 {i > 0 && year !== prevYear && (
-                  <div className="self-center text-text-dim text-[13px] px-4 py-1 rounded-xl my-3 border border-text-dim">
+                  <div className="self-center text-text-dim text-[11px] font-semibold px-3 py-1 rounded-[10px] my-3 border border-divider">
                     {year}
                   </div>
                 )}
                 {!isSent && isMultiParticipant && (
-                  <span className="text-[12px] mb-0.5 px-1 ml-9">
-                    <span className="font-bold" style={{ color: avatarBg(sender) }}>{sender}</span>
+                  <span className="text-[9px] font-bold mb-0.5 px-1 ml-8">
+                    <span style={{ color: avatarBg(sender) }}>{sender}</span>
                     {missing.length > 0 && (
                       <span className="text-text-muted line-through ml-1">{missing.join(", ")}</span>
                     )}
                   </span>
                 )}
                 {isSent && isMultiParticipant && missing.length > 0 && (
-                  <span className="text-[12px] text-text-muted line-through mb-0.5 px-1">{missing.join(", ")}</span>
+                  <span className="text-[9px] text-text-muted line-through mb-0.5 px-1 font-semibold">{missing.join(", ")}</span>
                 )}
                 <div className={`flex items-end gap-2 ${isSent ? "flex-row-reverse" : ""} max-w-[85%]`}>
                   {!isSent && isMultiParticipant && (
-                    <Avatar name={sender} email={m.from_address} size={8} fontSize="text-[12px]" className="shrink-0" />
+                    <Avatar name={sender} email={m.from_address} size={7} fontSize="text-[10px]" className="shrink-0" />
                   )}
-                  <div className={`min-w-0 px-3.5 py-2.5 text-[16px] leading-snug break-words ${isSent
-                    ? "bg-accent-green text-white rounded-[18px_18px_4px_18px]"
-                    : "bg-bg-secondary text-text-primary rounded-[18px_18px_18px_4px] border border-divider"
-                    }`}>
+                  <div className={`min-w-0 px-3 py-2 text-[11px] font-medium leading-snug break-words ${isSent
+                    ? "bg-accent-green text-white rounded-[12px_12px_4px_12px]"
+                    : "bg-bg-secondary text-text-primary rounded-[12px_12px_12px_4px]"
+                    }`}
+                    style={isSent ? undefined : { boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}
+                  >
                     {body}
                   </div>
                 </div>
-                <span className="text-[11px] text-text-dim px-1 pt-0.5">{fmtTime(m.date)}</span>
+                <span className="text-[9px] text-text-dim px-1 pt-0.5 font-medium">{fmtTime(m.date)}</span>
               </div>
             );
           })
@@ -179,13 +181,13 @@ function ConversationView() {
       </div>
 
       {/* Compose */}
-      <div className="flex items-center gap-2.5 px-4 pt-2.5 border-t border-divider shrink-0 bg-bg-secondary" style={{ paddingBottom: 'calc(0.875rem + env(safe-area-inset-bottom, 0px))' }}>
-        <button className="w-10 h-10 rounded-xl border border-divider bg-transparent text-xl text-text-dim cursor-pointer flex items-center justify-center shrink-0 leading-none hover:border-accent-green hover:text-accent-green">+</button>
+      <div className="flex items-center gap-2 px-3 pt-2 border-t border-divider shrink-0 bg-bg-secondary" style={{ paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom, 0px))' }}>
+        <button className="w-8 h-8 rounded-[10px] border border-divider bg-bg-primary text-lg text-text-dim cursor-pointer flex items-center justify-center shrink-0 leading-none font-light hover:border-accent-green hover:text-accent-green transition-colors">+</button>
         <input
-          className="flex-1 py-2 px-3.5 border border-divider rounded-xl text-[16px] outline-none bg-bg-primary text-text-primary placeholder:text-text-dim focus:border-accent-green"
+          className="flex-1 py-2 px-3 border border-divider rounded-[10px] text-[13px] font-medium outline-none bg-bg-primary text-text-primary placeholder:text-text-dim focus:border-accent-green"
           placeholder={"Message\u2026"}
         />
-        <button className="w-10 h-10 rounded-xl border-none bg-accent-green text-white text-lg font-bold cursor-pointer flex items-center justify-center shrink-0 hover:brightness-90 transition">{"\u2191"}</button>
+        <button className="w-8 h-8 rounded-[10px] border-none bg-accent-green text-white text-sm font-extrabold cursor-pointer flex items-center justify-center shrink-0 hover:brightness-90 transition">{"\u2191"}</button>
       </div>
     </div>
   );

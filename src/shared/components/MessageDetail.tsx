@@ -29,17 +29,17 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
     <div className="flex flex-col h-screen bg-bg-primary">
       {/* Header */}
       <div
-        className="flex items-center gap-3 px-5 pb-3 border-b border-divider shrink-0 bg-bg-secondary"
+        className="flex items-center gap-3 px-4 pb-3 border-b border-divider shrink-0 bg-bg-primary"
         style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
       >
         <button
-          className="border-none bg-transparent text-[32px] cursor-pointer text-accent-green min-w-11 min-h-11 flex items-center justify-center -ml-2"
+          className="border-none bg-transparent text-[28px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold"
           onClick={onBack}
         >
           &#8249;
         </button>
         <div className="flex flex-col min-w-0">
-          <span className="font-semibold text-[17px] text-text-primary leading-tight truncate">
+          <span className="font-extrabold text-[13px] text-text-primary leading-tight truncate" style={{ letterSpacing: "-0.2px" }}>
             {m.subject || "(no subject)"}
           </span>
         </div>
@@ -48,27 +48,27 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
         {/* Sender row */}
-        <div className="flex items-center gap-3 px-5 py-3">
+        <div className="flex items-center gap-3 px-4 py-3">
           <Avatar
             name={sender}
             email={m.from_address}
-            size={10}
-            fontSize="text-[14px]"
+            size={9}
+            fontSize="text-[12px]"
             className="shrink-0"
           />
           <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-[15px] text-text-primary">
+            <span className="font-bold text-[13px] text-text-primary">
               {sender}
             </span>
-            <span className="text-[12px] text-text-muted">
+            <span className="text-[10px] text-text-muted font-medium">
               {fmtDate(m.date)}
             </span>
           </div>
         </div>
 
         {/* Metadata rows */}
-        <div className="px-5 py-2 border-b border-divider">
-          <div className="flex gap-2 py-0.5 text-[13px] leading-snug">
+        <div className="px-4 py-2 border-b border-divider">
+          <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
             <span className="text-text-dim min-w-10 shrink-0 text-right">
               From
             </span>
@@ -78,7 +78,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
                 : m.from_address}
             </span>
           </div>
-          <div className="flex gap-2 py-0.5 text-[13px] leading-snug">
+          <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
             <span className="text-text-dim min-w-10 shrink-0 text-right">
               To
             </span>
@@ -87,7 +87,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
             </span>
           </div>
           {hasAddresses(m.cc_addresses) && (
-            <div className="flex gap-2 py-0.5 text-[13px] leading-snug">
+            <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
               <span className="text-text-dim min-w-10 shrink-0 text-right">
                 Cc
               </span>
@@ -96,7 +96,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
               </span>
             </div>
           )}
-          <div className="flex gap-2 py-0.5 text-[13px] leading-snug">
+          <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
             <span className="text-text-dim min-w-10 shrink-0 text-right">
               Date
             </span>
@@ -107,15 +107,15 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4">
+        <div className="px-4 py-4">
           {loading ? (
-            <div className="text-text-muted text-[14px]">
+            <div className="text-text-muted text-[12px] font-semibold">
               Loading full message&hellip;
             </div>
           ) : html ? (
             <HtmlBody html={html} />
           ) : (
-            <div className="text-[14px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words">
+            <div className="text-[12px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words font-medium">
               {m.body_text || ""}
             </div>
           )}
@@ -139,7 +139,7 @@ function HtmlBody({ html }: { html: string }) {
 
   return (
     <div
-      className="html-email-body text-[14px] leading-relaxed text-text-secondary break-words [&_img]:max-w-full [&_img]:h-auto [&_a]:text-accent-green [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_table]:max-w-full"
+      className="html-email-body text-[12px] leading-relaxed text-text-secondary break-words font-medium [&_img]:max-w-full [&_img]:h-auto [&_a]:text-accent-green [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_table]:max-w-full"
       dangerouslySetInnerHTML={{ __html: cleanHtml }}
     />
   );

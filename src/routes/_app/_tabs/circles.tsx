@@ -27,9 +27,9 @@ function CirclesList() {
   );
 
   return (
-    <ul className="list-none">
+    <div className="flex flex-col gap-[5px] px-2.5 py-2">
       {filtered.length === 0 && (
-        <li className="text-center py-15 px-5 text-text-muted text-[14px]">No conversations yet</li>
+        <div className="text-center py-15 px-5 text-text-muted text-[13px] font-semibold">No conversations yet</div>
       )}
       {filtered.map((c) => {
         const name = displayName(c);
@@ -37,52 +37,52 @@ function CirclesList() {
         const entries = participantEntries(c);
 
         return (
-          <li
+          <div
             key={c.id}
-            className="flex items-center px-5 py-3 border-b border-divider cursor-pointer gap-3 transition-colors"
+            className="card-row flex items-center px-3 py-2.5 cursor-pointer gap-2.5"
             onClick={() => navigate({ to: "/conversation/$id", params: { id: c.id } })}
           >
             {/* Avatar group */}
             {entries.length > 1 ? (
-              <div className="avatar-group w-12 h-12 relative shrink-0">
+              <div className="avatar-group w-11 h-11 relative shrink-0">
                 {entries.slice(0, 3).map(([email, n], i) => (
                   <Avatar
                     key={i}
                     name={n || email}
                     email={email}
-                    size={8}
-                    fontSize="text-[11px]"
+                    size={7}
+                    fontSize="text-[10px]"
                     className="avatar-sm absolute border-[1.5px] border-bg-primary"
                   />
                 ))}
               </div>
             ) : (
               <div className="relative shrink-0">
-                <Avatar name={name} email={participantEmails(c)[0]} size={12} fontSize="text-[17px]" />
+                <Avatar name={name} email={participantEmails(c)[0]} size={11} fontSize="text-[14px]" />
               </div>
             )}
 
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline gap-2">
-                <span className={`text-[15.5px] truncate flex-1 ${hasUnread ? "font-semibold text-text-primary" : "font-normal text-text-secondary"}`}>{name}</span>
-                <span className={`text-[12px] shrink-0 ${hasUnread ? "text-accent-green font-semibold" : "text-text-dim"}`}>
+                <span className={`text-[13px] truncate flex-1 ${hasUnread ? "font-extrabold text-text-primary" : "font-semibold text-text-secondary"}`} style={{ letterSpacing: "-0.2px" }}>{name}</span>
+                <span className={`text-[9px] shrink-0 ${hasUnread ? "font-extrabold text-text-primary" : "font-semibold text-text-dim"}`}>
                   {relTime(c.last_message_date)}
                 </span>
               </div>
-              <div className="flex justify-between items-center gap-2 mt-0.5">
-                <span className="text-[14px] text-text-muted truncate flex-1 whitespace-nowrap overflow-hidden text-ellipsis">
+              <div className="flex justify-between items-center gap-2 mt-px">
+                <span className="text-[10px] text-text-muted truncate flex-1 font-medium">
                   {c.last_message_preview || ""}
                 </span>
                 {hasUnread && (
-                  <span className="min-w-[20px] h-5 rounded-[10px] bg-accent-green text-white text-[11px] font-bold flex items-center justify-center px-1.5 shrink-0">
+                  <span className="min-w-4 h-4 rounded-lg bg-accent-purple text-white text-[9px] font-extrabold flex items-center justify-center px-1 shrink-0">
                     {c.unread_count}
                   </span>
                 )}
               </div>
             </div>
-          </li>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 }
