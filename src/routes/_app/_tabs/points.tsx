@@ -78,7 +78,7 @@ function PointsList() {
   }
 
   return (
-    <div className="flex flex-col gap-[5px] px-2.5 py-2">
+    <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25">
       {visible.length === 0 && (
         <div className="text-center py-15 px-5 text-text-muted text-[16px] font-semibold">No conversations yet</div>
       )}
@@ -107,7 +107,7 @@ function PointsList() {
 
             {/* Sliding foreground row */}
             <div
-              className="relative card-row flex items-center px-3 py-3 cursor-pointer gap-3 transition-transform duration-200"
+              className="relative card-row flex items-center px-3.25 py-3.25 cursor-pointer gap-3.25 transition-transform duration-200"
               style={{ transform: isOpen ? "translateX(-72px)" : "translateX(0)" }}
               onTouchStart={(e) => {
                 touchStartX.current = e.touches[0].clientX;

@@ -88,8 +88,8 @@ function TabsLayout() {
     >
       <div className="flex-1 overflow-y-auto">
         {/* Header */}
-        <div className="px-4 pb-2.5" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
-          <div className="flex items-center gap-3" onClick={() => setShowAccountDrawer(true)} style={{ cursor: "pointer" }}>
+        <div className="px-4.5 pb-2.75" style={{ paddingTop: 'calc(0.55rem + env(safe-area-inset-top, 0px))' }}>
+          <div className="flex items-center gap-3.25" onClick={() => setShowAccountDrawer(true)} style={{ cursor: "pointer" }}>
             <LogoPill height={54} />
             <div className="flex flex-col">
               <span style={{ color: "#5BBCF5", fontSize: "34px", fontWeight: 900, letterSpacing: "-0.5px", lineHeight: 1 }}>eddie</span>
@@ -98,8 +98,8 @@ function TabsLayout() {
           </div>
         </div>
         {/* Search + Filter */}
-        <div className="px-2.5 pb-2 flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-[10px] border border-divider">
+        <div className="px-2.75 pb-2.25 flex items-center gap-2.25">
+          <div className="flex-1 flex items-center gap-2.25 px-3.25 py-2.25 rounded-[10px] border border-divider">
             <span className="text-text-dim text-[16px]">{"\u2315"}</span>
             <input
               className="flex-1 bg-transparent border-none outline-none text-[16px] font-medium text-text-primary placeholder:text-text-dim"
@@ -147,7 +147,7 @@ function TabsLayout() {
         )}
         <div className="flex">
           <button
-            className="flex-1 flex flex-col items-center gap-0.5 py-3.5 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors"
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors"
             style={{ color: "#5BBCF5" }}
             onClick={() => navigate({ to: "/points" })}
           >
@@ -158,7 +158,7 @@ function TabsLayout() {
             {activeTab === "points" && <span className="w-1 h-1 rounded-full" style={{ background: "#5BBCF5" }} />}
           </button>
           <button
-            className="flex-1 flex flex-col items-center gap-0.5 py-3.5 border-none bg-transparent text-[10px] font-extrabold tracking-wide opacity-30"
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent text-[10px] font-extrabold tracking-wide opacity-30"
             style={{ color: "#A78BFA", cursor: "default" }}
             disabled
           >
@@ -171,7 +171,7 @@ function TabsLayout() {
             Groups
           </button>
           <button
-            className="flex-1 flex flex-col items-center gap-0.5 py-3.5 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors"
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors"
             style={{ color: "#F5C43A" }}
             onClick={() => navigate({ to: "/lines" })}
           >

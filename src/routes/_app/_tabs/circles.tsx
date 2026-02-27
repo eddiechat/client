@@ -27,7 +27,7 @@ function CirclesList() {
   );
 
   return (
-    <div className="flex flex-col gap-[5px] px-2.5 py-2">
+    <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25">
       {filtered.length === 0 && (
         <div className="text-center py-15 px-5 text-text-muted text-[13px] font-semibold">No conversations yet</div>
       )}
@@ -39,7 +39,7 @@ function CirclesList() {
         return (
           <div
             key={c.id}
-            className="card-row flex items-center px-3 py-2.5 cursor-pointer gap-2.5"
+            className="card-row flex items-center px-3.25 py-2.75 cursor-pointer gap-2.75"
             onClick={() => navigate({ to: "/conversation/$id", params: { id: c.id } })}
           >
             <PartitionedAvatar participants={entries} />
