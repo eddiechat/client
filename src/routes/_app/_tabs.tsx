@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/rea
 import { useAuth, useData, SearchContext, ChatFilterContext } from "../../shared/context";
 import type { ChatFilter } from "../../shared/context";
 import { participantCount } from "../../shared/lib";
-import { LogoPill } from "../../shared/components";
+import { Avatar, LogoPill } from "../../shared/components";
 import { getAppVersion } from "../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs")({
@@ -16,6 +16,28 @@ const TAB_ACCENT: Record<string, string> = {
   circles: "var(--color-accent-purple)",
   lines: "var(--color-accent-amber)",
 };
+
+function ChatBubbleIcon() {
+  return (
+    <svg width="26" height="24" viewBox="0 0 26 24" fill="none">
+      <path
+        fill="#5BBCF5"
+        d="M 4 0 L 22 0 Q 26 0 26 4 L 26 15 Q 26 19 22 19 L 12 19 L 7 24 L 7 19 L 4 19 Q 0 19 0 15 L 0 4 Q 0 0 4 0 Z"
+      />
+    </svg>
+  );
+}
+
+function LetterIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <rect width="24" height="24" rx="5" fill="#F5C43A" />
+      <rect x="5" y="7" width="14" height="2" rx="1" fill="white" />
+      <rect x="5" y="11" width="14" height="2" rx="1" fill="white" />
+      <rect x="5" y="15" width="9" height="2" rx="1" fill="white" />
+    </svg>
+  );
+}
 
 function TabsLayout() {
   const navigate = useNavigate();
@@ -117,20 +139,26 @@ function TabsLayout() {
           </div>
         )}
         <button
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors ${activeTab === "points" ? "text-accent-green" : "text-text-dim"}`}
+          className="flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors"
+          style={{ color: "#5BBCF5" }}
           onClick={() => navigate({ to: "/points" })}
         >
-          <span className="flex items-center justify-center w-7 h-7 text-[17px]">{"\uD83D\uDCAC"}</span>
+          <span className="flex items-center justify-center w-7 h-7">
+            <ChatBubbleIcon />
+          </span>
           Chats
-          {activeTab === "points" && <span className="w-1 h-1 rounded-full bg-accent-green" />}
+          {activeTab === "points" && <span className="w-1 h-1 rounded-full" style={{ background: "#5BBCF5" }} />}
         </button>
         <button
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors ${activeTab === "lines" ? "text-accent-amber" : "text-text-dim"}`}
+          className="flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors"
+          style={{ color: "#F5C43A" }}
           onClick={() => navigate({ to: "/lines" })}
         >
-          <span className="flex items-center justify-center w-7 h-7 text-[17px]">{"\uD83C\uDFF7"}</span>
-          Lanes
-          {activeTab === "lines" && <span className="w-1 h-1 rounded-full bg-accent-amber" />}
+          <span className="flex items-center justify-center w-7 h-7">
+            <LetterIcon />
+          </span>
+          Mails
+          {activeTab === "lines" && <span className="w-1 h-1 rounded-full" style={{ background: "#F5C43A" }} />}
         </button>
       </nav>
 
