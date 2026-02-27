@@ -10,17 +10,11 @@ export const Route = createFileRoute("/_app/settings")({
 
 const SETTING_KEYS = {
   ollamaUrl: "ollama_url",
-  notifPoints: "notif_points",
-  notifCircles: "notif_circles",
-  notifLines: "notif_lines",
   hideOlderChats: "hide_older_chats",
   showToaster: "show_toaster",
 } as const;
 
 const TOGGLE_DEFAULTS: Record<string, boolean> = {
-  [SETTING_KEYS.notifPoints]: true,
-  [SETTING_KEYS.notifCircles]: true,
-  [SETTING_KEYS.notifLines]: false,
   [SETTING_KEYS.showToaster]: false,
 };
 
@@ -70,16 +64,13 @@ function SettingsScreen() {
   }, []);
 
   const settingsSections = [
-    { section: "Appearance", items: [
-      { label: "Show status toaster", desc: "Show sync status at the bottom", key: SETTING_KEYS.showToaster },
-    ]},
+    {
+      section: "Appearance", items: [
+        { label: "Show status toaster", desc: "Show sync status at the bottom", key: SETTING_KEYS.showToaster },
+      ]
+    },
   ];
 
-  const notificationItems = [
-    { label: "Point messages", desc: "Direct conversations", key: SETTING_KEYS.notifPoints },
-    { label: "Circle messages", desc: "Groups and communities", key: SETTING_KEYS.notifCircles },
-    { label: "Line updates", desc: "New matches in your Lines", key: SETTING_KEYS.notifLines },
-  ];
 
   return (
     <div className="flex flex-col h-screen" style={{ background: "var(--color-bg-gradient)" }}>
@@ -91,7 +82,7 @@ function SettingsScreen() {
         <span className="font-extrabold text-[15px] text-text-primary" style={{ letterSpacing: "-0.2px" }}>Settings</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto flex flex-col">
         {/* Account card */}
         <div className="p-5">
           <div className="p-4 rounded-2xl bg-bg-secondary border border-divider flex items-center gap-3.5">
@@ -125,11 +116,10 @@ function SettingsScreen() {
                   {CHAT_AGE_STEPS.map((step, i) => (
                     <button
                       key={step}
-                      className={`flex-1 py-1.5 text-[11px] font-bold border border-divider cursor-pointer transition-colors ${
-                        chatAge === step
-                          ? "bg-accent-green text-white border-accent-green"
-                          : "bg-bg-tertiary text-text-muted"
-                      } ${i === 0 ? "rounded-l-lg" : ""} ${i === CHAT_AGE_STEPS.length - 1 ? "rounded-r-lg" : ""} ${i > 0 ? "-ml-px" : ""}`}
+                      className={`flex-1 py-1.5 text-[11px] font-bold border border-divider cursor-pointer transition-colors ${chatAge === step
+                        ? "bg-accent-green text-white border-accent-green"
+                        : "bg-bg-tertiary text-text-muted"
+                        } ${i === 0 ? "rounded-l-lg" : ""} ${i === CHAT_AGE_STEPS.length - 1 ? "rounded-r-lg" : ""} ${i > 0 ? "-ml-px" : ""}`}
                       onClick={() => { setChatAge(step); setSetting(SETTING_KEYS.hideOlderChats, step); }}
                     >
                       {CHAT_AGE_LABELS[step]}
@@ -185,24 +175,8 @@ function SettingsScreen() {
           </div>
         </div>
 
-        {/* Notifications */}
-        <div className="px-5 pb-2">
-          <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">NOTIFICATIONS</div>
-          {notificationItems.map((item) => (
-            <SettingsToggle key={item.key} label={item.label} desc={item.desc} value={toggles[item.key]} onChange={(v) => persistToggle(item.key, v)} />
-          ))}
-        </div>
-
-        {/* Open source info */}
-        <div className="px-5 pt-4">
-          <div className="p-3.5 rounded-xl bg-green-bg border border-green-border">
-            <div className="text-[13px] font-bold text-accent-green mb-1">{"\uD83D\uDD12"} Eddie is open source</div>
-            <div className="text-[12px] text-text-muted leading-relaxed">Audit the code, contribute, or fork it. Your data never touches our servers.</div>
-          </div>
-        </div>
-
-        <div className="py-4 text-center">
-          <span className="text-[12px] text-text-dim">Eddie v0.4.2 &middot; Built on email</span>
+        <div className="py-4 text-center mt-auto">
+          <span className="text-[12px] text-text-dim">Eddie is open source • We value privacy • We never touch your data.</span>
         </div>
       </div>
     </div>
