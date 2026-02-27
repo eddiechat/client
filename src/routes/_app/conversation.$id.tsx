@@ -6,6 +6,7 @@ import { fetchConversationMessages } from "../../tauri";
 import type { Message } from "../../tauri";
 import {
   displayName,
+  firstName,
   participantCount,
   participantEmails,
   dedup,
@@ -121,7 +122,7 @@ function ConversationView() {
           dedup(messages).sort((a, b) => a.date - b.date).map((m, i, arr) => {
             const isSent = m.is_sent;
             const body = m.distilled_text || m.body_text || m.subject || "";
-            const sender = m.from_name || m.from_address;
+            const sender = firstName(m.from_name || m.from_address);
             const year = new Date(m.date).getFullYear();
             const prevYear = i > 0 ? new Date(arr[i - 1].date).getFullYear() : year;
             const missing = isMultiParticipant ? (() => {

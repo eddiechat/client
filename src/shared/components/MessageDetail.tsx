@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Message } from "../../tauri";
 import { fetchMessageHtml } from "../../tauri";
-import { fmtDate, parseAddresses, hasAddresses } from "../lib";
+import { fmtDate, firstName, parseAddresses, hasAddresses } from "../lib";
 import { Avatar } from "./Avatar";
 
 interface MessageDetailProps {
@@ -23,7 +23,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
       .finally(() => setLoading(false));
   }, [m.id, needsFetch]);
 
-  const sender = m.from_name || m.from_address;
+  const sender = firstName(m.from_name || m.from_address);
 
   return (
     <div className="flex flex-col h-screen bg-bg-primary">

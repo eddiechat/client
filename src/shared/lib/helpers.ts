@@ -65,6 +65,12 @@ export function avatarTextColor(_name: string): string {
   return "#fff";
 }
 
+export function firstName(name: string): string {
+  const s = name.trim();
+  if (s.includes("@")) return s.split("@")[0];
+  return s.split(/\s+/)[0];
+}
+
 export function initials(name: string) {
   const p = name.trim().split(/[\s@]+/);
   if (p.length >= 2) return (p[0][0] + p[1][0]).toUpperCase();
@@ -116,7 +122,7 @@ export function displayName(c: Conversation): string {
       const v = Object.values(
         JSON.parse(c.participant_names) as Record<string, string>
       ).filter(Boolean);
-      if (v.length) return v.join(", ");
+      if (v.length) return v.map(firstName).join(", ");
     } catch {
       /* ignore */
     }

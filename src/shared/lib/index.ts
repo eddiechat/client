@@ -3,6 +3,7 @@ export {
   avatarBg,
   avatarBorder,
   avatarTextColor,
+  firstName,
   initials,
   relTime,
   fmtTime,
