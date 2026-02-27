@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useAuth, useData, useTabSearch, useTheme, useChatFilter } from "../../../shared/context";
 import {
   displayName,
@@ -9,7 +9,7 @@ import {
   relTime,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
-import { moveToLines } from "../../../tauri";
+import { moveToLines, getSetting } from "../../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs/points")({
   component: PointsList,
@@ -32,6 +32,16 @@ function PointsList() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
+  const [showOlder, setShowOlder] = useState(false);
+  const [chatAgeWeeks, setChatAgeWeeks] = useState<number | null>(null); // null = "all"
+
+  useEffect(() => {
+    getSetting("hide_older_chats").then((v) => {
+      if (v === null || v === "all") setChatAgeWeeks(null);
+      else { const n = parseInt(v, 10); setChatAgeWeeks(isNaN(n) ? null : n); }
+    });
+  }, []);
+
   const conns = conversations.filter((c) => c.classification === "connections");
   const byFilter = chatFilter === "1:1"
     ? conns.filter((c) => participantCount(c) === 1)
@@ -42,6 +52,13 @@ function PointsList() {
   const filtered = byFilter.filter(
     (c) => !q || displayName(c).toLowerCase().includes(q)
   );
+
+  const cutoff = chatAgeWeeks !== null ? Date.now() - chatAgeWeeks * 7 * 24 * 60 * 60 * 1000 : 0;
+  const recent = chatAgeWeeks !== null ? filtered.filter((c) => c.last_message_date >= cutoff) : filtered;
+  const older = chatAgeWeeks !== null ? filtered.filter((c) => c.last_message_date < cutoff) : [];
+  // If all conversations are older than the cutoff, show them all
+  const canCollapse = older.length > 0 && recent.length > 0;
+  const visible = canCollapse && !showOlder ? recent : filtered;
 
   function clearLongPress() {
     if (longPressTimer.current) {
@@ -59,10 +76,10 @@ function PointsList() {
 
   return (
     <div className="flex flex-col gap-[5px] px-2.5 py-2">
-      {filtered.length === 0 && (
+      {visible.length === 0 && (
         <div className="text-center py-15 px-5 text-text-muted text-[13px] font-semibold">No conversations yet</div>
       )}
-      {filtered.map((c) => {
+      {visible.map((c) => {
         const name = displayName(c);
         const hasUnread = c.unread_count > 0;
         const isOpen = swipedId === c.id;
@@ -156,6 +173,14 @@ function PointsList() {
           </div>
         );
       })}
+      {canCollapse && !showOlder && (
+        <button
+          className="self-center text-[11px] font-semibold text-text-muted mt-2 mb-1 bg-transparent border-none cursor-pointer hover:text-text-primary transition-colors underline"
+          onClick={() => setShowOlder(true)}
+        >
+          Show {older.length} older conversations
+        </button>
+      )}
     </div>
   );
 }

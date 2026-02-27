@@ -13,15 +13,17 @@ const SETTING_KEYS = {
   notifPoints: "notif_points",
   notifCircles: "notif_circles",
   notifLines: "notif_lines",
-  compactList: "compact_list",
+  hideOlderChats: "hide_older_chats",
 } as const;
 
 const TOGGLE_DEFAULTS: Record<string, boolean> = {
   [SETTING_KEYS.notifPoints]: true,
   [SETTING_KEYS.notifCircles]: true,
   [SETTING_KEYS.notifLines]: false,
-  [SETTING_KEYS.compactList]: false,
 };
+
+const CHAT_AGE_STEPS = ["1", "2", "3", "4", "all"] as const;
+const CHAT_AGE_LABELS: Record<string, string> = { "1": "1w", "2": "2w", "3": "3w", "4": "4w", "all": "All" };
 
 const THEME_OPTIONS = [
   { value: "light", label: "Light" },
@@ -37,6 +39,7 @@ function SettingsScreen() {
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [toggles, setToggles] = useState<Record<string, boolean>>(TOGGLE_DEFAULTS);
+  const [chatAge, setChatAge] = useState<string>("all");
 
   useEffect(() => {
     getOllamaModels("__DEFAULT__").then((data) => {
@@ -52,6 +55,7 @@ function SettingsScreen() {
       for (const [k, v] of results) {
         if (v === null) continue;
         if (k === SETTING_KEYS.ollamaUrl) setOllamaUrl(v);
+        else if (k === SETTING_KEYS.hideOlderChats) setChatAge(v);
         else setToggles((prev) => ({ ...prev, [k]: v === "true" }));
       }
     }
@@ -64,14 +68,13 @@ function SettingsScreen() {
   }, []);
 
   const settingsSections = [
-    { section: "Notifications", items: [
-      { label: "Point messages", desc: "Direct conversations", key: SETTING_KEYS.notifPoints },
-      { label: "Circle messages", desc: "Groups and communities", key: SETTING_KEYS.notifCircles },
-      { label: "Line updates", desc: "New matches in your Lines", key: SETTING_KEYS.notifLines },
-    ]},
-    { section: "Appearance", items: [
-      { label: "Compact list", desc: "Reduce spacing in lists", key: SETTING_KEYS.compactList },
-    ]},
+    { section: "Appearance", items: [] as { label: string; desc: string; key: string }[] },
+  ];
+
+  const notificationItems = [
+    { label: "Point messages", desc: "Direct conversations", key: SETTING_KEYS.notifPoints },
+    { label: "Circle messages", desc: "Groups and communities", key: SETTING_KEYS.notifCircles },
+    { label: "Line updates", desc: "New matches in your Lines", key: SETTING_KEYS.notifLines },
   ];
 
   return (
@@ -99,6 +102,43 @@ function SettingsScreen() {
             </div>
           </div>
         </div>
+
+        {/* Setting sections */}
+        {settingsSections.map((group) => (
+          <div key={group.section} className="px-5 pb-2">
+            <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">{group.section.toUpperCase()}</div>
+            {group.section === "Appearance" && (<>
+              <SettingsSelect label="Theme" desc="Choose light, dark, or system" value={theme} options={THEME_OPTIONS} onChange={(v) => setTheme(v as "light" | "dark" | "system")} />
+              <div className="py-3 border-b border-divider">
+                <div className="flex justify-between items-baseline">
+                  <div>
+                    <div className="text-[14px] font-medium text-text-primary">Show chats from</div>
+                    <div className="text-[12px] text-text-dim mt-px">How far back to show in the list</div>
+                  </div>
+                  <span className="text-[13px] font-bold text-accent-green">{CHAT_AGE_LABELS[chatAge]}</span>
+                </div>
+                <div className="flex items-center gap-0 mt-3">
+                  {CHAT_AGE_STEPS.map((step, i) => (
+                    <button
+                      key={step}
+                      className={`flex-1 py-1.5 text-[11px] font-bold border border-divider cursor-pointer transition-colors ${
+                        chatAge === step
+                          ? "bg-accent-green text-white border-accent-green"
+                          : "bg-bg-tertiary text-text-muted"
+                      } ${i === 0 ? "rounded-l-lg" : ""} ${i === CHAT_AGE_STEPS.length - 1 ? "rounded-r-lg" : ""} ${i > 0 ? "-ml-px" : ""}`}
+                      onClick={() => { setChatAge(step); setSetting(SETTING_KEYS.hideOlderChats, step); }}
+                    >
+                      {CHAT_AGE_LABELS[step]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>)}
+            {group.items.map((item) => (
+              <SettingsToggle key={item.key} label={item.label} desc={item.desc} value={toggles[item.key]} onChange={(v) => persistToggle(item.key, v)} />
+            ))}
+          </div>
+        ))}
 
         {/* Ollama section */}
         <div className="px-5 pb-2">
@@ -141,18 +181,13 @@ function SettingsScreen() {
           </div>
         </div>
 
-        {/* Setting sections */}
-        {settingsSections.map((group) => (
-          <div key={group.section} className="px-5 pb-2">
-            <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">{group.section.toUpperCase()}</div>
-            {group.section === "Appearance" && (
-              <SettingsSelect label="Theme" desc="Choose light, dark, or system" value={theme} options={THEME_OPTIONS} onChange={(v) => setTheme(v as "light" | "dark" | "system")} />
-            )}
-            {group.items.map((item) => (
-              <SettingsToggle key={item.key} label={item.label} desc={item.desc} value={toggles[item.key]} onChange={(v) => persistToggle(item.key, v)} />
-            ))}
-          </div>
-        ))}
+        {/* Notifications */}
+        <div className="px-5 pb-2">
+          <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">NOTIFICATIONS</div>
+          {notificationItems.map((item) => (
+            <SettingsToggle key={item.key} label={item.label} desc={item.desc} value={toggles[item.key]} onChange={(v) => persistToggle(item.key, v)} />
+          ))}
+        </div>
 
         {/* Open source info */}
         <div className="px-5 pt-4">
