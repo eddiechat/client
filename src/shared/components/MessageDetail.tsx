@@ -33,13 +33,13 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
         style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
       >
         <button
-          className="border-none bg-transparent text-[28px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold"
+          className="border-none bg-transparent text-[32px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold"
           onClick={onBack}
         >
           &#8249;
         </button>
         <div className="flex flex-col min-w-0">
-          <span className="font-extrabold text-[13px] text-text-primary leading-tight truncate" style={{ letterSpacing: "-0.2px" }}>
+          <span className="font-extrabold text-[16px] text-text-primary leading-tight truncate" style={{ letterSpacing: "-0.2px" }}>
             {m.subject || "(no subject)"}
           </span>
         </div>
@@ -52,15 +52,15 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
           <Avatar
             name={sender}
             email={m.from_address}
-            size={9}
-            fontSize="text-[12px]"
+            size={11}
+            fontSize="text-[15px]"
             className="shrink-0"
           />
           <div className="flex flex-col min-w-0">
-            <span className="font-bold text-[13px] text-text-primary">
+            <span className="font-bold text-[16px] text-text-primary">
               {sender}
             </span>
-            <span className="text-[10px] text-text-muted font-medium">
+            <span className="text-[12px] text-text-muted font-medium">
               {fmtDate(m.date)}
             </span>
           </div>
@@ -68,7 +68,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
 
         {/* Metadata rows */}
         <div className="px-4 py-2 border-b border-divider">
-          <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+          <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
             <span className="text-text-dim min-w-10 shrink-0 text-right">
               From
             </span>
@@ -78,7 +78,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
                 : m.from_address}
             </span>
           </div>
-          <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+          <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
             <span className="text-text-dim min-w-10 shrink-0 text-right">
               To
             </span>
@@ -87,7 +87,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
             </span>
           </div>
           {hasAddresses(m.cc_addresses) && (
-            <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+            <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
               <span className="text-text-dim min-w-10 shrink-0 text-right">
                 Cc
               </span>
@@ -96,7 +96,7 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
               </span>
             </div>
           )}
-          <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+          <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
             <span className="text-text-dim min-w-10 shrink-0 text-right">
               Date
             </span>
@@ -109,13 +109,13 @@ export function MessageDetail({ message: m, onBack }: MessageDetailProps) {
         {/* Body */}
         <div className="px-4 py-4">
           {loading ? (
-            <div className="text-text-muted text-[12px] font-semibold">
+            <div className="text-text-muted text-[15px] font-semibold">
               Loading full message&hellip;
             </div>
           ) : html ? (
             <HtmlBody html={html} />
           ) : (
-            <div className="text-[12px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words font-medium">
+            <div className="text-[15px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words font-medium">
               {m.body_text || ""}
             </div>
           )}
@@ -139,7 +139,7 @@ function HtmlBody({ html }: { html: string }) {
 
   return (
     <div
-      className="html-email-body text-[12px] leading-relaxed text-text-secondary break-words font-medium [&_img]:max-w-full [&_img]:h-auto [&_a]:text-accent-green [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_table]:max-w-full"
+      className="html-email-body text-[15px] leading-relaxed text-text-secondary break-words font-medium [&_img]:max-w-full [&_img]:h-auto [&_a]:text-accent-green [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_table]:max-w-full"
       dangerouslySetInnerHTML={{ __html: cleanHtml }}
     />
   );

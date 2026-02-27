@@ -52,25 +52,25 @@ function ClusterView() {
     <div className="flex flex-col h-screen" style={{ background: "var(--color-bg-gradient)" }}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pb-3 border-b border-divider shrink-0" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
-        <button className="border-none bg-transparent text-[28px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold" onClick={() => router.history.back()}>
+        <button className="border-none bg-transparent text-[32px] cursor-pointer text-text-muted min-w-10 min-h-10 flex items-center justify-center -ml-1 font-bold" onClick={() => router.history.back()}>
           &#8249;
         </button>
         <div
-          className="w-9 h-9 rounded-[11px] flex items-center justify-center text-[17px] shrink-0"
+          className="w-11 h-11 rounded-[13px] flex items-center justify-center text-[20px] shrink-0"
           style={{ background: `${lineColor(name)}20`, border: `1px solid ${lineColor(name)}40` }}
         >
           {lineEmoji(name)}
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="font-extrabold text-[13px] text-text-primary truncate" style={{ letterSpacing: "-0.2px" }}>{name}</span>
-          <span className="text-[10px] text-text-muted font-medium">{sorted.length} messages</span>
+          <span className="font-extrabold text-[16px] text-text-primary truncate" style={{ letterSpacing: "-0.2px" }}>{name}</span>
+          <span className="text-[12px] text-text-muted font-medium">{sorted.length} messages</span>
         </div>
       </div>
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="text-center py-10 text-text-muted font-semibold text-[13px]">Loading messages&hellip;</div>
+          <div className="text-center py-10 text-text-muted font-semibold text-[16px]">Loading messages&hellip;</div>
         ) : (
           sorted.map((m) => {
             const isOpen = expandedMsgId === m.id;
@@ -89,19 +89,19 @@ function ClusterView() {
                   {isUnread && (
                     <div className="w-1.5 h-1.5 rounded-full bg-accent-amber shrink-0 mt-3.5" />
                   )}
-                  <Avatar name={sender} email={m.from_address} size={9} fontSize="text-[12px]" className="shrink-0 mt-0.5" />
+                  <Avatar name={sender} email={m.from_address} size={11} fontSize="text-[15px]" className="shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline gap-2">
-                      <span className={`text-[12px] truncate ${isUnread ? "font-extrabold text-text-primary" : "font-semibold text-text-secondary"}`} style={{ letterSpacing: "-0.2px" }}>
+                      <span className={`text-[15px] truncate ${isUnread ? "font-extrabold text-text-primary" : "font-semibold text-text-secondary"}`} style={{ letterSpacing: "-0.2px" }}>
                         {m.is_sent ? `To: ${m.to_addresses.split(",")[0]}` : sender}
                       </span>
-                      <span className={`text-[9px] shrink-0 font-semibold ${isUnread ? "text-accent-amber" : "text-text-dim"}`}>{relTime(m.date)}</span>
+                      <span className={`text-[11px] shrink-0 font-semibold ${isUnread ? "text-accent-amber" : "text-text-dim"}`}>{relTime(m.date)}</span>
                     </div>
-                    <div className="text-[11px] text-text-secondary mt-0.5 truncate font-medium">
+                    <div className="text-[13px] text-text-secondary mt-0.5 truncate font-medium">
                       {m.subject || "(no subject)"}
                     </div>
                     {!isOpen && body && (
-                      <div className="text-[10px] text-text-muted mt-0.5 truncate font-medium">
+                      <div className="text-[12px] text-text-muted mt-0.5 truncate font-medium">
                         {body.slice(0, 120)}
                       </div>
                     )}
@@ -115,28 +115,28 @@ function ClusterView() {
                 {isOpen && (
                   <div className="px-4 pb-4 pl-14">
                     <div className="py-2 pb-3 border-b border-divider mb-3">
-                      <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+                      <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
                         <span className="text-text-dim min-w-12 shrink-0 text-right">From</span>
                         <span className="text-text-primary break-all">
                           {m.from_name ? `${m.from_name} <${m.from_address}>` : m.from_address}
                         </span>
                       </div>
-                      <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+                      <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
                         <span className="text-text-dim min-w-12 shrink-0 text-right">To</span>
                         <span className="text-text-primary break-all">{m.to_addresses}</span>
                       </div>
                       {m.cc_addresses && (
-                        <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+                        <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
                           <span className="text-text-dim min-w-12 shrink-0 text-right">Cc</span>
                           <span className="text-text-primary break-all">{m.cc_addresses}</span>
                         </div>
                       )}
-                      <div className="flex gap-2 py-0.5 text-[11px] leading-snug font-medium">
+                      <div className="flex gap-2 py-0.5 text-[13px] leading-snug font-medium">
                         <span className="text-text-dim min-w-12 shrink-0 text-right">Date</span>
                         <span className="text-text-primary break-all">{fmtDate(m.date)}</span>
                       </div>
                     </div>
-                    <div className="text-[12px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words font-medium">{body}</div>
+                    <div className="text-[15px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words font-medium">{body}</div>
                   </div>
                 )}
               </div>

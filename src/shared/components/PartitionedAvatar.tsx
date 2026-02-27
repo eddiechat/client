@@ -29,7 +29,7 @@ const CELL_BASE: CSSProperties = {
   letterSpacing: "-0.5px",
 };
 
-export function PartitionedAvatar({ participants, sizePx = 44, conversationId }: PartitionedAvatarProps) {
+export function PartitionedAvatar({ participants, sizePx = 54, conversationId }: PartitionedAvatarProps) {
   const isDark = document.documentElement.classList.contains("dark");
   const count = participants.length;
   const gHash = participants.reduce((acc, [email, name]) => acc + charSum(name || email), 0);
@@ -137,7 +137,7 @@ export function PartitionedAvatar({ participants, sizePx = 44, conversationId }:
             ...CELL_BASE,
             background: slot.color,
             color: textColorForBg(slot.color),
-            fontSize: slot.label === "*" ? "16px" : "10px",
+            fontSize: slot.label === "*" ? "20px" : "12px",
             ...slot.pos,
           }}
         >

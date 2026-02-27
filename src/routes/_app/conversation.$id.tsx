@@ -119,27 +119,27 @@ function ConversationView() {
         }}
       >
         <button
-          className="border-none bg-transparent text-[22px] cursor-pointer text-text-secondary w-9 h-9 flex items-center justify-center rounded-[10px] hover:bg-bg-tertiary active:scale-95 transition-all font-bold -ml-1"
+          className="border-none bg-transparent text-[26px] cursor-pointer text-text-secondary w-10 h-10 flex items-center justify-center rounded-[10px] hover:bg-bg-tertiary active:scale-95 transition-all font-bold -ml-1"
           onClick={() => router.history.back()}
         >
           &#8249;
         </button>
         {isMultiParticipant ? (
-          <PartitionedAvatar participants={participantEntries(conversation)} sizePx={40} conversationId={conversation.id} />
+          <PartitionedAvatar participants={participantEntries(conversation)} sizePx={50} conversationId={conversation.id} />
         ) : (
-          <Avatar name={name} email={emails[0]} size={10} fontSize="text-[13px]" className="shrink-0" color={colorOf(emails[0])} />
+          <Avatar name={name} email={emails[0]} size={12} fontSize="text-[16px]" className="shrink-0" color={colorOf(emails[0])} />
         )}
         <div className="flex flex-col min-w-0">
-          <span className="font-extrabold text-[13px] text-text-primary leading-tight truncate" style={{ letterSpacing: "-0.2px" }}>{name}</span>
-          <span className="text-[10px] text-text-muted leading-tight font-medium truncate">{emails.join(", ")}</span>
-          <span className="text-[9px] text-text-dim leading-tight font-semibold">{totalCount} messages</span>
+          <span className="font-extrabold text-[16px] text-text-primary leading-tight truncate" style={{ letterSpacing: "-0.2px" }}>{name}</span>
+          <span className="text-[12px] text-text-muted leading-tight font-medium truncate">{emails.join(", ")}</span>
+          <span className="text-[11px] text-text-dim leading-tight font-semibold">{totalCount} messages</span>
         </div>
       </div>
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-2">
         <div
-          className="self-center text-text-muted text-[10px] font-semibold px-3 py-1 rounded-full mb-4"
+          className="self-center text-text-muted text-[12px] font-semibold px-3 py-1 rounded-full mb-4"
           style={{
             background: 'color-mix(in srgb, var(--color-accent-purple) 8%, var(--color-bg-secondary))',
             border: '1px solid color-mix(in srgb, var(--color-accent-purple) 15%, transparent)',
@@ -149,7 +149,7 @@ function ConversationView() {
         </div>
 
         {messagesLoading ? (
-          <div className="text-center py-10 text-text-muted font-semibold text-[13px]">Loading messages&hellip;</div>
+          <div className="text-center py-10 text-text-muted font-semibold text-[16px]">Loading messages&hellip;</div>
         ) : (
           dedup(messages).sort((a, b) => a.date - b.date).map((m, i, arr) => {
             const isSent = m.is_sent;
@@ -182,7 +182,7 @@ function ConversationView() {
               >
                 {i > 0 && year !== prevYear && (
                   <div
-                    className="self-center text-text-dim text-[10px] font-semibold px-3 py-1 rounded-full my-4"
+                    className="self-center text-text-dim text-[12px] font-semibold px-3 py-1 rounded-full my-4"
                     style={{
                       background: 'color-mix(in srgb, var(--color-accent-purple) 8%, var(--color-bg-secondary))',
                       border: '1px solid color-mix(in srgb, var(--color-accent-purple) 15%, transparent)',
@@ -192,7 +192,7 @@ function ConversationView() {
                   </div>
                 )}
                 {!isSent && isMultiParticipant && (
-                  <span className="text-[10px] font-bold mb-0.5 px-1 ml-8" style={{ letterSpacing: '0.1px' }}>
+                  <span className="text-[12px] font-bold mb-0.5 px-1 ml-8" style={{ letterSpacing: '0.1px' }}>
                     <span style={{ color: colorOf(m.from_address) }}>{sender}</span>
                     {missing.length > 0 && (
                       <span className="text-text-muted line-through ml-1">{missing.join(", ")}</span>
@@ -200,15 +200,15 @@ function ConversationView() {
                   </span>
                 )}
                 {isSent && isMultiParticipant && missing.length > 0 && (
-                  <span className="text-[9px] text-text-muted line-through mb-0.5 px-1 font-semibold">{missing.join(", ")}</span>
+                  <span className="text-[11px] text-text-muted line-through mb-0.5 px-1 font-semibold">{missing.join(", ")}</span>
                 )}
                 <div className={`flex items-end gap-2 ${isSent ? "flex-row-reverse" : ""} max-w-[85%] transition-transform active:scale-[0.98]`}>
                   {!isSent && isMultiParticipant && (
-                    <Avatar name={sender} email={m.from_address} size={7} fontSize="text-[10px]" className="shrink-0" color={colorOf(m.from_address)} />
+                    <Avatar name={sender} email={m.from_address} size={9} fontSize="text-[12px]" className="shrink-0" color={colorOf(m.from_address)} />
                   )}
-                  <div className={`min-w-0 px-3.5 py-2.5 text-[12px] font-medium leading-snug break-words ${isSent
-                    ? "bg-accent-blue text-white rounded-[12px_12px_4px_12px]"
-                    : "bg-bg-secondary text-text-primary rounded-[12px_12px_12px_4px]"
+                  <div className={`min-w-0 px-3.5 py-2.5 text-[15px] font-medium leading-snug break-words ${isSent
+                    ? "bg-accent-blue text-white rounded-[14px_14px_4px_14px]"
+                    : "bg-bg-secondary text-text-primary rounded-[14px_14px_14px_4px]"
                     }`}
                     style={isSent
                       ? { boxShadow: '0 2px 8px color-mix(in srgb, var(--color-accent-blue) 30%, transparent)' }
@@ -219,7 +219,7 @@ function ConversationView() {
                   </div>
                 </div>
                 {showTime && (
-                  <span className="text-[9px] text-text-dim px-1 pt-0.5 font-medium">{fmtTime(m.date)}</span>
+                  <span className="text-[11px] text-text-dim px-1 pt-0.5 font-medium">{fmtTime(m.date)}</span>
                 )}
               </div>
             );
@@ -236,14 +236,14 @@ function ConversationView() {
           boxShadow: '0 -2px 12px rgba(0,0,0,0.05)',
         }}
       >
-        <button className="w-8 h-8 rounded-[12px] border border-divider bg-bg-primary text-lg text-text-dim cursor-pointer flex items-center justify-center shrink-0 leading-none font-light hover:border-accent-green hover:text-accent-green active:scale-95 transition-all">+</button>
+        <button className="w-10 h-10 rounded-[12px] border border-divider bg-bg-primary text-xl text-text-dim cursor-pointer flex items-center justify-center shrink-0 leading-none font-light hover:border-accent-green hover:text-accent-green active:scale-95 transition-all">+</button>
         <input
-          className="compose-input flex-1 py-2 px-3 rounded-[12px] text-[13px] font-medium outline-none bg-bg-primary text-text-primary placeholder:text-text-dim"
+          className="compose-input flex-1 py-2.5 px-3.5 rounded-[12px] text-[16px] font-medium outline-none bg-bg-primary text-text-primary placeholder:text-text-dim"
           style={{ border: '1px solid var(--color-divider)', transition: 'border-color 0.15s, box-shadow 0.15s' }}
           placeholder={"Message\u2026"}
         />
         <button
-          className="w-8 h-8 rounded-[12px] border-none bg-accent-green text-white text-sm font-extrabold cursor-pointer flex items-center justify-center shrink-0 hover:brightness-90 active:scale-95 transition"
+          className="w-10 h-10 rounded-[12px] border-none bg-accent-green text-white text-base font-extrabold cursor-pointer flex items-center justify-center shrink-0 hover:brightness-90 active:scale-95 transition"
           style={{ boxShadow: '0 2px 8px color-mix(in srgb, var(--color-accent-green) 35%, transparent)' }}
         >
           {"\u2191"}

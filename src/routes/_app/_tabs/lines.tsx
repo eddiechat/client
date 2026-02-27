@@ -149,7 +149,7 @@ function LinesList() {
       {showNamePopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNamePopup(false)}>
           <div className="bg-bg-secondary border border-divider rounded-[16px] p-5 w-70" style={{ boxShadow: "var(--shadow-card)" }} onClick={(e) => e.stopPropagation()}>
-            <div className="text-[14px] font-extrabold text-text-primary mb-3">Name this group</div>
+            <div className="text-[16px] font-extrabold text-text-primary mb-3">Name this group</div>
             <input
               autoFocus
               type="text"
@@ -163,17 +163,17 @@ function LinesList() {
                 }
               }}
               placeholder="e.g. Shopping, Work, Travel..."
-              className="w-full px-3 py-2 rounded-[10px] border border-divider bg-bg-tertiary text-[13px] font-medium text-text-primary outline-none focus:border-accent-amber"
+              className="w-full px-3 py-2 rounded-[10px] border border-divider bg-bg-tertiary text-[16px] font-medium text-text-primary outline-none focus:border-accent-amber"
             />
             <div className="flex gap-2 mt-3 justify-end">
               <button
-                className="px-3 py-1.5 rounded-[10px] text-[12px] text-text-secondary cursor-pointer bg-transparent border border-divider font-semibold"
+                className="px-3 py-1.5 rounded-[10px] text-[15px] text-text-secondary cursor-pointer bg-transparent border border-divider font-semibold"
                 onClick={() => { setShowNamePopup(false); setGroupName(""); }}
               >
                 Cancel
               </button>
               <button
-                className="px-3 py-1.5 rounded-[10px] text-[12px] text-white cursor-pointer bg-accent-amber border-none font-bold disabled:opacity-40"
+                className="px-3 py-1.5 rounded-[10px] text-[15px] text-white cursor-pointer bg-accent-amber border-none font-bold disabled:opacity-40"
                 disabled={!groupName.trim()}
                 onClick={() => { setShowNamePopup(false); handleGroup(groupName); setGroupName(""); }}
               >
@@ -187,14 +187,14 @@ function LinesList() {
       {/* Toolbar */}
       <div className="flex gap-1.5 px-3 py-2 overflow-x-auto">
         <button
-          className="px-2.5 py-1 rounded-[8px] border-[1.5px] border-dashed border-text-dim bg-transparent text-[11px] font-bold whitespace-nowrap cursor-pointer text-text-dim"
+          className="px-2.5 py-1 rounded-[8px] border-[1.5px] border-dashed border-text-dim bg-transparent text-[13px] font-bold whitespace-nowrap cursor-pointer text-text-dim"
           onClick={() => navigate({ to: "/skills/hub" })}
         >
           + Skill
         </button>
         {showGroup && (
           <button
-            className="px-2.5 py-1 rounded-[8px] border-[1.5px] border-accent-amber bg-amber-bg text-[11px] whitespace-nowrap cursor-pointer text-accent-amber font-bold"
+            className="px-2.5 py-1 rounded-[8px] border-[1.5px] border-accent-amber bg-amber-bg text-[13px] whitespace-nowrap cursor-pointer text-accent-amber font-bold"
             onClick={() => {
               const existing = selectedClusters.find((c) => c.is_join);
               setGroupName(existing ? existing.name : "");
@@ -206,7 +206,7 @@ function LinesList() {
         )}
         {showUngroup && (
           <button
-            className="px-2.5 py-1 rounded-[8px] border-[1.5px] border-accent-red bg-red-bg text-[11px] whitespace-nowrap cursor-pointer text-accent-red font-bold"
+            className="px-2.5 py-1 rounded-[8px] border-[1.5px] border-accent-red bg-red-bg text-[13px] whitespace-nowrap cursor-pointer text-accent-red font-bold"
             onClick={handleUngroup}
           >
             Ungroup
@@ -215,7 +215,7 @@ function LinesList() {
         {suggestedSkillBadges.map((s) => (
           <button
             key={s.name}
-            className="px-2.5 py-1 rounded-[8px] border border-divider bg-bg-secondary text-[11px] font-semibold whitespace-nowrap cursor-pointer text-text-secondary"
+            className="px-2.5 py-1 rounded-[8px] border border-divider bg-bg-secondary text-[13px] font-semibold whitespace-nowrap cursor-pointer text-text-secondary"
             onClick={() => navigate({ to: "/skills/hub" })}
           >
             {"\u26A1"} {s.name}
@@ -225,7 +225,7 @@ function LinesList() {
 
       <div className="flex flex-col gap-[5px] px-2.5 pb-2">
         {filteredClusters.length === 0 && (
-          <div className="text-center py-15 px-5 text-text-muted text-[13px] font-semibold">No lanes yet</div>
+          <div className="text-center py-15 px-5 text-text-muted text-[16px] font-semibold">No lanes yet</div>
         )}
         {filteredClusters.map((c, i) => {
           const isExpanded = expandedLines.has(c.id);
@@ -254,15 +254,15 @@ function LinesList() {
                 onClick={() => handleClick(c)}
                 onContextMenu={(e) => e.preventDefault()}
               >
-                <div className={`relative shrink-0 ${c.is_join ? "w-12 h-11" : "w-9 h-9"}`}>
+                <div className={`relative shrink-0 ${c.is_join ? "w-15 h-13" : "w-11 h-11"}`}>
                   {c.is_join && (
                     <>
-                      <div className="absolute w-9 h-9 rounded-[11px] top-0 left-0.5" style={{ background: `linear-gradient(${displayColor}10,${displayColor}10),var(--color-bg-primary)`, border: `1px solid ${displayColor}30`, transform: "rotate(-8deg)", transformOrigin: "center bottom" }} />
-                      <div className="absolute w-9 h-9 rounded-[11px] top-0 left-0.5" style={{ background: `linear-gradient(${displayColor}15,${displayColor}15),var(--color-bg-primary)`, border: `1px solid ${displayColor}35`, transform: "rotate(4deg)", transformOrigin: "center bottom" }} />
+                      <div className="absolute w-11 h-11 rounded-[13px] top-0 left-0.5" style={{ background: `linear-gradient(${displayColor}10,${displayColor}10),var(--color-bg-primary)`, border: `1px solid ${displayColor}30`, transform: "rotate(-8deg)", transformOrigin: "center bottom" }} />
+                      <div className="absolute w-11 h-11 rounded-[13px] top-0 left-0.5" style={{ background: `linear-gradient(${displayColor}15,${displayColor}15),var(--color-bg-primary)`, border: `1px solid ${displayColor}35`, transform: "rotate(4deg)", transformOrigin: "center bottom" }} />
                     </>
                   )}
                   <div
-                    className={`w-9 h-9 rounded-[11px] flex items-center justify-center text-[17px] ${c.is_join ? "absolute bottom-0 left-1" : ""}`}
+                    className={`w-11 h-11 rounded-[13px] flex items-center justify-center text-[20px] ${c.is_join ? "absolute bottom-0 left-1" : ""}`}
                     style={c.is_skill
                       ? { background: "var(--color-amber-bg)", border: "1px solid var(--color-accent-amber)" }
                       : { background: `linear-gradient(${displayColor}20,${displayColor}20),var(--color-bg-primary)`, border: `1px solid ${displayColor}40` }}
@@ -274,15 +274,15 @@ function LinesList() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline gap-2">
-                    <span className={`text-[13px] truncate flex-1 ${c.unread_count > 0 ? "font-extrabold text-text-primary" : "font-semibold text-text-secondary"}`} style={{ letterSpacing: "-0.2px" }}>{c.name}</span>
-                    <span className={`text-[9px] shrink-0 ${c.unread_count > 0 ? "font-extrabold text-text-primary" : "font-semibold text-text-dim"}`}>
+                    <span className={`text-[16px] truncate flex-1 ${c.unread_count > 0 ? "font-extrabold text-text-primary" : "font-semibold text-text-secondary"}`} style={{ letterSpacing: "-0.2px" }}>{c.name}</span>
+                    <span className={`text-[11px] shrink-0 ${c.unread_count > 0 ? "font-extrabold text-text-primary" : "font-semibold text-text-dim"}`}>
                       {relTime(c.last_activity)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center gap-2 mt-px">
-                    <span className="text-[10px] text-text-muted truncate flex-1 font-medium">{subtitle}</span>
+                    <span className="text-[12px] text-text-muted truncate flex-1 font-medium">{subtitle}</span>
                     {c.unread_count > 0 && (
-                      <span className="min-w-4 h-4 rounded-lg bg-accent-amber text-white text-[9px] font-extrabold flex items-center justify-center px-1 shrink-0">
+                      <span className="min-w-4.5 h-4.5 rounded-lg bg-accent-amber text-white text-[11px] font-extrabold flex items-center justify-center px-1 shrink-0">
                         {c.unread_count}
                       </span>
                     )}
@@ -302,12 +302,12 @@ function LinesList() {
                         onClick={(e) => { e.stopPropagation(); setExpandedMsgId(isMsgExpanded ? null : m.id); }}
                       >
                         <div className="flex justify-between">
-                          <span className="font-bold text-[11px] text-text-primary truncate">{m.subject || "(no subject)"}</span>
-                          <span className="text-[9px] text-text-dim shrink-0 ml-2 font-semibold">{relTime(m.date)}</span>
+                          <span className="font-bold text-[13px] text-text-primary truncate">{m.subject || "(no subject)"}</span>
+                          <span className="text-[11px] text-text-dim shrink-0 ml-2 font-semibold">{relTime(m.date)}</span>
                         </div>
-                        <div className="text-[10px] text-text-secondary mt-px truncate font-medium">{body.slice(0, 80) || ""}</div>
+                        <div className="text-[12px] text-text-secondary mt-px truncate font-medium">{body.slice(0, 80) || ""}</div>
                         {isMsgExpanded && body && (
-                          <div className="mt-2 px-2.5 py-2 bg-bg-tertiary rounded-[8px] text-[11px] leading-relaxed text-text-muted border border-divider whitespace-pre-wrap break-words">
+                          <div className="mt-2 px-2.5 py-2 bg-bg-tertiary rounded-[8px] text-[13px] leading-relaxed text-text-muted border border-divider whitespace-pre-wrap break-words">
                             {body}
                           </div>
                         )}
@@ -317,7 +317,7 @@ function LinesList() {
                   {msgCount > 3 && (
                     <div className="py-2 px-3 pl-14">
                       <button
-                        className="text-[11px] text-accent-amber font-bold cursor-pointer bg-transparent border-none"
+                        className="text-[13px] text-accent-amber font-bold cursor-pointer bg-transparent border-none"
                         onClick={(e) => { e.stopPropagation(); navigate({ to: "/cluster/$id", params: { id: c.id } }); }}
                       >
                         View all {msgCount} messages {"\u2192"}
