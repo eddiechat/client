@@ -122,7 +122,7 @@ function TabsLayout() {
       <div
         className="absolute right-3.5 z-10 w-12 h-12 rounded-[15px] flex items-center justify-center cursor-pointer text-white text-[34px] font-light leading-none"
         style={{
-          bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))',
+          bottom: 'calc(4.5rem + 0.875rem)',
           background: TAB_ACCENT[activeTab],
           boxShadow: `0 4px 14px color-mix(in srgb, ${TAB_ACCENT[activeTab]} 40%, transparent)`,
         }}
@@ -131,35 +131,37 @@ function TabsLayout() {
       </div>
 
       {/* Bottom Tab Bar */}
-      <nav className="relative flex border-t border-divider bg-bg-secondary px-0 pt-1.5 shrink-0" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
+      <nav className="relative flex flex-col border-t border-divider bg-bg-secondary shrink-0">
         {import.meta.env.DEV && status && !dismissed && (
           <div className="absolute left-3 right-3 -top-12 z-10 flex items-center gap-2 px-4 py-2.5 text-[12px] text-text-muted bg-bg-secondary border border-divider rounded-[10px]" style={{ boxShadow: "var(--shadow-card)" }}>
             <span className="flex-1 text-center">{status}</span>
             <button className="shrink-0 text-text-dim hover:text-text-secondary text-[15px] leading-none bg-transparent border-none cursor-pointer p-0" onClick={() => setDismissed(true)}>&times;</button>
           </div>
         )}
-        <button
-          className="flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors"
-          style={{ color: "#5BBCF5" }}
-          onClick={() => navigate({ to: "/points" })}
-        >
-          <span className="flex items-center justify-center w-7 h-7">
-            <ChatBubbleIcon />
-          </span>
-          Chats
-          {activeTab === "points" && <span className="w-1 h-1 rounded-full" style={{ background: "#5BBCF5" }} />}
-        </button>
-        <button
-          className="flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors"
-          style={{ color: "#F5C43A" }}
-          onClick={() => navigate({ to: "/lines" })}
-        >
-          <span className="flex items-center justify-center w-7 h-7">
-            <LetterIcon />
-          </span>
-          Mails
-          {activeTab === "lines" && <span className="w-1 h-1 rounded-full" style={{ background: "#F5C43A" }} />}
-        </button>
+        <div className="flex">
+          <button
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors"
+            style={{ color: "#5BBCF5" }}
+            onClick={() => navigate({ to: "/points" })}
+          >
+            <span className="flex items-center justify-center w-7 h-7">
+              <ChatBubbleIcon />
+            </span>
+            Chats
+            {activeTab === "points" && <span className="w-1 h-1 rounded-full" style={{ background: "#5BBCF5" }} />}
+          </button>
+          <button
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.5 border-none bg-transparent cursor-pointer text-[8.5px] font-extrabold tracking-wide transition-colors"
+            style={{ color: "#F5C43A" }}
+            onClick={() => navigate({ to: "/lines" })}
+          >
+            <span className="flex items-center justify-center w-7 h-7">
+              <LetterIcon />
+            </span>
+            Mails
+            {activeTab === "lines" && <span className="w-1 h-1 rounded-full" style={{ background: "#F5C43A" }} />}
+          </button>
+        </div>
       </nav>
 
       {/* Account Drawer Overlay */}
