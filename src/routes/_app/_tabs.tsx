@@ -63,7 +63,7 @@ function TabsLayout() {
         const devSuffix = import.meta.env.DEV ? " (dev)" : "";
         setVersion(`${v}${devSuffix}`);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const path = location.pathname;
@@ -129,7 +129,7 @@ function TabsLayout() {
       <div
         className="absolute right-3.5 z-10 w-14 h-14 rounded-[17px] flex items-center justify-center cursor-pointer text-white text-[38px] font-light leading-none"
         style={{
-          bottom: 'calc(4.5rem + 0.875rem)',
+          bottom: 'calc(5.5rem + 0.875rem)',
           background: TAB_ACCENT[activeTab],
           boxShadow: `0 4px 14px color-mix(in srgb, ${TAB_ACCENT[activeTab]} 40%, transparent)`,
         }}
