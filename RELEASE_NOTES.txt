@@ -1,5 +1,14 @@
+### Added
+- Search across all points
+
 ### Changed
-- New app icon
-- Increase item sizes by 20%
-- Increase spacing on home screen by 10%
-- Clean up settings
+- Updated filter icons
+- Locked screen orientation
+- Decreased onboarding duration
+- Added safe area to login and launcher screens
+
+### Fixed
+- Fixed splash screen
+- Fixed icons
+- Removed borders from launcher icon
+- Fixed compose button spacing
