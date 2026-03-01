@@ -46,13 +46,16 @@ function PointsList() {
   }, []);
 
   const conns = conversations.filter((c) => c.classification === "connections");
-  const byFilter = chatFilter === "1:1"
-    ? conns.filter((c) => participantCount(c) === 1)
-    : chatFilter === "3+"
-      ? conns.filter((c) => participantCount(c) > 1)
-      : conns;
   const q = search.toLowerCase();
-  const filtered = byFilter.filter(
+  // When searching, ignore chatFilter and search all connections
+  const base = q
+    ? conns
+    : chatFilter === "1:1"
+      ? conns.filter((c) => participantCount(c) === 1)
+      : chatFilter === "3+"
+        ? conns.filter((c) => participantCount(c) > 1)
+        : conns;
+  const filtered = base.filter(
     (c) => !q || displayName(c).toLowerCase().includes(q)
   );
 
