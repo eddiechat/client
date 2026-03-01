@@ -1,14 +1,4 @@
-### Added
-- Search across all points
-
 ### Changed
-- Updated filter icons
-- Locked screen orientation
-- Decreased onboarding duration
-- Added safe area to login and launcher screens
-
-### Fixed
-- Fixed splash screen
-- Fixed icons
-- Removed borders from launcher icon
-- Fixed compose button spacing
+- Restyle login screen with new boxed logo and light mode default
+- Use image icons in chat messages
+- Use link badges instead of full links
