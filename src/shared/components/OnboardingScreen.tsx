@@ -174,7 +174,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
   const progress = PROGRESS_BY_MILESTONE[dm] ?? 3;
 
   return (
-    <div className="h-full flex flex-col p-7" style={{ background: "var(--color-bg-gradient)" }}>
+    <div className="h-full flex flex-col p-7" style={{ background: "var(--color-bg-gradient)", paddingTop: 'calc(1.75rem + env(safe-area-inset-top, 0px))', paddingBottom: 'calc(1.75rem + env(safe-area-inset-bottom, 0px))' }}>
       <div
         className="text-[26px] font-black text-text-primary"
         style={{ letterSpacing: "-0.5px" }}
