@@ -85,7 +85,7 @@ function LoginScreen() {
     <div className="h-screen overflow-y-auto" style={{ background: "var(--color-bg-gradient)", paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="min-h-full flex flex-col items-center justify-center p-10">
       <div className="max-w-[380px] w-full flex flex-col items-center">
-        <img src="/eddie-swirl-green.svg" alt="Eddie" className="w-[88px] h-[88px] mb-7" />
+        <img src="/logo.svg" alt="Eddie" className="w-22 h-22 mb-7" />
         <h1 className="text-[28px] font-black mb-2.5 text-text-primary" style={{ letterSpacing: "-0.5px" }}>
           Welcome to Eddie
         </h1>

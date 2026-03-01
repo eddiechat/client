@@ -8,7 +8,7 @@ interface ThemeContextValue {
   setTheme: (mode: ThemeMode) => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue>({ theme: "system", setTheme: () => {} });
+const ThemeContext = createContext<ThemeContextValue>({ theme: "light", setTheme: () => {} });
 
 function applyTheme(mode: ThemeMode) {
   const isDark =
@@ -17,7 +17,7 @@ function applyTheme(mode: ThemeMode) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("system");
+  const [theme, setThemeState] = useState<ThemeMode>("light");
 
   // Load persisted preference
   useEffect(() => {

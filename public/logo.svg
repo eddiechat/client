@@ -1,0 +1,24 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- White backing behind logo to fill gaps between pieces -->
+  <g transform="scale(10.24)">
+    <rect x="0" y="0" width="100" height="100" rx="13" fill="#FFFFFF"/>
+  </g>
+  <!-- Logo fills full canvas: scale 1024/100 = 10.24 -->
+  <g transform="scale(10.24)">
+    <!-- Blue left piece — TL and BL rounded (r=13), right side sharp -->
+    <path
+      fill="#5BBCF5"
+      d="M 13 0 L 44 0 L 44 100 L 13 100 A 13 13 0 0 1 0 87 L 0 13 A 13 13 0 0 1 13 0 Z"
+    />
+    <!-- Yellow top piece — TR rounded (r=11), all other corners sharp -->
+    <path
+      fill="#F5C43A"
+      d="M 52 0 L 89 0 A 11 11 0 0 1 100 11 L 100 46 L 52 46 Z"
+    />
+    <!-- Yellow bottom piece — BR rounded (r=11), all other corners sharp -->
+    <path
+      fill="#F5C43A"
+      d="M 52 54 L 100 54 L 100 89 A 11 11 0 0 1 89 100 L 52 100 Z"
+    />
+  </g>
+</svg>
