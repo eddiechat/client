@@ -98,8 +98,8 @@ function TabsLayout() {
           </div>
         </div>
         {/* Search + Filter */}
-        <div className="px-2.75 pb-2.25 flex items-center gap-2.25">
-          <div className="flex-1 flex items-center gap-2.25 px-3.25 py-2.25 rounded-[10px] border border-divider">
+        <div className="px-2.75 pb-2.25 relative">
+          <div className={`flex items-center gap-2.25 px-3.25 py-2.25 rounded-[10px] border border-divider ${activeTab === "points" ? "mr-14.25" : ""}`}>
             <span className="text-text-dim text-[16px]">{"\u2315"}</span>
             <input
               className="flex-1 bg-transparent border-none outline-none text-[16px] font-medium text-text-primary placeholder:text-text-dim"
@@ -109,12 +109,36 @@ function TabsLayout() {
             />
           </div>
           {activeTab === "points" && (
-            <button
-              className="shrink-0 w-12 self-stretch rounded-[10px] card-row text-accent-green text-[13px] font-extrabold cursor-pointer text-center"
+            <div
+              className="absolute top-0 right-2.75 bottom-2.25 w-12 rounded-[10px] flex items-center justify-center cursor-pointer"
+              style={{ background: "#5BBCF5" }}
               onClick={() => setChatFilter((prev) => prev === "all" ? "1:1" : prev === "1:1" ? "3+" : "all")}
             >
-              {chatFilter === "all" ? "All" : chatFilter}
-            </button>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {chatFilter === "all" ? (
+                  /* Asterisk — all conversations */
+                  <>
+                    <line x1="12" y1="4" x2="12" y2="20" strokeWidth="3.5" />
+                    <line x1="5.1" y1="8" x2="18.9" y2="16" strokeWidth="3.5" />
+                    <line x1="5.1" y1="16" x2="18.9" y2="8" strokeWidth="3.5" />
+                  </>
+                ) : chatFilter === "1:1" ? (
+                  /* Single person */
+                  <>
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeWidth="2.5" />
+                    <circle cx="12" cy="7" r="4" strokeWidth="2.5" />
+                  </>
+                ) : (
+                  /* Group of people */
+                  <>
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" strokeWidth="2.5" />
+                    <circle cx="9" cy="7" r="4" strokeWidth="2.5" />
+                    <path d="M23 21v-2a4 4 0 00-3-3.87" strokeWidth="2.5" />
+                    <path d="M16 3.13a4 4 0 010 7.75" strokeWidth="2.5" />
+                  </>
+                )}
+              </svg>
+            </div>
           )}
         </div>
 
