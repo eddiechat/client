@@ -14,7 +14,7 @@ import {
   fmtTime,
   avatarGroupPalette,
 } from "../../shared/lib";
-import { Avatar, PartitionedAvatar, MessageDetail } from "../../shared/components";
+import { Avatar, PartitionedAvatar, MessageDetail, LinkifiedText } from "../../shared/components";
 
 export const Route = createFileRoute("/_app/conversation/$id")({
   component: ConversationView,
@@ -215,7 +215,7 @@ function ConversationView() {
                       : { boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.05)' }
                     }
                   >
-                    {body}
+                    <LinkifiedText text={body} />
                   </div>
                 </div>
                 {showTime && (

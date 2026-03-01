@@ -10,7 +10,7 @@ import {
   lineEmoji,
   lineColor,
 } from "../../shared/lib";
-import { Avatar } from "../../shared/components";
+import { Avatar, LinkifiedText } from "../../shared/components";
 
 export const Route = createFileRoute("/_app/cluster/$id")({
   component: ClusterView,
@@ -102,7 +102,7 @@ function ClusterView() {
                     </div>
                     {!isOpen && body && (
                       <div className="text-[12px] text-text-muted mt-0.5 truncate font-medium">
-                        {body.slice(0, 120)}
+                        <LinkifiedText text={body.slice(0, 120)} />
                       </div>
                     )}
                   </div>
@@ -136,7 +136,7 @@ function ClusterView() {
                         <span className="text-text-primary break-all">{fmtDate(m.date)}</span>
                       </div>
                     </div>
-                    <div className="text-[15px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words font-medium">{body}</div>
+                    <div className="text-[15px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words font-medium"><LinkifiedText text={body} /></div>
                   </div>
                 )}
               </div>

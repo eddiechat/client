@@ -12,3 +12,4 @@ export { PartitionedAvatar } from "./PartitionedAvatar";
 export { LogoPill } from "./LogoPill";
 export { ErrorFallback } from "./ErrorFallback";
 export { MessageDetail } from "./MessageDetail";
+export { LinkifiedText } from "./LinkifiedText";
