@@ -45,7 +45,7 @@ pub async fn get_onboarding_status(
     let trust_contact_count = sqlite::conversations::count_trust_contacts(&pool, &account_id)?;
 
     let all_done = !tasks.is_empty() && tasks.iter().all(|t| t.status == "done");
-    let is_complete = all_done || message_count >= 1000;
+    let is_complete = all_done || message_count >= 600;
 
     let task_statuses: Vec<TaskStatus> = tasks
         .iter()
