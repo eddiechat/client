@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Conversation, Message, ConnectAccountParams, Cluster, Thread, Skill, OllamaModels, OnboardingStatus, DiscoveryResult, ExistingAccount } from "./types";
+import type { Conversation, Message, ConnectAccountParams, Cluster, Thread, Skill, OllamaModels, OnboardingStatus, DiscoveryResult, ExistingAccount, EntityResult, AliasInfo, SendMessageParams, SendResult, AccountDetails, UpdateAccountParams } from "./types";
 
 export async function connectAccount(
   params: ConnectAccountParams
@@ -168,4 +168,68 @@ export async function fetchMessageHtml(
   messageId: string
 ): Promise<string | null> {
   return invoke<string | null>("fetch_message_html", { messageId });
+}
+
+export async function queueAction(
+  accountId: string,
+  actionType: string,
+  payload: object
+): Promise<string> {
+  return invoke<string>("queue_action", {
+    accountId,
+    actionType,
+    payload: JSON.stringify(payload),
+  });
+}
+
+export async function searchEntities(
+  accountId: string,
+  query: string
+): Promise<EntityResult[]> {
+  return invoke<EntityResult[]>("search_entities", { accountId, query });
+}
+
+export async function getUserAliases(
+  accountId: string
+): Promise<AliasInfo[]> {
+  return invoke<AliasInfo[]>("get_user_aliases", { accountId });
+}
+
+export async function sendMessage(
+  params: SendMessageParams
+): Promise<SendResult> {
+  return invoke<SendResult>("send_message", {
+    accountId: params.accountId,
+    fromEmail: params.fromEmail,
+    fromName: params.fromName,
+    to: params.to,
+    cc: params.cc,
+    subject: params.subject,
+    body: params.body,
+    inReplyTo: params.inReplyTo,
+    references: params.references ?? [],
+  });
+}
+
+export async function getAccount(
+  accountId: string
+): Promise<AccountDetails> {
+  return invoke<AccountDetails>("get_account", { accountId });
+}
+
+export async function updateAccount(
+  params: UpdateAccountParams
+): Promise<void> {
+  return invoke<void>("update_account", {
+    accountId: params.accountId,
+    displayName: params.displayName,
+    password: params.password,
+    imapHost: params.imapHost,
+    imapPort: params.imapPort,
+    imapTls: params.imapTls,
+    smtpHost: params.smtpHost,
+    smtpPort: params.smtpPort,
+    smtpTls: params.smtpTls,
+    aliases: params.aliases,
+  });
 }

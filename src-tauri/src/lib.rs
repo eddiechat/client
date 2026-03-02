@@ -123,6 +123,12 @@ pub fn run() {
             commands::ollama::ollama_complete,
             commands::discovery::discover_email_config,
             commands::app::get_app_version,
+            commands::actions::queue_action,
+            commands::entities::search_entities,
+            commands::entities::get_user_aliases,
+            commands::messages::send_message,
+            commands::account::get_account,
+            commands::account::update_account,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

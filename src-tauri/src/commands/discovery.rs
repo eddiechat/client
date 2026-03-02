@@ -32,10 +32,10 @@ impl From<EmailDiscoveryConfig> for DiscoveryResult {
             provider_id: config.provider_id,
             imap_host: config.imap.hostname,
             imap_port: config.imap.port,
-            imap_tls: matches!(config.imap.security, Security::Tls),
+            imap_tls: !matches!(config.imap.security, Security::None),
             smtp_host: config.smtp.hostname,
             smtp_port: config.smtp.port,
-            smtp_tls: matches!(config.smtp.security, Security::Tls),
+            smtp_tls: !matches!(config.smtp.security, Security::None),
             auth_method: match config.auth_method {
                 AuthMethod::Password => "password".to_string(),
                 AuthMethod::AppPassword => "app_password".to_string(),

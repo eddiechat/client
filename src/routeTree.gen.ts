@@ -13,6 +13,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppComposeRouteImport } from './routes/_app/compose'
 import { Route as AppTabsRouteImport } from './routes/_app/_tabs'
 import { Route as AppTabsIndexRouteImport } from './routes/_app/_tabs/index'
 import { Route as AppSkillsStudioRouteImport } from './routes/_app/skills.studio'
@@ -40,6 +41,11 @@ const AppRoute = AppRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppComposeRoute = AppComposeRouteImport.update({
+  id: '/compose',
+  path: '/compose',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTabsRoute = AppTabsRouteImport.update({
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppTabsIndexRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/compose': typeof AppComposeRoute
   '/settings': typeof AppSettingsRoute
   '/circles': typeof AppTabsCirclesRoute
   '/lines': typeof AppTabsLinesRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/': typeof AppTabsIndexRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/compose': typeof AppComposeRoute
   '/settings': typeof AppSettingsRoute
   '/circles': typeof AppTabsCirclesRoute
   '/lines': typeof AppTabsLinesRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/_app/_tabs': typeof AppTabsRouteWithChildren
+  '/_app/compose': typeof AppComposeRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/_tabs/circles': typeof AppTabsCirclesRoute
   '/_app/_tabs/lines': typeof AppTabsLinesRoute
@@ -135,6 +144,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/onboarding'
+    | '/compose'
     | '/settings'
     | '/circles'
     | '/lines'
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/onboarding'
+    | '/compose'
     | '/settings'
     | '/circles'
     | '/lines'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/_app/_tabs'
+    | '/_app/compose'
     | '/_app/settings'
     | '/_app/_tabs/circles'
     | '/_app/_tabs/lines'
@@ -207,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/compose': {
+      id: '/_app/compose'
+      path: '/compose'
+      fullPath: '/compose'
+      preLoaderRoute: typeof AppComposeRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/_tabs': {
@@ -294,6 +313,7 @@ const AppTabsRouteWithChildren =
 
 interface AppRouteChildren {
   AppTabsRoute: typeof AppTabsRouteWithChildren
+  AppComposeRoute: typeof AppComposeRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppClusterIdRoute: typeof AppClusterIdRoute
   AppConversationIdRoute: typeof AppConversationIdRoute
@@ -303,6 +323,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppTabsRoute: AppTabsRouteWithChildren,
+  AppComposeRoute: AppComposeRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppClusterIdRoute: AppClusterIdRoute,
   AppConversationIdRoute: AppConversationIdRoute,

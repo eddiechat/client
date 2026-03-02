@@ -40,3 +40,68 @@
 - Settings: auto-archive matched emails, notify on new matches
 - Delete skills from the settings tab
 - Preview tab placeholder for future classification testing
+
+## Message Composition
+
+**Compose New Messages**
+- Compose new messages via the FAB button on the main screen
+- Tokenized recipient input with type-ahead entity search
+- Search matches contacts by email and display name
+- From-address selector cycles through account aliases
+- Navigates to conversation view for typing and sending the first message
+
+**Reply to Messages**
+- Reply to any received message with a single tap
+- Shows quoted preview above the compose input (sender name + truncated body)
+- Automatically sets In-Reply-To and References headers for proper threading
+- Subject automatically prefixed with "Re:" when replying
+- Reply quote blocks shown inline in message bubbles
+
+**Send via SMTP**
+- Sends emails through the configured SMTP server
+- Supports STARTTLS (port 587) and implicit TLS (port 465)
+- Automatically saves sent messages to the Sent folder via IMAP APPEND
+- Optimistic message insertion — sent messages appear instantly in the conversation
+
+## Mark as Read
+
+**Automatic Read Tracking**
+- Messages are automatically marked as read after 1 second of visibility
+- Uses IntersectionObserver to detect when message bubbles are on screen
+- Optimistic local flag update for instant UI feedback
+- Queues IMAP STORE command to set \Seen flag on the server
+- Server-wins conflict resolution via periodic flag resync
+
+## Action Queue
+
+**Offline-First Mutations**
+- All write operations (mark as read, send email) go through a persistent action queue
+- Actions are stored in SQLite and survive app restarts
+- Replay worker processes pending actions before each sync cycle
+- Failed actions are retried up to 5 times with error tracking
+- Completed actions are cleaned up automatically
+
+## Read-Only Mode
+
+**Mailbox Protection**
+- Read-only toggle in Settings > Privacy (defaults ON)
+- When enabled, IMAP connections use EXAMINE (read-only) instead of SELECT
+- Prevents any modifications to the remote mailbox
+- Write actions queue locally but will fail gracefully on replay
+
+## Account Management
+
+**Account Settings**
+- Expandable account card in Settings shows current configuration
+- Edit display name, password, IMAP/SMTP server settings
+- Configure TLS settings for both IMAP and SMTP connections
+- Manage email aliases (comma-separated)
+- Changes saved immediately to the local database
+
+## Entity Display Names
+
+**Contact Name Resolution**
+- Automatically populates entity display names from incoming message headers
+- Names extracted from the From header of received emails
+- Used in compose autocomplete and contact suggestions
+- Entity search matches by both email address and display name

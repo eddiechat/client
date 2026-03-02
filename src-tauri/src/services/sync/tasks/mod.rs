@@ -1,3 +1,4 @@
+mod action_replay;
 mod connection_history;
 mod flag_resync;
 mod historical_fetch;
@@ -5,6 +6,7 @@ mod incremental_sync;
 mod skill_classify;
 mod trust_network;
 
+pub use action_replay::replay_pending_actions;
 pub use connection_history::run_connection_history;
 pub use flag_resync::run_flag_resync_all;
 pub use historical_fetch::run_historical_fetch;

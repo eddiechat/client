@@ -13,6 +13,11 @@ pub async fn tick(
 ) -> Result<bool, EddieError> {
     logger::debug("Engine tick");
 
+    // Step 0: Replay any pending actions (mark_read, send, etc.)
+    if let Err(e) = tasks::replay_pending_actions(pool).await {
+        logger::warn(&format!("Action replay error: {}", e));
+    }
+
     // Step 1: Always fetch latest messages for all onboarded accounts.
     // This runs even during onboarding so new mail keeps arriving.
     let _ = tasks::run_incremental_sync_all(app, pool).await;
@@ -67,7 +72,11 @@ pub(crate) async fn connect_account(
     let creds = sqlite::accounts::get_credentials(pool, account_id)?
         .ok_or(EddieError::AccountNotFound(account_id.to_string()))?;
 
-    let conn = connection::connect_with_tls(&creds.host, creds.port, creds.tls, &creds.email, &creds.password).await?;
+    let read_only = sqlite::settings::get_setting(pool, "read_only")?
+        .map(|v| v != "false")
+        .unwrap_or(true);
+
+    let conn = connection::connect_with_tls(&creds.host, creds.port, creds.tls, &creds.email, &creds.password, read_only).await?;
 
     let self_emails = sqlite::entities::get_self_emails(pool, account_id)?;
 
@@ -84,6 +93,12 @@ pub fn process_changes(
     let extracted = helpers::entity_extraction::extract_entities_from_new_messages(pool, account_id)?;
     if extracted > 0 {
         logger::debug(&format!("Extracted {} connections in {}", extracted, logger::fmt_ms(start.elapsed())));
+    }
+
+    // Populate display_name on entities from message from_name headers
+    let names_updated = sqlite::entities::update_display_names_from_messages(pool, account_id)?;
+    if names_updated > 0 {
+        logger::debug(&format!("Updated {} entity display names", names_updated));
     }
 
     helpers::status_emit::emit_status(app, "classifying", "Identifying Points & Circles...");

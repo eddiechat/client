@@ -56,6 +56,7 @@ export type Thread = {
 
 export type Message = {
   id: string;
+  message_id: string;
   date: number;
   from_address: string;
   from_name: string | null;
@@ -66,6 +67,10 @@ export type Message = {
   body_html: string | null;
   has_attachments: boolean;
   imap_flags: string;
+  imap_uid: number;
+  imap_folder: string;
+  in_reply_to: string | null;
+  references_ids: string;
   distilled_text: string | null;
   is_sent: boolean;
 };
@@ -78,6 +83,7 @@ export type ConnectAccountParams = {
   imapTls?: boolean;
   smtpHost: string;
   smtpPort: number;
+  smtpTls?: boolean;
   aliases?: string;
 };
 
@@ -133,6 +139,60 @@ export type OnboardingStatus = {
 export type ExistingAccount = {
   id: string;
   email: string;
+};
+
+export type EntityResult = {
+  email: string;
+  display_name: string | null;
+  trust_level: string;
+};
+
+export type AliasInfo = {
+  email: string;
+  is_primary: boolean;
+};
+
+export type SendMessageParams = {
+  accountId: string;
+  fromEmail: string;
+  fromName?: string;
+  to: string[];
+  cc: string[];
+  subject: string;
+  body: string;
+  inReplyTo?: string;
+  references?: string[];
+};
+
+export type SendResult = {
+  message_id: string;
+  conversation_id: string;
+};
+
+export type AccountDetails = {
+  id: string;
+  email: string;
+  display_name: string | null;
+  imap_host: string;
+  imap_port: number;
+  imap_tls: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_tls: boolean;
+  aliases: string[];
+};
+
+export type UpdateAccountParams = {
+  accountId: string;
+  displayName?: string;
+  password?: string;
+  imapHost?: string;
+  imapPort?: number;
+  imapTls?: boolean;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpTls?: boolean;
+  aliases?: string;
 };
 
 export type DiscoveryResult = {

@@ -157,6 +157,7 @@ function TabsLayout() {
           background: TAB_ACCENT[activeTab],
           boxShadow: `0 4px 14px color-mix(in srgb, ${TAB_ACCENT[activeTab]} 40%, transparent)`,
         }}
+        onClick={() => navigate({ to: '/compose' })}
       >
         +
       </div>

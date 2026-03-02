@@ -229,6 +229,8 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
 
     // Add revision_hash column to skills (for skill classification engine)
     let _ = conn.execute_batch("ALTER TABLE skills ADD COLUMN revision_hash TEXT NOT NULL DEFAULT '';");
+    // Add smtp_tls column to accounts (defaults to 1 = true for existing accounts)
+    let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN smtp_tls INTEGER NOT NULL DEFAULT 1;");
 
     // Migration: clear domain-based line_groups (Lines now group by sender, not domain).
     // The 'domain' column is reused to store sender emails.

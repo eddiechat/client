@@ -78,6 +78,42 @@ impl ImapConnection {
 
         Ok(mailbox)
     }
+
+    /// Store flags on messages (requires SELECT mode, not EXAMINE).
+    /// `flag_op` should be something like "+FLAGS (\\Seen)" or "-FLAGS (\\Deleted)".
+    pub async fn store_flags(&mut self, uids: &[u32], flag_op: &str) -> Result<(), EddieError> {
+        if uids.is_empty() {
+            return Ok(());
+        }
+        let uid_set = uids.iter().map(|u| u.to_string()).collect::<Vec<_>>().join(",");
+        let _updates = self.session
+            .uid_store(&uid_set, flag_op)
+            .await
+            .map_err(|e| EddieError::Backend(format!("STORE failed: {}", e)))?;
+        // Consume the stream
+        use futures::TryStreamExt;
+        let _: Vec<_> = _updates.try_collect().await
+            .map_err(|e| EddieError::Backend(format!("STORE response failed: {}", e)))?;
+        Ok(())
+    }
+
+    /// Append a raw RFC 5322 message to a folder.
+    /// `flags` should be like &["\\Seen", "\\Flagged"] — they'll be joined into "(\\Seen \\Flagged)".
+    pub async fn append_message(&mut self, folder: &str, flags: &[&str], message_bytes: &[u8]) -> Result<(), EddieError> {
+        let flags_str = if flags.is_empty() {
+            None
+        } else {
+            Some(format!("({})", flags.join(" ")))
+        };
+
+        self.session
+            .append(folder, flags_str.as_deref(), None, message_bytes)
+            .await
+            .map_err(|e| EddieError::Backend(format!("APPEND to {} failed: {}", folder, e)))?;
+
+        logger::debug(&format!("Appended message to folder {} with flags {:?}", folder, flags));
+        Ok(())
+    }
 }
 
 pub async fn connect_with_tls(
@@ -86,6 +122,7 @@ pub async fn connect_with_tls(
     use_tls: bool,
     username: &str,
     password: &str,
+    read_only: bool,
 ) -> Result<ImapConnection, EddieError> {
     logger::debug(&format!("Connecting to IMAP server: host={}, port={}, tls={}", host, port, use_tls));
 
@@ -128,6 +165,6 @@ pub async fn connect_with_tls(
     Ok(ImapConnection {
         session,
         has_gmail_ext,
-        read_only: true,
+        read_only,
     })
 }

@@ -1,8 +1,11 @@
 pub mod app;
 pub mod account;
+pub mod actions;
 pub mod conversations;
 pub mod classify;
 pub mod discovery;
+pub mod entities;
+pub mod messages;
 pub mod sync;
 pub mod skills;
 pub mod settings;

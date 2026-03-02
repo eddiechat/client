@@ -22,7 +22,7 @@ interface AuthContextValue {
   error: string;
   accountId: string | null;
   myAddrs: Set<string>;
-  handleLogin: (overrides?: { imapHost: string; imapPort: number; imapTls?: boolean; smtpHost: string; smtpPort: number }) => Promise<string>;
+  handleLogin: (overrides?: { imapHost: string; imapPort: number; imapTls?: boolean; smtpHost: string; smtpPort: number; smtpTls?: boolean }) => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [email, aliases]
   );
 
-  const handleLogin = useCallback(async (overrides?: { imapHost: string; imapPort: number; imapTls?: boolean; smtpHost: string; smtpPort: number }) => {
+  const handleLogin = useCallback(async (overrides?: { imapHost: string; imapPort: number; imapTls?: boolean; smtpHost: string; smtpPort: number; smtpTls?: boolean }) => {
     setLoading(true);
     setError("");
     try {
@@ -75,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         imapTls: overrides?.imapTls,
         smtpHost: overrides?.smtpHost ?? smtpHost,
         smtpPort: overrides?.smtpPort ?? smtpPort,
+        smtpTls: overrides?.smtpTls,
         aliases: aliases || undefined,
       });
       if (overrides) {

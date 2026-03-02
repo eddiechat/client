@@ -10,5 +10,6 @@ pub mod skills;
 pub mod skill_classify;
 pub mod line_groups;
 pub mod settings;
+pub mod action_queue;
 
 pub use db::DbPool;

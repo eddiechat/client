@@ -261,6 +261,7 @@ pub fn reset_classifications(pool: &DbPool, account_id: &str) -> Result<(), Eddi
 #[derive(serde::Serialize)]
 pub struct Message {
     pub id: String,
+    pub message_id: String,
     pub date: i64,
     pub from_address: String,
     pub from_name: Option<String>,
@@ -271,8 +272,57 @@ pub struct Message {
     pub body_html: Option<String>,
     pub has_attachments: bool,
     pub imap_flags: String,
+    pub imap_uid: u32,
+    pub imap_folder: String,
+    pub in_reply_to: Option<String>,
+    pub references_ids: String,
     pub distilled_text: Option<String>,
     pub is_sent: bool,
+}
+
+const MESSAGE_COLUMNS: &str =
+    "id, date, from_address, from_name, to_addresses, cc_addresses,
+     subject, body_text, body_html, has_attachments, imap_flags, distilled_text,
+     gmail_labels, imap_folder, message_id, imap_uid, in_reply_to, references_ids";
+
+fn map_message_row(row: &rusqlite::Row) -> rusqlite::Result<(Message, String, String, String)> {
+    let gmail_labels: String = row.get(12)?;
+    let imap_folder: String = row.get(13)?;
+    let from_address: String = row.get(2)?;
+    Ok((Message {
+        id: row.get(0)?,
+        message_id: row.get(14)?,
+        date: row.get(1)?,
+        from_address: from_address.clone(),
+        from_name: row.get(3)?,
+        to_addresses: row.get(4)?,
+        cc_addresses: row.get(5)?,
+        subject: row.get(6)?,
+        body_text: row.get(7)?,
+        body_html: row.get(8)?,
+        has_attachments: row.get::<_, i32>(9)? != 0,
+        imap_flags: row.get(10)?,
+        imap_uid: row.get(15)?,
+        imap_folder: imap_folder.clone(),
+        in_reply_to: row.get(16)?,
+        references_ids: row.get(17)?,
+        distilled_text: row.get(11)?,
+        is_sent: false, // computed by caller
+    }, gmail_labels, imap_folder, from_address))
+}
+
+fn collect_messages(
+    rows: rusqlite::Rows,
+    self_emails: &[String],
+) -> Result<Vec<Message>, EddieError> {
+    let mut messages = Vec::new();
+    let mapped: Vec<_> = rows.mapped(map_message_row).collect();
+    for row in mapped {
+        let (mut msg, labels, folder, from) = row.map_err(|e| EddieError::Database(e.to_string()))?;
+        msg.is_sent = is_sent(&labels, &folder, &from, self_emails);
+        messages.push(msg);
+    }
+    Ok(messages)
 }
 
 pub fn fetch_conversation_messages(
@@ -282,43 +332,13 @@ pub fn fetch_conversation_messages(
 ) -> Result<Vec<Message>, EddieError> {
     let self_emails = entities::get_self_emails(pool, account_id)?;
     let conn = pool.get()?;
-    let mut stmt = conn.prepare(
-        "SELECT id, date, from_address, from_name, to_addresses, cc_addresses,
-                subject, body_text, body_html, has_attachments, imap_flags, distilled_text,
-                gmail_labels, imap_folder
-         FROM messages
-         WHERE account_id = ?1 AND conversation_id = ?2
-         ORDER BY date ASC",
-    )?;
-
-    let rows = stmt.query_map(params![account_id, conversation_id], |row| {
-        let gmail_labels: String = row.get(12)?;
-        let imap_folder: String = row.get(13)?;
-        let from_address: String = row.get(2)?;
-        Ok((Message {
-            id: row.get(0)?,
-            date: row.get(1)?,
-            from_address: from_address.clone(),
-            from_name: row.get(3)?,
-            to_addresses: row.get(4)?,
-            cc_addresses: row.get(5)?,
-            subject: row.get(6)?,
-            body_text: row.get(7)?,
-            body_html: row.get(8)?,
-            has_attachments: row.get::<_, i32>(9)? != 0,
-            imap_flags: row.get(10)?,
-            distilled_text: row.get(11)?,
-            is_sent: false, // computed below
-        }, gmail_labels, imap_folder, from_address))
-    })?;
-
-    let mut messages = Vec::new();
-    for row in rows {
-        let (mut msg, labels, folder, from) = row?;
-        msg.is_sent = is_sent(&labels, &folder, &from, &self_emails);
-        messages.push(msg);
-    }
-    Ok(messages)
+    let query = format!(
+        "SELECT {} FROM messages WHERE account_id = ?1 AND conversation_id = ?2 ORDER BY date ASC",
+        MESSAGE_COLUMNS
+    );
+    let mut stmt = conn.prepare(&query)?;
+    let rows = stmt.query(params![account_id, conversation_id])?;
+    collect_messages(rows, &self_emails)
 }
 
 pub fn fetch_cluster_messages(
@@ -350,14 +370,8 @@ fn fetch_messages_by_senders(
     let in_clause = placeholders.join(", ");
 
     let query = format!(
-        "SELECT id, date, from_address, from_name, to_addresses, cc_addresses,
-                subject, body_text, body_html, has_attachments, imap_flags, distilled_text,
-                gmail_labels, imap_folder
-         FROM messages
-         WHERE account_id = ?1
-           AND from_address IN ({})
-         ORDER BY date DESC",
-        in_clause
+        "SELECT {} FROM messages WHERE account_id = ?1 AND from_address IN ({}) ORDER BY date DESC",
+        MESSAGE_COLUMNS, in_clause
     );
 
     let mut stmt = conn.prepare(&query)?;
@@ -368,34 +382,8 @@ fn fetch_messages_by_senders(
     }
     let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
 
-    let rows = stmt.query_map(param_refs.as_slice(), |row| {
-        let gmail_labels: String = row.get(12)?;
-        let imap_folder: String = row.get(13)?;
-        let from_address: String = row.get(2)?;
-        Ok((Message {
-            id: row.get(0)?,
-            date: row.get(1)?,
-            from_address: from_address.clone(),
-            from_name: row.get(3)?,
-            to_addresses: row.get(4)?,
-            cc_addresses: row.get(5)?,
-            subject: row.get(6)?,
-            body_text: row.get(7)?,
-            body_html: row.get(8)?,
-            has_attachments: row.get::<_, i32>(9)? != 0,
-            imap_flags: row.get(10)?,
-            distilled_text: row.get(11)?,
-            is_sent: false,
-        }, gmail_labels, imap_folder, from_address))
-    })?;
-
-    let mut messages = Vec::new();
-    for row in rows {
-        let (mut msg, labels, folder, from) = row?;
-        msg.is_sent = is_sent(&labels, &folder, &from, self_emails);
-        messages.push(msg);
-    }
-    Ok(messages)
+    let rows = stmt.query(param_refs.as_slice())?;
+    collect_messages(rows, self_emails)
 }
 
 pub fn fetch_skill_match_messages(
@@ -406,44 +394,15 @@ pub fn fetch_skill_match_messages(
     let self_emails = entities::get_self_emails(pool, account_id)?;
     let conn = pool.get()?;
 
-    let mut stmt = conn.prepare(
-        "SELECT m.id, m.date, m.from_address, m.from_name, m.to_addresses, m.cc_addresses,
-                m.subject, m.body_text, m.body_html, m.has_attachments, m.imap_flags, m.distilled_text,
-                m.gmail_labels, m.imap_folder
-         FROM messages m
-         JOIN skill_matches sm ON sm.message_id = m.id
-         WHERE sm.skill_id = ?1 AND m.account_id = ?2
-         ORDER BY m.date DESC",
-    )?;
-
-    let rows = stmt.query_map(params![skill_id, account_id], |row| {
-        let gmail_labels: String = row.get(12)?;
-        let imap_folder: String = row.get(13)?;
-        let from_address: String = row.get(2)?;
-        Ok((Message {
-            id: row.get(0)?,
-            date: row.get(1)?,
-            from_address: from_address.clone(),
-            from_name: row.get(3)?,
-            to_addresses: row.get(4)?,
-            cc_addresses: row.get(5)?,
-            subject: row.get(6)?,
-            body_text: row.get(7)?,
-            body_html: row.get(8)?,
-            has_attachments: row.get::<_, i32>(9)? != 0,
-            imap_flags: row.get(10)?,
-            distilled_text: row.get(11)?,
-            is_sent: false,
-        }, gmail_labels, imap_folder, from_address))
-    })?;
-
-    let mut messages = Vec::new();
-    for row in rows {
-        let (mut msg, labels, folder, from) = row?;
-        msg.is_sent = is_sent(&labels, &folder, &from, &self_emails);
-        messages.push(msg);
-    }
-    Ok(messages)
+    let cols = MESSAGE_COLUMNS.replace(|c: char| c == '\n', " ");
+    let prefixed = cols.split(", ").map(|c| format!("m.{}", c.trim())).collect::<Vec<_>>().join(", ");
+    let query = format!(
+        "SELECT {} FROM messages m JOIN skill_matches sm ON sm.message_id = m.id WHERE sm.skill_id = ?1 AND m.account_id = ?2 ORDER BY m.date DESC",
+        prefixed
+    );
+    let mut stmt = conn.prepare(&query)?;
+    let rows = stmt.query(params![skill_id, account_id])?;
+    collect_messages(rows, &self_emails)
 }
 
 pub fn fetch_thread_messages(
@@ -453,43 +412,13 @@ pub fn fetch_thread_messages(
 ) -> Result<Vec<Message>, EddieError> {
     let self_emails = entities::get_self_emails(pool, account_id)?;
     let conn = pool.get()?;
-    let mut stmt = conn.prepare(
-        "SELECT id, date, from_address, from_name, to_addresses, cc_addresses,
-                subject, body_text, body_html, has_attachments, imap_flags, distilled_text,
-                gmail_labels, imap_folder
-         FROM messages
-         WHERE account_id = ?1 AND thread_id = ?2
-         ORDER BY date ASC",
-    )?;
-
-    let rows = stmt.query_map(params![account_id, thread_id], |row| {
-        let gmail_labels: String = row.get(12)?;
-        let imap_folder: String = row.get(13)?;
-        let from_address: String = row.get(2)?;
-        Ok((Message {
-            id: row.get(0)?,
-            date: row.get(1)?,
-            from_address: from_address.clone(),
-            from_name: row.get(3)?,
-            to_addresses: row.get(4)?,
-            cc_addresses: row.get(5)?,
-            subject: row.get(6)?,
-            body_text: row.get(7)?,
-            body_html: row.get(8)?,
-            has_attachments: row.get::<_, i32>(9)? != 0,
-            imap_flags: row.get(10)?,
-            distilled_text: row.get(11)?,
-            is_sent: false,
-        }, gmail_labels, imap_folder, from_address))
-    })?;
-
-    let mut messages = Vec::new();
-    for row in rows {
-        let (mut msg, labels, folder, from) = row?;
-        msg.is_sent = is_sent(&labels, &folder, &from, &self_emails);
-        messages.push(msg);
-    }
-    Ok(messages)
+    let query = format!(
+        "SELECT {} FROM messages WHERE account_id = ?1 AND thread_id = ?2 ORDER BY date ASC",
+        MESSAGE_COLUMNS
+    );
+    let mut stmt = conn.prepare(&query)?;
+    let rows = stmt.query(params![account_id, thread_id])?;
+    collect_messages(rows, &self_emails)
 }
 
 pub fn fetch_recent_messages(
@@ -499,44 +428,13 @@ pub fn fetch_recent_messages(
 ) -> Result<Vec<Message>, EddieError> {
     let self_emails = entities::get_self_emails(pool, account_id)?;
     let conn = pool.get()?;
-    let mut stmt = conn.prepare(
-        "SELECT id, date, from_address, from_name, to_addresses, cc_addresses,
-                subject, body_text, body_html, has_attachments, imap_flags, distilled_text,
-                gmail_labels, imap_folder
-         FROM messages
-         WHERE account_id = ?1 AND body_text IS NOT NULL
-         ORDER BY date DESC
-         LIMIT ?2",
-    )?;
-
-    let rows = stmt.query_map(params![account_id, limit], |row| {
-        let gmail_labels: String = row.get(12)?;
-        let imap_folder: String = row.get(13)?;
-        let from_address: String = row.get(2)?;
-        Ok((Message {
-            id: row.get(0)?,
-            date: row.get(1)?,
-            from_address: from_address.clone(),
-            from_name: row.get(3)?,
-            to_addresses: row.get(4)?,
-            cc_addresses: row.get(5)?,
-            subject: row.get(6)?,
-            body_text: row.get(7)?,
-            body_html: row.get(8)?,
-            has_attachments: row.get::<_, i32>(9)? != 0,
-            imap_flags: row.get(10)?,
-            distilled_text: row.get(11)?,
-            is_sent: false,
-        }, gmail_labels, imap_folder, from_address))
-    })?;
-
-    let mut messages = Vec::new();
-    for row in rows {
-        let (mut msg, labels, folder, from) = row?;
-        msg.is_sent = is_sent(&labels, &folder, &from, &self_emails);
-        messages.push(msg);
-    }
-    Ok(messages)
+    let query = format!(
+        "SELECT {} FROM messages WHERE account_id = ?1 AND body_text IS NOT NULL ORDER BY date DESC LIMIT ?2",
+        MESSAGE_COLUMNS
+    );
+    let mut stmt = conn.prepare(&query)?;
+    let rows = stmt.query(params![account_id, limit])?;
+    collect_messages(rows, &self_emails)
 }
 
 pub fn get_uids_for_folder(
@@ -710,4 +608,47 @@ pub fn get_uids_flags_and_labels_for_folder(
         results.push(row?);
     }
     Ok(results)
+}
+
+/// Delete a message by its message_id (RFC 5322 Message-ID, not DB id).
+/// Used to remove optimistic OUTBOX placeholders after successful send.
+pub fn delete_message_by_message_id(pool: &DbPool, message_id: &str) -> Result<bool, EddieError> {
+    let conn = pool.get()?;
+    let rows = conn.execute(
+        "DELETE FROM messages WHERE message_id = ?1",
+        params![message_id],
+    )?;
+    Ok(rows > 0)
+}
+
+/// Optimistically mark messages as seen by adding \\Seen to their imap_flags JSON array.
+pub fn mark_messages_seen(pool: &DbPool, message_ids: &[String]) -> Result<usize, EddieError> {
+    let conn = pool.get()?;
+    let tx = conn.unchecked_transaction()?;
+    let mut count = 0;
+
+    for id in message_ids {
+        let current_flags: String = match tx.query_row(
+            "SELECT imap_flags FROM messages WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        ) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+
+        let mut flags: Vec<String> = serde_json::from_str(&current_flags).unwrap_or_default();
+        if !flags.iter().any(|f| f == "\\Seen") {
+            flags.push("\\Seen".to_string());
+            let new_flags = serde_json::to_string(&flags).unwrap_or_default();
+            let rows = tx.execute(
+                "UPDATE messages SET imap_flags = ?1 WHERE id = ?2",
+                params![new_flags, id],
+            )?;
+            count += rows;
+        }
+    }
+
+    tx.commit()?;
+    Ok(count)
 }

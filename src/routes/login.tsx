@@ -70,6 +70,7 @@ function LoginScreen() {
         imapTls: discovery ? discovery.imap_tls : imapTls,
         smtpHost: discovery ? discovery.smtp_host : smtpHost,
         smtpPort: discovery ? discovery.smtp_port : smtpPort,
+        smtpTls: discovery ? discovery.smtp_tls : smtpTls,
       });
       navigate({ to: "/onboarding" });
     } catch (e) {

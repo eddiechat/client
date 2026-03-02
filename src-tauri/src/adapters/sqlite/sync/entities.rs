@@ -106,3 +106,91 @@ pub fn get_self_emails(pool: &DbPool, account_id: &str) -> Result<Vec<String>, E
     }
     Ok(emails)
 }
+
+/// Search entities by email or display_name (for compose autocomplete).
+pub fn search_entities(
+    pool: &DbPool,
+    account_id: &str,
+    query: &str,
+) -> Result<Vec<crate::commands::entities::EntityResult>, EddieError> {
+    let conn = pool.get()?;
+    let pattern = format!("%{}%", query);
+
+    let mut stmt = conn.prepare(
+        "SELECT email, display_name, trust_level FROM entities
+         WHERE account_id = ?1
+           AND trust_level NOT IN ('user', 'alias')
+           AND (email LIKE ?2 OR display_name LIKE ?2)
+         ORDER BY
+           CASE trust_level
+             WHEN 'contact' THEN 1
+             WHEN 'connection' THEN 2
+             ELSE 3
+           END,
+           sent_count DESC,
+           last_seen DESC
+         LIMIT 20",
+    )?;
+
+    let rows = stmt.query_map(params![account_id, pattern], |row| {
+        Ok(crate::commands::entities::EntityResult {
+            email: row.get(0)?,
+            display_name: row.get(1)?,
+            trust_level: row.get(2)?,
+        })
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| EddieError::Database(e.to_string()))?);
+    }
+    Ok(results)
+}
+
+/// Get user + alias entities for "from" address selection.
+pub fn get_user_aliases(
+    pool: &DbPool,
+    account_id: &str,
+) -> Result<Vec<crate::commands::entities::AliasInfo>, EddieError> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        "SELECT email, trust_level FROM entities
+         WHERE account_id = ?1 AND trust_level IN ('user', 'alias')
+         ORDER BY CASE trust_level WHEN 'user' THEN 0 ELSE 1 END",
+    )?;
+
+    let rows = stmt.query_map(params![account_id], |row| {
+        let email: String = row.get(0)?;
+        let trust_level: String = row.get(1)?;
+        Ok(crate::commands::entities::AliasInfo {
+            email,
+            is_primary: trust_level == "user",
+        })
+    })?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| EddieError::Database(e.to_string()))?);
+    }
+    Ok(results)
+}
+
+/// Populate display_name for entities that don't have one yet,
+/// using from_name from received messages.
+pub fn update_display_names_from_messages(pool: &DbPool, account_id: &str) -> Result<usize, EddieError> {
+    let conn = pool.get()?;
+    let count = conn.execute(
+        "UPDATE entities SET display_name = (
+            SELECT from_name FROM messages
+            WHERE from_address = entities.email
+              AND from_name IS NOT NULL AND from_name != ''
+              AND account_id = ?1
+            ORDER BY date DESC LIMIT 1
+        )
+        WHERE account_id = ?1
+          AND display_name IS NULL
+          AND trust_level NOT IN ('user', 'alias')",
+        params![account_id],
+    )?;
+    Ok(count)
+}

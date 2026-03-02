@@ -64,6 +64,9 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
     // Seed initial state
     refreshStatus();
 
+    // Poll every 5s so completion is detected even if no event fires
+    const poll = setInterval(refreshStatus, 5000);
+
     // Subscribe to events
     const unsubs: Promise<() => void>[] = [];
 
@@ -86,6 +89,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
     );
 
     return () => {
+      clearInterval(poll);
       unsubs.forEach((p) => p.then((f) => f()));
     };
   }, [refreshStatus, triggerComplete]);
@@ -93,10 +97,10 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
   const tasksSeeded = Object.keys(taskMap).length > 0;
   const trustDone = taskMap["trust_network"] === "done";
   const historyDone = taskMap["historical_fetch"] === "done";
-  const connectionDone = taskMap["connection_history"] === "done";
+  const allTasksDone = tasksSeeded && Object.values(taskMap).every((s) => s === "done");
 
-  // Milestones: 0=nothing, 1=seeded, 2=trust, 3=history, 4=connections, 5=done
-  const targetMilestone = done ? 5 : connectionDone ? 4 : historyDone ? 3 : trustDone ? 2 : tasksSeeded ? 1 : 0;
+  // Milestones: 0=nothing, 1=seeded, 2=trust, 3=history, 4=processing, 5=done
+  const targetMilestone = done ? 5 : allTasksDone ? 4 : historyDone ? 3 : trustDone ? 2 : tasksSeeded ? 1 : 0;
   const [displayMilestone, setDisplayMilestone] = useState(0);
 
   // Advance displayMilestone one step at a time, with minimum 800ms dwell per step.
