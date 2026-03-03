@@ -41,7 +41,7 @@ pub async fn send_message(
 
     let now = chrono::Utc::now().timestamp_millis();
     let db_id = uuid::Uuid::new_v4().to_string();
-    let placeholder_message_id = format!("<{}.eddie@local>", uuid::Uuid::new_v4());
+    let placeholder_message_id = format!("{}.eddie@local", uuid::Uuid::new_v4());
 
     // Insert optimistic message into local DB
     let to_json = serde_json::to_string(&to).unwrap_or_default();
@@ -66,7 +66,7 @@ pub async fn send_message(
         has_attachments: false,
         in_reply_to: in_reply_to.clone(),
         references_ids: refs_json,
-        imap_flags: "[\"\\\\Seen\"]".to_string(),
+        imap_flags: "[\"Seen\"]".to_string(),
         gmail_labels: "[]".to_string(),
         classification: Some("chat".to_string()),
         is_important: false,

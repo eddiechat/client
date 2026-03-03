@@ -183,6 +183,15 @@ function ConversationView() {
       }
     }, { threshold: 0.5 });
 
+    // Re-register elements with the new observer. React calls ref callbacks
+    // during the commit phase (before effects), so elements were registered
+    // with the now-disconnected old observer and must be re-added here.
+    for (const [msgId, el] of msgElementsRef.current) {
+      if (!markedReadRef.current.has(msgId)) {
+        observerRef.current.observe(el);
+      }
+    }
+
     return () => {
       observerRef.current?.disconnect();
       visibilityTimers.current.forEach(t => clearTimeout(t));
@@ -212,24 +221,28 @@ function ConversationView() {
     let refs: string[] = [];
 
     if (replyingTo) {
+      // Reply button: thread against the specific message, keep subject stable
       subject = replyingTo.subject?.match(/^re:/i) ? replyingTo.subject : `Re: ${replyingTo.subject || ""}`;
       inReplyTo = replyingTo.message_id || undefined;
       try {
         const existingRefs: string[] = JSON.parse(replyingTo.references_ids || "[]");
         refs = [...existingRefs, replyingTo.message_id].filter(Boolean);
       } catch { refs = [replyingTo.message_id].filter(Boolean); }
+    } else if (isNewConversation) {
+      // Brand-new conversation with no prior messages
+      subject = newSubject || `${myEmail.split("@")[0]} via Eddie`;
     } else {
-      subject = isNewConversation && newSubject
-        ? newSubject
-        : `${myEmail.split("@")[0]} via Eddie`;
-      // Find the latest message with the same subject to maintain threading
-      const threadTarget = [...messages].reverse().find((m) => m.subject === subject);
-      if (threadTarget) {
-        inReplyTo = threadTarget.message_id || undefined;
+      // Existing conversation: continue the most recent thread to keep subject stable
+      const lastMsg = [...messages].reverse().find((m) => m.subject);
+      if (lastMsg?.subject) {
+        subject = lastMsg.subject.match(/^re:/i) ? lastMsg.subject : `Re: ${lastMsg.subject}`;
+        inReplyTo = lastMsg.message_id || undefined;
         try {
-          const existingRefs: string[] = JSON.parse(threadTarget.references_ids || "[]");
-          refs = [...existingRefs, threadTarget.message_id].filter(Boolean);
-        } catch { refs = [threadTarget.message_id].filter(Boolean); }
+          const existingRefs: string[] = JSON.parse(lastMsg.references_ids || "[]");
+          refs = [...existingRefs, lastMsg.message_id].filter(Boolean);
+        } catch { refs = [lastMsg.message_id].filter(Boolean); }
+      } else {
+        subject = `${myEmail.split("@")[0]} via Eddie`;
       }
     }
 
@@ -436,10 +449,9 @@ function ConversationView() {
             // Compute quoted reply data for discontinuous replies
             const quoteData = (() => {
               if (!m.in_reply_to || !prevMsg) return null;
-              const stripBrackets = (s: string) => s.replace(/^<|>$/g, "");
-              const replyId = stripBrackets(m.in_reply_to);
-              if (stripBrackets(prevMsg.message_id) === replyId) return null;
-              const quoted = messages.find(q => stripBrackets(q.message_id) === replyId);
+              const replyId = m.in_reply_to;
+              if (prevMsg.message_id === replyId) return null;
+              const quoted = messages.find(q => q.message_id === replyId);
               if (!quoted) return null;
               const isSelf = quoted.is_sent || myAddrs.has(quoted.from_address.toLowerCase());
               return {

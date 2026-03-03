@@ -38,7 +38,10 @@ pub fn parse_envelope(fetch: &Fetch) -> Option<Envelope> {
     let message_id = envelope
         .message_id
         .as_ref()
-        .map(|id| String::from_utf8_lossy(id).to_string())
+        .map(|id| {
+            let s = String::from_utf8_lossy(id).to_string();
+            s.trim_matches(|c| c == '<' || c == '>').to_string()
+        })
         .unwrap_or_default();
 
     let date = envelope

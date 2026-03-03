@@ -638,8 +638,8 @@ pub fn mark_messages_seen(pool: &DbPool, message_ids: &[String]) -> Result<usize
         };
 
         let mut flags: Vec<String> = serde_json::from_str(&current_flags).unwrap_or_default();
-        if !flags.iter().any(|f| f == "\\Seen") {
-            flags.push("\\Seen".to_string());
+        if !flags.iter().any(|f| f == "Seen") {
+            flags.push("Seen".to_string());
             let new_flags = serde_json::to_string(&flags).unwrap_or_default();
             let rows = tx.execute(
                 "UPDATE messages SET imap_flags = ?1 WHERE id = ?2",

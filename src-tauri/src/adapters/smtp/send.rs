@@ -3,8 +3,15 @@ use lettre::{
     message::{header::References, Mailbox, MessageBuilder},
     transport::smtp::authentication::{Credentials, Mechanism},
 };
+use uuid::Uuid;
 use crate::error::EddieError;
 use crate::services::logger;
+
+/// Ensure a message-id is wrapped in angle brackets for RFC 5322 headers.
+fn bracket(id: &str) -> String {
+    let bare = id.trim_matches(|c| c == '<' || c == '>');
+    format!("<{}>", bare)
+}
 
 pub struct SmtpMessage {
     pub from: String,
@@ -36,8 +43,12 @@ pub async fn send_message(
             .map_err(|e| EddieError::InvalidInput(format!("Invalid from address: {}", e)))?
     };
 
+    // Generate an explicit Message-ID using a domain we control
+    let generated_message_id = bracket(&format!("{}@eddie.app", Uuid::new_v4()));
+
     let mut builder: MessageBuilder = lettre::Message::builder()
         .from(from_mailbox)
+        .message_id(Some(generated_message_id))
         .subject(&message.subject);
 
     for to_addr in &message.to {
@@ -52,12 +63,13 @@ pub async fn send_message(
         builder = builder.cc(mailbox);
     }
 
+    // Wrap bare IDs in angle brackets per RFC 5322
     if let Some(ref reply_to) = message.in_reply_to {
-        builder = builder.in_reply_to(reply_to.clone());
+        builder = builder.in_reply_to(bracket(reply_to));
     }
 
     if !message.references.is_empty() {
-        let refs_str = message.references.join(" ");
+        let refs_str = message.references.iter().map(|r| bracket(r)).collect::<Vec<_>>().join(" ");
         builder = builder.header(References::from(refs_str));
     }
 
