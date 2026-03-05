@@ -154,7 +154,7 @@ function TabsLayout() {
       </div>
 
       {/* FAB — Compose button (hidden on Requests tab) */}
-      {activeTab !== "lines" && (
+      {activeTab !== "requests" && (
         <div
           className="absolute right-3.5 z-10 w-14 h-14 rounded-[17px] flex items-center justify-center cursor-pointer text-white text-[38px] font-light leading-none"
           style={{
