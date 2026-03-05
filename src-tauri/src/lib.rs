@@ -93,6 +93,7 @@ pub fn run() {
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::conversations::move_to_lines,
+            commands::conversations::move_to_points,
             commands::conversations::fetch_recent_messages,
             commands::conversations::fetch_message_html,
             commands::discovery::discover_email_config,

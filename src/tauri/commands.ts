@@ -69,6 +69,13 @@ export async function moveToLines(
   return invoke<void>("move_to_lines", { accountId, emails });
 }
 
+export async function moveToPoints(
+  accountId: string,
+  emails: string[]
+): Promise<void> {
+  return invoke<void>("move_to_points", { accountId, emails });
+}
+
 export async function getAppVersion(): Promise<string> {
   return invoke<string>("get_app_version");
 }

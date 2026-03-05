@@ -12,6 +12,7 @@ import {
   previewPrefix,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
+import { moveToPoints } from "../../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs/lines")({
   component: RequestsList,
@@ -25,15 +26,13 @@ function RequestsList() {
   const navigate = useNavigate();
   const search = useTabSearch();
   const { accountId } = useAuth();
-  const { conversations } = useData();
+  const { conversations, refresh } = useData();
 
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const touchStartX = useRef(0);
   const touchDeltaX = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
-
-  void accountId; // available for future actions
 
   const reqs = conversations.filter(
     (c) => c.classification === "others" && participantEmails(c).length > 0 && displayName(c).trim().length > 0
@@ -42,6 +41,13 @@ function RequestsList() {
   const filtered = reqs.filter(
     (c) => !q || displayName(c).toLowerCase().includes(q)
   );
+
+  async function handleMove(emails: string[]) {
+    if (!accountId) return;
+    await moveToPoints(accountId, emails);
+    setSwipedId(null);
+    await refresh(accountId);
+  }
 
   function clearLongPress() {
     if (longPressTimer.current) {
@@ -65,10 +71,23 @@ function RequestsList() {
             key={c.id}
             className="relative overflow-hidden rounded-2xl"
           >
+            {/* Move button behind the row */}
+            <div className="absolute inset-y-0 right-0 flex items-center">
+              <button
+                className="h-full px-5 bg-accent-purple text-white text-[16px] font-bold rounded-r-2xl"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMove(participantEmails(c));
+                }}
+              >
+                Move
+              </button>
+            </div>
+
             {/* Sliding foreground row */}
             <div
               className="relative card-row flex items-center px-3.25 py-3.25 cursor-pointer gap-3.25 transition-transform duration-200"
-              style={{ transform: isOpen ? "translateX(0)" : "translateX(0)" }}
+              style={{ transform: isOpen ? "translateX(-72px)" : "translateX(0)" }}
               onTouchStart={(e) => {
                 touchStartX.current = e.touches[0].clientX;
                 touchDeltaX.current = 0;
@@ -77,7 +96,9 @@ function RequestsList() {
                 touchDeltaX.current = e.touches[0].clientX - touchStartX.current;
               }}
               onTouchEnd={() => {
-                if (touchDeltaX.current > SWIPE_THRESHOLD) {
+                if (touchDeltaX.current < -SWIPE_THRESHOLD) {
+                  setSwipedId(c.id);
+                } else if (touchDeltaX.current > SWIPE_THRESHOLD) {
                   setSwipedId(null);
                 }
               }}
@@ -97,7 +118,11 @@ function RequestsList() {
                   didLongPress.current = false;
                   return;
                 }
-                navigate({ to: "/conversation/$id", params: { id: c.id } });
+                if (isOpen) {
+                  setSwipedId(null);
+                } else {
+                  navigate({ to: "/conversation/$id", params: { id: c.id } });
+                }
               }}
             >
               {participantCount(c) > 1 ? (
