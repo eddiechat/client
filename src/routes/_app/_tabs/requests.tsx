@@ -96,13 +96,13 @@ function RequestsList() {
             {/* Action buttons behind the row */}
             <div className="absolute inset-y-0 right-0 flex items-center">
               <button
-                className="h-full px-4 bg-accent-green text-white text-[14px] font-bold"
+                className="h-full px-4 bg-green-600 text-white text-[14px] font-bold"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleMove(participantEmails(c));
                 }}
               >
-                Move
+                Accept
               </button>
               <button
                 className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId === c.id ? "bg-red-700" : "bg-accent-red"}`}
@@ -111,7 +111,7 @@ function RequestsList() {
                   handleDelete(c.id, participantEmails(c));
                 }}
               >
-                {confirmDeleteId === c.id ? "Sure?" : "Delete"}
+                {confirmDeleteId === c.id ? "Sure?" : "Block"}
               </button>
             </div>
 

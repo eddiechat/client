@@ -12,7 +12,7 @@ import {
   previewPrefix,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
-import { moveToRequests, blockEntities, getSetting } from "../../../tauri";
+import { blockEntities, getSetting } from "../../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs/points")({
   component: PointsList,
@@ -74,15 +74,7 @@ function PointsList() {
     }
   }
 
-  async function handleMove(emails: string[]) {
-    if (!accountId) return;
-    await moveToRequests(accountId, emails);
-    setConfirmDeleteId(null);
-    setSwipedId(null);
-    await refresh(accountId);
-  }
-
-  async function handleDelete(id: string, emails: string[]) {
+  async function handleBlock(id: string, emails: string[]) {
     if (!accountId) return;
     if (confirmDeleteId !== id) {
       setConfirmDeleteId(id);
@@ -109,32 +101,23 @@ function PointsList() {
             key={c.id}
             className="relative overflow-hidden rounded-[16px]"
           >
-            {/* Action buttons behind the row */}
+            {/* Block button behind the row */}
             <div className="absolute inset-y-0 right-0 flex items-center">
-              <button
-                className="h-full px-4 bg-accent-blue text-white text-[14px] font-bold"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleMove(participantEmails(c));
-                }}
-              >
-                Move
-              </button>
               <button
                 className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId === c.id ? "bg-red-700" : "bg-accent-red"}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDelete(c.id, participantEmails(c));
+                  handleBlock(c.id, participantEmails(c));
                 }}
               >
-                {confirmDeleteId === c.id ? "Sure?" : "Delete"}
+                {confirmDeleteId === c.id ? "Sure?" : "Block"}
               </button>
             </div>
 
             {/* Sliding foreground row */}
             <div
               className="relative card-row flex items-center px-3.25 py-3.25 cursor-pointer gap-3.25 transition-transform duration-200"
-              style={{ transform: isOpen ? "translateX(-140px)" : "translateX(0)" }}
+              style={{ transform: isOpen ? "translateX(-70px)" : "translateX(0)" }}
               onTouchStart={(e) => {
                 touchStartX.current = e.touches[0].clientX;
                 touchDeltaX.current = 0;
