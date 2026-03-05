@@ -6,7 +6,7 @@ use imap_proto::types::{BodyStructure, ContentEncoding, SectionPath};
 use crate::services::logger;
 
 use super::connection::ImapConnection;
-use super::envelopes::{parse_envelope, Envelope, parse_references_value};
+use super::envelopes::{parse_envelope, Envelope, parse_references_value, parse_classification_headers};
 use crate::error::EddieError;
 
 /// Collects a FETCH stream tolerantly — logs and skips individual responses
@@ -123,10 +123,10 @@ where
             }
         }
 
-        // Round trip 2: References headers (once per batch, full uid_list)
+        // Round trip 2: References + classification headers (once per batch, full uid_list)
         let refs_fetches = collect_tolerant(
             conn.session
-                .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References)])")
+                .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References List-Id Auto-Submitted List-Unsubscribe Precedence Feedback-ID X-Mailer Return-Path)])")
                 .await
                 .map_err(|e| EddieError::Backend(format!("FETCH refs failed: {}", e)))?,
             &format!("references in {}", folder),
@@ -134,11 +134,13 @@ where
 
         for fetch in &refs_fetches {
             if let Some(uid) = fetch.uid {
-                let refs = parse_references_value(
-                    &String::from_utf8_lossy(fetch.header().unwrap_or(&[]))
-                );
+                let raw = fetch.header().unwrap_or(&[]);
+                let header_text = String::from_utf8_lossy(raw);
+                let refs = parse_references_value(&header_text);
+                let cls_headers = parse_classification_headers(raw);
                 if let Some(env) = envelopes.iter_mut().find(|e| e.uid == uid) {
                     env.references = refs;
+                    env.classification_headers = cls_headers;
                 }
             }
         }

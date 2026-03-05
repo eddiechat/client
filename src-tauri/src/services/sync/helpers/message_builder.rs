@@ -98,6 +98,7 @@ fn envelope_to_new_message(
         processed_at: None,
         participant_key,
         conversation_id,
+        classification_headers: serde_json::to_string(&envelope.classification_headers).unwrap_or_else(|_| "{}".to_string()),
     }
 }
 

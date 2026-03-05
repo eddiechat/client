@@ -48,6 +48,7 @@ pub struct NewMessage {
     pub processed_at: Option<i64>,
     pub participant_key: String,
     pub conversation_id: String,
+    pub classification_headers: String, // JSON map of RFC headers for classification
 }
 
 pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, EddieError> {
@@ -65,14 +66,14 @@ pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, 
                 bcc_addresses, subject, body_text, body_html, size_bytes,
                 has_attachments, in_reply_to, references_ids, imap_flags,
                 gmail_labels, fetched_at, classification, is_important, distilled_text,
-                processed_at, participant_key, conversation_id
+                processed_at, participant_key, conversation_id, classification_headers
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5,
                 ?6, ?7, ?8, ?9, ?10,
                 ?11, ?12, ?13, ?14, ?15,
                 ?16, ?17, ?18, ?19, ?20,
                 ?21, ?22, ?23, ?24,
-                ?25, ?26, ?27
+                ?25, ?26, ?27, ?28
             )",
             params![
                 Uuid::new_v4().to_string(),
@@ -102,6 +103,7 @@ pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, 
                 msg.processed_at,
                 msg.participant_key,
                 msg.conversation_id,
+                msg.classification_headers,
             ],
         );
 
@@ -122,13 +124,14 @@ pub struct UnprocessedMessage {
     pub in_reply_to: Option<String>,
     pub references_ids: String,
     pub body_text: Option<String>,
+    pub classification_headers: String,
 }
 
 pub fn get_unprocessed_messages(pool: &DbPool, account_id: &str) -> Result<Vec<UnprocessedMessage>, EddieError> {
     let conn = pool.get()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, from_address, subject, in_reply_to, references_ids, body_text
+            "SELECT id, from_address, subject, in_reply_to, references_ids, body_text, classification_headers
              FROM messages WHERE account_id = ?1 AND processed_at IS NULL"
         )?;
 
@@ -141,6 +144,7 @@ pub fn get_unprocessed_messages(pool: &DbPool, account_id: &str) -> Result<Vec<U
                 in_reply_to: row.get(3)?,
                 references_ids: row.get(4)?,
                 body_text: row.get(5)?,
+                classification_headers: row.get::<_, String>(6).unwrap_or_else(|_| "{}".to_string()),
             })
         })?;
 

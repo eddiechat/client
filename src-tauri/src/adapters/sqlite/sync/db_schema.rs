@@ -176,7 +176,8 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
     let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN imap_tls INTEGER NOT NULL DEFAULT 1;");
     // Add thread_id column to messages (computed during rebuild_conversations)
     let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN thread_id TEXT;");
-
+    // Add classification_headers column for RFC header-based classification
+    let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN classification_headers TEXT DEFAULT '{}';");
 
     Ok(())
 }

@@ -34,7 +34,14 @@ pub fn classify_messages(pool: &DbPool, account_id: &str) -> Result<usize, Eddie
             body_text: msg.body_text.clone(),
         };
 
-        let result = classifier.classify(&input);
+        let headers = serde_json::from_str::<std::collections::HashMap<String, String>>(
+            &msg.classification_headers
+        )
+        .ok()
+        .filter(|m| !m.is_empty())
+        .map(EmailHeaders::from_map);
+
+        let result = classifier.classify_with_headers(&input, headers.as_ref());
         sqlite::messages::update_classification(
             pool,
             &msg.id,
@@ -129,6 +136,15 @@ pub struct EmailHeaders {
 }
 
 impl EmailHeaders {
+    /// Build from a flat map of lowercase header name → value (as stored in DB).
+    pub fn from_map(map: std::collections::HashMap<String, String>) -> Self {
+        let headers = map
+            .into_iter()
+            .map(|(k, v)| (k, vec![v]))
+            .collect();
+        Self { headers }
+    }
+
     /// Get the first value for a header (case-insensitive lookup).
     pub fn get(&self, name: &str) -> Option<&str> {
         self.headers
@@ -201,11 +217,6 @@ impl MessageClassifier {
             automated_subject_kw: Self::build_automated_subject_keywords(),
             newsletter_subject_kw: Self::build_newsletter_subject_keywords(),
         }
-    }
-
-    /// Classify using only the fields available in [`ClassificationInput`].
-    pub fn classify(&self, input: &ClassificationInput) -> ClassificationResult {
-        self.classify_with_headers(input, None)
     }
 
     /// Classify with optional raw email headers for improved accuracy.

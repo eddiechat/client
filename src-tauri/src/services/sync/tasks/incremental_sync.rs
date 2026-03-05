@@ -102,10 +102,10 @@ pub async fn run_incremental_sync(
             }
         }
 
-        // Fetch references
+        // Fetch references + classification headers
         let refs_fetches = historical::collect_tolerant(
             conn.session
-                .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References)])")
+                .uid_fetch(&uid_list, "(UID BODY.PEEK[HEADER.FIELDS (References List-Id Auto-Submitted List-Unsubscribe Precedence Feedback-ID X-Mailer Return-Path)])")
                 .await
                 .map_err(|e| EddieError::Backend(format!("FETCH refs failed: {}", e)))?,
             &format!("references in {}", folder_info.name),
@@ -113,11 +113,13 @@ pub async fn run_incremental_sync(
 
         for fetch in &refs_fetches {
             if let Some(uid) = fetch.uid {
-                let refs = envelopes::parse_references_value(
-                    &String::from_utf8_lossy(fetch.header().unwrap_or(&[]))
-                );
+                let raw = fetch.header().unwrap_or(&[]);
+                let header_text = String::from_utf8_lossy(raw);
+                let refs = envelopes::parse_references_value(&header_text);
+                let cls_headers = envelopes::parse_classification_headers(raw);
                 if let Some(env) = envelopes.iter_mut().find(|e| e.uid == uid) {
                     env.references = refs;
+                    env.classification_headers = cls_headers;
                 }
             }
         }
