@@ -112,7 +112,7 @@ function TabsLayout() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          {activeTab === "points" && (
+          {(activeTab === "points" || activeTab === "lines") && (
             <div
               className="absolute top-0 right-2.75 bottom-2.25 w-12 rounded-[10px] flex items-center justify-center cursor-pointer"
               style={{ background: "#5BBCF5" }}

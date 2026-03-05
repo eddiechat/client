@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { useAuth, useData, useTabSearch, useTheme } from "../../../shared/context";
+import { useAuth, useData, useTabSearch, useTheme, useChatFilter } from "../../../shared/context";
 import {
   displayName,
   participantCount,
@@ -25,6 +25,7 @@ function RequestsList() {
   useTheme(); // subscribe to theme changes for avatar colors
   const navigate = useNavigate();
   const search = useTabSearch();
+  const chatFilter = useChatFilter();
   const { accountId } = useAuth();
   const { conversations, refresh } = useData();
 
@@ -39,7 +40,14 @@ function RequestsList() {
     (c) => c.classification === "others" && participantEmails(c).length > 0 && displayName(c).trim().length > 0
   );
   const q = search.toLowerCase();
-  const filtered = reqs.filter(
+  const base = q
+    ? reqs
+    : chatFilter === "1:1"
+      ? reqs.filter((c) => participantCount(c) === 1)
+      : chatFilter === "3+"
+        ? reqs.filter((c) => participantCount(c) > 1)
+        : reqs;
+  const filtered = base.filter(
     (c) => !q || displayName(c).toLowerCase().includes(q)
   );
 
