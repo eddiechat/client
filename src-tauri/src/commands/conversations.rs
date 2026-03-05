@@ -52,6 +52,20 @@ pub async fn move_to_points(
 }
 
 #[tauri::command]
+pub async fn block_entities(
+    pool: tauri::State<'_, sqlite::DbPool>,
+    account_id: String,
+    emails: Vec<String>,
+) -> Result<(), EddieError> {
+    for email in &emails {
+        sqlite::entities::insert_entity(&pool, &account_id, email, "manual", "blocked")?;
+    }
+    logger::info(&format!("Blocked entities, rebuilding conversations: account_id={}", account_id));
+    sqlite::conversations::rebuild_conversations(&pool, &account_id)?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn fetch_recent_messages(
     pool: tauri::State<'_, sqlite::DbPool>,
     account_id: String,

@@ -174,7 +174,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                         CASE WHEN e.id IS NOT NULL THEN 1 ELSE 0 END AS is_trusted
                  FROM messages m
                  LEFT JOIN entities e ON e.email = m.from_address AND e.account_id = m.account_id
-                                       AND e.trust_level NOT IN ('user', 'alias')
+                                       AND e.trust_level NOT IN ('user', 'alias', 'blocked')
                  WHERE m.account_id = ?1
                  ORDER BY m.conversation_id, m.date DESC",
             )?;
@@ -257,6 +257,8 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
     // PHASE 3: Upsert conversations
     // ========================================
 
+    let blocked_emails = entities::get_blocked_emails(pool, account_id)?;
+
     let tx = conn.unchecked_transaction()?;
 
     // Clear old conversations and rebuild fresh
@@ -269,6 +271,15 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
     let mut count = 0;
 
     for builder in conv_map.values() {
+        // Skip conversations where all external participants are blocked
+        if !blocked_emails.is_empty() {
+            let participants: Vec<&str> = builder.participant_key.split('\n')
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !participants.is_empty() && participants.iter().all(|p| blocked_emails.contains(*p)) {
+                continue;
+            }
+        }
         let names_json = serde_json::to_string(&builder.names).ok();
 
         let classification = if builder.has_chat && builder.has_trusted {

@@ -89,6 +89,19 @@ pub fn delete_entity(pool: &DbPool, account_id: &str, email: &str) -> Result<(),
     Ok(())
 }
 
+pub fn get_blocked_emails(pool: &DbPool, account_id: &str) -> Result<std::collections::HashSet<String>, EddieError> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        "SELECT email FROM entities WHERE account_id = ?1 AND trust_level = 'blocked'"
+    )?;
+    let rows = stmt.query_map(rusqlite::params![account_id], |row| row.get::<_, String>(0))?;
+    let mut emails = std::collections::HashSet::new();
+    for row in rows {
+        emails.insert(row?);
+    }
+    Ok(emails)
+}
+
 pub fn get_self_emails(pool: &DbPool, account_id: &str) -> Result<Vec<String>, EddieError> {
     let conn = pool.get()?;
     let mut stmt = conn

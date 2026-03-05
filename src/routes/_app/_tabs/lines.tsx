@@ -12,7 +12,7 @@ import {
   previewPrefix,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
-import { moveToPoints } from "../../../tauri";
+import { moveToPoints, blockEntities } from "../../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs/lines")({
   component: RequestsList,
@@ -29,6 +29,7 @@ function RequestsList() {
   const { conversations, refresh } = useData();
 
   const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const touchStartX = useRef(0);
   const touchDeltaX = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,6 +46,19 @@ function RequestsList() {
   async function handleMove(emails: string[]) {
     if (!accountId) return;
     await moveToPoints(accountId, emails);
+    setConfirmDeleteId(null);
+    setSwipedId(null);
+    await refresh(accountId);
+  }
+
+  async function handleDelete(id: string, emails: string[]) {
+    if (!accountId) return;
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      return;
+    }
+    await blockEntities(accountId, emails);
+    setConfirmDeleteId(null);
     setSwipedId(null);
     await refresh(accountId);
   }
@@ -71,10 +85,10 @@ function RequestsList() {
             key={c.id}
             className="relative overflow-hidden rounded-2xl"
           >
-            {/* Move button behind the row */}
+            {/* Action buttons behind the row */}
             <div className="absolute inset-y-0 right-0 flex items-center">
               <button
-                className="h-full px-5 bg-accent-purple text-white text-[16px] font-bold rounded-r-2xl"
+                className="h-full px-4 bg-accent-green text-white text-[14px] font-bold"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleMove(participantEmails(c));
@@ -82,12 +96,21 @@ function RequestsList() {
               >
                 Move
               </button>
+              <button
+                className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId === c.id ? "bg-red-700" : "bg-accent-red"}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(c.id, participantEmails(c));
+                }}
+              >
+                {confirmDeleteId === c.id ? "Sure?" : "Delete"}
+              </button>
             </div>
 
             {/* Sliding foreground row */}
             <div
               className="relative card-row flex items-center px-3.25 py-3.25 cursor-pointer gap-3.25 transition-transform duration-200"
-              style={{ transform: isOpen ? "translateX(-72px)" : "translateX(0)" }}
+              style={{ transform: isOpen ? "translateX(-140px)" : "translateX(0)" }}
               onTouchStart={(e) => {
                 touchStartX.current = e.touches[0].clientX;
                 touchDeltaX.current = 0;
