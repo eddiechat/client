@@ -25,18 +25,16 @@
 - SMTP host, port, and TLS settings
 - Switch between auto-detected and manual settings at any time
 
-## Skills
+## Email Views
 
-**My Skills (Skills Hub)**
-- View all created skills with name, icon, and enabled/disabled status
-- Toggle skills on/off directly from the list
-- Navigate to Skill Studio to create new or edit existing skills
-- Skills are persisted locally in SQLite database per account
+**Chats (Points tab)**
+- Shows conversations with senders in your trust network
+- Groups messages by conversation (participant set)
+- Long-press to move a conversation to Requests
 
-**Skill Studio (Create / Edit / Delete)**
-- Create new skills with name, icon, classification prompt, and modifiers
-- Edit existing skills (name, prompt, modifiers, settings)
-- Quick modifiers: exclude newsletters, only known senders, has attachments, recent 6 months, exclude auto-replies
-- Settings: auto-archive matched emails, notify on new matches
-- Delete skills from the settings tab
-- Preview tab placeholder for future classification testing
+**Requests (Requests tab)**
+- Shows conversations from senders not yet in your trust network
+- Allows discovering messages from new people reaching out
+
+**Groups (Circles tab)**
+- Placeholder for future group/circle functionality
