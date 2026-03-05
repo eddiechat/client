@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/_tabs")({
 const TAB_ACCENT: Record<string, string> = {
   points: "var(--color-accent-green)",
   circles: "var(--color-accent-amber)",
-  lines: "var(--color-accent-purple)",
+  requests: "var(--color-accent-purple)",
 };
 
 function ChatBubbleIcon() {
@@ -71,12 +71,12 @@ function TabsLayout() {
 
   const path = location.pathname;
   const activeTab = path.includes("/circles") ? "circles"
-    : path.includes("/lines") ? "lines"
+    : path.includes("/requests") ? "requests"
       : "points";
 
   const conns = conversations.filter((c) => c.classification === "connections");
   const reqs = conversations.filter((c) => c.classification === "others");
-  const tabUnread = activeTab === "lines"
+  const tabUnread = activeTab === "requests"
     ? reqs.reduce((sum, c) => sum + c.unread_count, 0)
     : chatFilter === "1:1"
       ? conns.filter((c) => participantCount(c) === 1).reduce((sum, c) => sum + c.unread_count, 0)
@@ -103,7 +103,7 @@ function TabsLayout() {
         </div>
         {/* Search + Filter */}
         <div className="px-2.75 pb-2.25 relative">
-          <div className={`flex items-center gap-2.25 px-3.25 py-2.25 rounded-[10px] border border-divider ${activeTab === "points" ? "mr-14.25" : ""}`}>
+          <div className={`flex items-center gap-2.25 px-3.25 py-2.25 rounded-[10px] border border-divider ${activeTab === "points" || activeTab === "requests" ? "mr-14.25" : ""}`}>
             <span className="text-text-dim text-[16px]">{"\u2315"}</span>
             <input
               className="flex-1 bg-transparent border-none outline-none text-[16px] font-medium text-text-primary placeholder:text-text-dim"
@@ -112,7 +112,7 @@ function TabsLayout() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          {(activeTab === "points" || activeTab === "lines") && (
+          {(activeTab === "points" || activeTab === "requests") && (
             <div
               className="absolute top-0 right-2.75 bottom-2.25 w-12 rounded-[10px] flex items-center justify-center cursor-pointer"
               style={{ background: "#5BBCF5" }}
@@ -203,13 +203,13 @@ function TabsLayout() {
           <button
             className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors"
             style={{ color: "#A78BFA" }}
-            onClick={() => navigate({ to: "/lines" })}
+            onClick={() => navigate({ to: "/requests" })}
           >
             <span className="flex items-center justify-center w-8 h-8">
               <RequestsIcon />
             </span>
             Requests
-            {activeTab === "lines" && <span className="w-1 h-1 rounded-full" style={{ background: "#A78BFA" }} />}
+            {activeTab === "requests" && <span className="w-1 h-1 rounded-full" style={{ background: "#A78BFA" }} />}
           </button>
         </div>
       </nav>

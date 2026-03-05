@@ -24,7 +24,7 @@ pub async fn fetch_conversation_messages(
 }
 
 #[tauri::command]
-pub async fn move_to_lines(
+pub async fn move_to_requests(
     pool: tauri::State<'_, sqlite::DbPool>,
     account_id: String,
     emails: Vec<String>,

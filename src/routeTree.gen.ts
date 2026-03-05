@@ -16,8 +16,8 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTabsRouteImport } from './routes/_app/_tabs'
 import { Route as AppTabsIndexRouteImport } from './routes/_app/_tabs/index'
 import { Route as AppConversationIdRouteImport } from './routes/_app/conversation.$id'
+import { Route as AppTabsRequestsRouteImport } from './routes/_app/_tabs/requests'
 import { Route as AppTabsPointsRouteImport } from './routes/_app/_tabs/points'
-import { Route as AppTabsLinesRouteImport } from './routes/_app/_tabs/lines'
 import { Route as AppTabsCirclesRouteImport } from './routes/_app/_tabs/circles'
 
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -53,14 +53,14 @@ const AppConversationIdRoute = AppConversationIdRouteImport.update({
   path: '/conversation/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTabsRequestsRoute = AppTabsRequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
+  getParentRoute: () => AppTabsRoute,
+} as any)
 const AppTabsPointsRoute = AppTabsPointsRouteImport.update({
   id: '/points',
   path: '/points',
-  getParentRoute: () => AppTabsRoute,
-} as any)
-const AppTabsLinesRoute = AppTabsLinesRouteImport.update({
-  id: '/lines',
-  path: '/lines',
   getParentRoute: () => AppTabsRoute,
 } as any)
 const AppTabsCirclesRoute = AppTabsCirclesRouteImport.update({
@@ -75,8 +75,8 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/settings': typeof AppSettingsRoute
   '/circles': typeof AppTabsCirclesRoute
-  '/lines': typeof AppTabsLinesRoute
   '/points': typeof AppTabsPointsRoute
+  '/requests': typeof AppTabsRequestsRoute
   '/conversation/$id': typeof AppConversationIdRoute
 }
 export interface FileRoutesByTo {
@@ -85,8 +85,8 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/settings': typeof AppSettingsRoute
   '/circles': typeof AppTabsCirclesRoute
-  '/lines': typeof AppTabsLinesRoute
   '/points': typeof AppTabsPointsRoute
+  '/requests': typeof AppTabsRequestsRoute
   '/conversation/$id': typeof AppConversationIdRoute
 }
 export interface FileRoutesById {
@@ -97,8 +97,8 @@ export interface FileRoutesById {
   '/_app/_tabs': typeof AppTabsRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/_tabs/circles': typeof AppTabsCirclesRoute
-  '/_app/_tabs/lines': typeof AppTabsLinesRoute
   '/_app/_tabs/points': typeof AppTabsPointsRoute
+  '/_app/_tabs/requests': typeof AppTabsRequestsRoute
   '/_app/conversation/$id': typeof AppConversationIdRoute
   '/_app/_tabs/': typeof AppTabsIndexRoute
 }
@@ -110,8 +110,8 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/settings'
     | '/circles'
-    | '/lines'
     | '/points'
+    | '/requests'
     | '/conversation/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -120,8 +120,8 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/settings'
     | '/circles'
-    | '/lines'
     | '/points'
+    | '/requests'
     | '/conversation/$id'
   id:
     | '__root__'
@@ -131,8 +131,8 @@ export interface FileRouteTypes {
     | '/_app/_tabs'
     | '/_app/settings'
     | '/_app/_tabs/circles'
-    | '/_app/_tabs/lines'
     | '/_app/_tabs/points'
+    | '/_app/_tabs/requests'
     | '/_app/conversation/$id'
     | '/_app/_tabs/'
   fileRoutesById: FileRoutesById
@@ -194,18 +194,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConversationIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/_tabs/requests': {
+      id: '/_app/_tabs/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof AppTabsRequestsRouteImport
+      parentRoute: typeof AppTabsRoute
+    }
     '/_app/_tabs/points': {
       id: '/_app/_tabs/points'
       path: '/points'
       fullPath: '/points'
       preLoaderRoute: typeof AppTabsPointsRouteImport
-      parentRoute: typeof AppTabsRoute
-    }
-    '/_app/_tabs/lines': {
-      id: '/_app/_tabs/lines'
-      path: '/lines'
-      fullPath: '/lines'
-      preLoaderRoute: typeof AppTabsLinesRouteImport
       parentRoute: typeof AppTabsRoute
     }
     '/_app/_tabs/circles': {
@@ -220,15 +220,15 @@ declare module '@tanstack/react-router' {
 
 interface AppTabsRouteChildren {
   AppTabsCirclesRoute: typeof AppTabsCirclesRoute
-  AppTabsLinesRoute: typeof AppTabsLinesRoute
   AppTabsPointsRoute: typeof AppTabsPointsRoute
+  AppTabsRequestsRoute: typeof AppTabsRequestsRoute
   AppTabsIndexRoute: typeof AppTabsIndexRoute
 }
 
 const AppTabsRouteChildren: AppTabsRouteChildren = {
   AppTabsCirclesRoute: AppTabsCirclesRoute,
-  AppTabsLinesRoute: AppTabsLinesRoute,
   AppTabsPointsRoute: AppTabsPointsRoute,
+  AppTabsRequestsRoute: AppTabsRequestsRoute,
   AppTabsIndexRoute: AppTabsIndexRoute,
 }
 

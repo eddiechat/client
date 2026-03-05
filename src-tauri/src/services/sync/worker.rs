@@ -88,7 +88,7 @@ pub fn process_changes(
     let classified = helpers::message_classification::classify_messages(pool, account_id)?;
     logger::debug(&format!("Classified {} messages in {}", classified, logger::fmt_ms(start.elapsed())));
 
-    helpers::status_emit::emit_status(app, "distilling", "Classifying Lines with AI...");
+    helpers::status_emit::emit_status(app, "distilling", "Classifying Requests with AI...");
     let start = std::time::Instant::now();
     let distilled = helpers::message_distillation::distill_messages(pool, account_id)?;
     logger::debug(&format!("Distilled {} messages in {}", distilled, logger::fmt_ms(start.elapsed())));

@@ -92,7 +92,7 @@ pub fn run() {
             commands::sync::get_onboarding_status,
             commands::settings::get_setting,
             commands::settings::set_setting,
-            commands::conversations::move_to_lines,
+            commands::conversations::move_to_requests,
             commands::conversations::move_to_points,
             commands::conversations::block_entities,
             commands::conversations::fetch_recent_messages,

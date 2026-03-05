@@ -14,7 +14,7 @@ import {
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
 import { moveToPoints, blockEntities } from "../../../tauri";
 
-export const Route = createFileRoute("/_app/_tabs/lines")({
+export const Route = createFileRoute("/_app/_tabs/requests")({
   component: RequestsList,
 });
 

@@ -12,7 +12,7 @@ import {
   previewPrefix,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
-import { moveToLines, blockEntities, getSetting } from "../../../tauri";
+import { moveToRequests, blockEntities, getSetting } from "../../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs/points")({
   component: PointsList,
@@ -76,7 +76,7 @@ function PointsList() {
 
   async function handleMove(emails: string[]) {
     if (!accountId) return;
-    await moveToLines(accountId, emails);
+    await moveToRequests(accountId, emails);
     setConfirmDeleteId(null);
     setSwipedId(null);
     await refresh(accountId);

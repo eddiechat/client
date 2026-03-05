@@ -141,7 +141,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
       visible: showLower,
     },
     {
-      label: "Classifying Lines",
+      label: "Classifying Requests",
       done: dm >= 4,
       active: dm >= 3 && dm < 4,
       visible: showLower,

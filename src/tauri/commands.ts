@@ -62,11 +62,11 @@ export async function getExistingAccount(): Promise<ExistingAccount | null> {
   return invoke<ExistingAccount | null>("get_existing_account");
 }
 
-export async function moveToLines(
+export async function moveToRequests(
   accountId: string,
   emails: string[]
 ): Promise<void> {
-  return invoke<void>("move_to_lines", { accountId, emails });
+  return invoke<void>("move_to_requests", { accountId, emails });
 }
 
 export async function moveToPoints(
