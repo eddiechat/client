@@ -5,12 +5,8 @@ mod commands;
 pub mod error;
 
 use adapters::sqlite::{sync};
-use services::ollama::OllamaState;
 use tauri::Manager;
 use tokio::sync::mpsc;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing_subscriber::{prelude::*, Layer};
 
 const SYNC_WORKER_TICK_FREQ: u64 = 15; // seconds
@@ -81,14 +77,6 @@ pub fn run() {
                 }
             });
 
-            // Ollama model discovery (non-blocking)
-            let ollama_state: OllamaState = Arc::new(RwLock::new(HashMap::new()));
-            app.manage(ollama_state.clone());
-            let ollama_pool = pool.clone();
-            tauri::async_runtime::spawn(async move {
-                services::ollama::populate(&ollama_pool, &ollama_state).await;
-            });
-
             // Make the pool available to all Tauri commands via State
             app.manage(pool);
 
@@ -99,28 +87,14 @@ pub fn run() {
             commands::account::get_existing_account,
             commands::conversations::fetch_conversations,
             commands::conversations::fetch_conversation_messages,
-            commands::conversations::fetch_clusters,
-            commands::conversations::fetch_cluster_messages,
-            commands::conversations::fetch_cluster_threads,
-            commands::conversations::fetch_thread_messages,
-            commands::conversations::group_domains,
-            commands::conversations::ungroup_domains,
             commands::classify::reclassify,
             commands::sync::sync_now,
             commands::sync::get_onboarding_status,
-            commands::skills::list_skills,
-            commands::skills::get_skill,
-            commands::skills::create_skill,
-            commands::skills::update_skill,
-            commands::skills::toggle_skill,
-            commands::skills::delete_skill,
             commands::settings::get_setting,
             commands::settings::set_setting,
-            commands::settings::get_ollama_models,
             commands::conversations::move_to_lines,
             commands::conversations::fetch_recent_messages,
             commands::conversations::fetch_message_html,
-            commands::ollama::ollama_complete,
             commands::discovery::discover_email_config,
             commands::app::get_app_version,
         ])

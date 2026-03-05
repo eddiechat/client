@@ -2,14 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useAuth, useTheme } from "../../shared/context";
 import { SettingsToggle, SettingsSelect, Avatar } from "../../shared/components";
-import { getSetting, setSetting, getOllamaModels } from "../../tauri";
+import { getSetting, setSetting } from "../../tauri";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsScreen,
 });
 
 const SETTING_KEYS = {
-  ollamaUrl: "ollama_url",
   hideOlderChats: "hide_older_chats",
   showToaster: "show_toaster",
 } as const;
@@ -31,18 +30,8 @@ function SettingsScreen() {
   const router = useRouter();
   const { email } = useAuth();
   const { theme, setTheme } = useTheme();
-  const [ollamaUrl, setOllamaUrl] = useState("");
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [toggles, setToggles] = useState<Record<string, boolean>>(TOGGLE_DEFAULTS);
   const [chatAge, setChatAge] = useState<string>("all");
-
-  useEffect(() => {
-    getOllamaModels("__DEFAULT__").then((data) => {
-      setOllamaModels(data.models);
-      setSelectedModel(data.selected_model);
-    });
-  }, []);
 
   useEffect(() => {
     async function load() {
@@ -50,8 +39,7 @@ function SettingsScreen() {
       const results = await Promise.all(keys.map((k) => getSetting(k).then((v) => [k, v] as const)));
       for (const [k, v] of results) {
         if (v === null) continue;
-        if (k === SETTING_KEYS.ollamaUrl) setOllamaUrl(v);
-        else if (k === SETTING_KEYS.hideOlderChats) setChatAge(v);
+        if (k === SETTING_KEYS.hideOlderChats) setChatAge(v);
         else setToggles((prev) => ({ ...prev, [k]: v === "true" }));
       }
     }
@@ -133,47 +121,6 @@ function SettingsScreen() {
             ))}
           </div>
         ))}
-
-        {/* Ollama section */}
-        <div className="px-5 pb-2">
-          <div className="text-[11px] font-bold text-text-dim tracking-[0.08em] mb-2 mt-2">OLLAMA</div>
-          <div className="flex flex-col gap-1.5 py-3 border-b border-divider">
-            <div>
-              <div className="text-[14px] font-medium text-text-primary">URL</div>
-              <div className="text-[12px] text-text-dim mt-px">Default Ollama server endpoint</div>
-            </div>
-            <input
-              className="w-full px-3 py-2 rounded-lg border border-divider bg-bg-tertiary text-[14px] text-text-primary font-(--font-body) outline-none transition-colors focus:border-accent-green placeholder:text-text-dim"
-              placeholder="http://localhost:11434"
-              value={ollamaUrl}
-              onChange={(e) => setOllamaUrl(e.target.value)}
-              onBlur={() => setSetting(SETTING_KEYS.ollamaUrl, ollamaUrl)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5 py-3">
-            <div>
-              <div className="text-[14px] font-medium text-text-primary">Model</div>
-              <div className="text-[12px] text-text-dim mt-px">Default model for classification</div>
-            </div>
-            {ollamaModels.length > 0 ? (
-              <select
-                className="w-full px-3 h-10 rounded-lg border border-divider bg-bg-tertiary text-[14px] text-text-primary font-(--font-body) outline-none transition-colors focus:border-accent-green appearance-none"
-                value={selectedModel ?? ""}
-                onChange={(e) => { setSelectedModel(e.target.value); setSetting("ollama_model", e.target.value); }}
-              >
-                {!selectedModel && <option value="" disabled>Select model</option>}
-                {ollamaModels.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            ) : (
-              <select
-                className="w-full px-3 h-10 rounded-lg border border-divider bg-bg-tertiary text-[14px] text-text-dim font-(--font-body) outline-none appearance-none opacity-60 cursor-not-allowed"
-                disabled
-              >
-                <option>Ollama not found</option>
-              </select>
-            )}
-          </div>
-        </div>
 
         <div className="py-4 text-center mt-auto">
           <span className="text-[12px] text-text-dim">Eddie is open source • We value privacy • We never touch your data.</span>

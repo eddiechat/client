@@ -4,6 +4,4 @@ pub mod conversations;
 pub mod classify;
 pub mod discovery;
 pub mod sync;
-pub mod skills;
 pub mod settings;
-pub mod ollama;

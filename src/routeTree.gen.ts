@@ -15,10 +15,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTabsRouteImport } from './routes/_app/_tabs'
 import { Route as AppTabsIndexRouteImport } from './routes/_app/_tabs/index'
-import { Route as AppSkillsStudioRouteImport } from './routes/_app/skills.studio'
-import { Route as AppSkillsHubRouteImport } from './routes/_app/skills.hub'
 import { Route as AppConversationIdRouteImport } from './routes/_app/conversation.$id'
-import { Route as AppClusterIdRouteImport } from './routes/_app/cluster.$id'
 import { Route as AppTabsPointsRouteImport } from './routes/_app/_tabs/points'
 import { Route as AppTabsLinesRouteImport } from './routes/_app/_tabs/lines'
 import { Route as AppTabsCirclesRouteImport } from './routes/_app/_tabs/circles'
@@ -51,24 +48,9 @@ const AppTabsIndexRoute = AppTabsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppTabsRoute,
 } as any)
-const AppSkillsStudioRoute = AppSkillsStudioRouteImport.update({
-  id: '/skills/studio',
-  path: '/skills/studio',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSkillsHubRoute = AppSkillsHubRouteImport.update({
-  id: '/skills/hub',
-  path: '/skills/hub',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppConversationIdRoute = AppConversationIdRouteImport.update({
   id: '/conversation/$id',
   path: '/conversation/$id',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppClusterIdRoute = AppClusterIdRouteImport.update({
-  id: '/cluster/$id',
-  path: '/cluster/$id',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTabsPointsRoute = AppTabsPointsRouteImport.update({
@@ -95,10 +77,7 @@ export interface FileRoutesByFullPath {
   '/circles': typeof AppTabsCirclesRoute
   '/lines': typeof AppTabsLinesRoute
   '/points': typeof AppTabsPointsRoute
-  '/cluster/$id': typeof AppClusterIdRoute
   '/conversation/$id': typeof AppConversationIdRoute
-  '/skills/hub': typeof AppSkillsHubRoute
-  '/skills/studio': typeof AppSkillsStudioRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppTabsIndexRoute
@@ -108,10 +87,7 @@ export interface FileRoutesByTo {
   '/circles': typeof AppTabsCirclesRoute
   '/lines': typeof AppTabsLinesRoute
   '/points': typeof AppTabsPointsRoute
-  '/cluster/$id': typeof AppClusterIdRoute
   '/conversation/$id': typeof AppConversationIdRoute
-  '/skills/hub': typeof AppSkillsHubRoute
-  '/skills/studio': typeof AppSkillsStudioRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -123,10 +99,7 @@ export interface FileRoutesById {
   '/_app/_tabs/circles': typeof AppTabsCirclesRoute
   '/_app/_tabs/lines': typeof AppTabsLinesRoute
   '/_app/_tabs/points': typeof AppTabsPointsRoute
-  '/_app/cluster/$id': typeof AppClusterIdRoute
   '/_app/conversation/$id': typeof AppConversationIdRoute
-  '/_app/skills/hub': typeof AppSkillsHubRoute
-  '/_app/skills/studio': typeof AppSkillsStudioRoute
   '/_app/_tabs/': typeof AppTabsIndexRoute
 }
 export interface FileRouteTypes {
@@ -139,10 +112,7 @@ export interface FileRouteTypes {
     | '/circles'
     | '/lines'
     | '/points'
-    | '/cluster/$id'
     | '/conversation/$id'
-    | '/skills/hub'
-    | '/skills/studio'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -152,10 +122,7 @@ export interface FileRouteTypes {
     | '/circles'
     | '/lines'
     | '/points'
-    | '/cluster/$id'
     | '/conversation/$id'
-    | '/skills/hub'
-    | '/skills/studio'
   id:
     | '__root__'
     | '/_app'
@@ -166,10 +133,7 @@ export interface FileRouteTypes {
     | '/_app/_tabs/circles'
     | '/_app/_tabs/lines'
     | '/_app/_tabs/points'
-    | '/_app/cluster/$id'
     | '/_app/conversation/$id'
-    | '/_app/skills/hub'
-    | '/_app/skills/studio'
     | '/_app/_tabs/'
   fileRoutesById: FileRoutesById
 }
@@ -223,32 +187,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTabsIndexRouteImport
       parentRoute: typeof AppTabsRoute
     }
-    '/_app/skills/studio': {
-      id: '/_app/skills/studio'
-      path: '/skills/studio'
-      fullPath: '/skills/studio'
-      preLoaderRoute: typeof AppSkillsStudioRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/skills/hub': {
-      id: '/_app/skills/hub'
-      path: '/skills/hub'
-      fullPath: '/skills/hub'
-      preLoaderRoute: typeof AppSkillsHubRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/conversation/$id': {
       id: '/_app/conversation/$id'
       path: '/conversation/$id'
       fullPath: '/conversation/$id'
       preLoaderRoute: typeof AppConversationIdRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/cluster/$id': {
-      id: '/_app/cluster/$id'
-      path: '/cluster/$id'
-      fullPath: '/cluster/$id'
-      preLoaderRoute: typeof AppClusterIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/_tabs/points': {
@@ -295,19 +238,13 @@ const AppTabsRouteWithChildren =
 interface AppRouteChildren {
   AppTabsRoute: typeof AppTabsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
-  AppClusterIdRoute: typeof AppClusterIdRoute
   AppConversationIdRoute: typeof AppConversationIdRoute
-  AppSkillsHubRoute: typeof AppSkillsHubRoute
-  AppSkillsStudioRoute: typeof AppSkillsStudioRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppTabsRoute: AppTabsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
-  AppClusterIdRoute: AppClusterIdRoute,
   AppConversationIdRoute: AppConversationIdRoute,
-  AppSkillsHubRoute: AppSkillsHubRoute,
-  AppSkillsStudioRoute: AppSkillsStudioRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

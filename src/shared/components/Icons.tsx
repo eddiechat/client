@@ -22,15 +22,6 @@ export function CirclesIcon() {
   );
 }
 
-export function LinesIcon() {
-  return (
-    <svg width="18" height="14" viewBox="0 0 18 14">
-      <line x1="1" y1="2" x2="17" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="1" y1="7" x2="17" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="1" y1="12" x2="17" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 export function SettingsSelect({ label, desc, value, options, onChange }: { label: string; desc: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
