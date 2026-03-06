@@ -29,12 +29,23 @@ function RequestsList() {
   const { accountId } = useAuth();
   const { conversations, refresh } = useData();
 
-  const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const touchStartX = useRef(0);
   const touchDeltaX = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+
+  const inSelectMode = selectedIds.size > 0;
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const reqs = conversations.filter(
     (c) => c.classification === "others" && participantEmails(c).length > 0 && displayName(c).trim().length > 0
@@ -51,23 +62,43 @@ function RequestsList() {
     (c) => !q || displayName(c).toLowerCase().includes(q)
   );
 
-  async function handleMove(emails: string[]) {
+  function emailsForConversation(c: (typeof filtered)[0]): string[] {
+    return participantCount(c) > 1 && c.initial_sender_email
+      ? [c.initial_sender_email]
+      : participantEmails(c);
+  }
+
+  function allSelectedEmails(): string[] {
+    const set = new Set<string>();
+    for (const c of filtered) {
+      if (selectedIds.has(c.id)) {
+        for (const e of emailsForConversation(c)) set.add(e);
+      }
+    }
+    return [...set];
+  }
+
+  async function handleMove() {
     if (!accountId) return;
+    const emails = allSelectedEmails();
+    if (emails.length === 0) return;
     await moveToPoints(accountId, emails);
     setConfirmDeleteId(null);
-    setSwipedId(null);
+    setSelectedIds(new Set());
     await refresh(accountId);
   }
 
-  async function handleDelete(id: string, emails: string[]) {
+  async function handleBlock() {
     if (!accountId) return;
-    if (confirmDeleteId !== id) {
-      setConfirmDeleteId(id);
+    if (!confirmDeleteId) {
+      setConfirmDeleteId("all");
       return;
     }
+    const emails = allSelectedEmails();
+    if (emails.length === 0) return;
     await blockEntities(accountId, emails);
     setConfirmDeleteId(null);
-    setSwipedId(null);
+    setSelectedIds(new Set());
     await refresh(accountId);
   }
 
@@ -86,7 +117,7 @@ function RequestsList() {
       {filtered.map((c) => {
         const name = displayName(c);
         const hasUnread = c.unread_count > 0;
-        const isOpen = swipedId === c.id;
+        const isSelected = selectedIds.has(c.id);
 
         return (
           <div
@@ -99,32 +130,26 @@ function RequestsList() {
                 className="h-full px-4 bg-green-600 text-white text-[14px] font-bold"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const emails = participantCount(c) > 1 && c.initial_sender_email
-                    ? [c.initial_sender_email]
-                    : participantEmails(c);
-                  handleMove(emails);
+                  handleMove();
                 }}
               >
                 Accept
               </button>
               <button
-                className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId === c.id ? "bg-red-700" : "bg-accent-red"}`}
+                className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId ? "bg-red-700" : "bg-accent-red"}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  const emails = participantCount(c) > 1 && c.initial_sender_email
-                    ? [c.initial_sender_email]
-                    : participantEmails(c);
-                  handleDelete(c.id, emails);
+                  handleBlock();
                 }}
               >
-                {confirmDeleteId === c.id ? "Sure?" : "Block"}
+                {confirmDeleteId ? "Sure?" : "Block"}
               </button>
             </div>
 
             {/* Sliding foreground row */}
             <div
               className="relative card-row flex items-center px-3.25 py-3.25 cursor-pointer gap-3.25 transition-transform duration-200"
-              style={{ transform: isOpen ? "translateX(-140px)" : "translateX(0)" }}
+              style={{ transform: isSelected ? "translateX(-140px)" : "translateX(0)" }}
               onTouchStart={(e) => {
                 touchStartX.current = e.touches[0].clientX;
                 touchDeltaX.current = 0;
@@ -134,16 +159,16 @@ function RequestsList() {
               }}
               onTouchEnd={() => {
                 if (touchDeltaX.current < -SWIPE_THRESHOLD) {
-                  setSwipedId(c.id);
+                  if (!selectedIds.has(c.id)) toggleSelected(c.id);
                 } else if (touchDeltaX.current > SWIPE_THRESHOLD) {
-                  setSwipedId(null);
+                  if (selectedIds.has(c.id)) toggleSelected(c.id);
                 }
               }}
               onPointerDown={() => {
                 didLongPress.current = false;
                 longPressTimer.current = setTimeout(() => {
                   didLongPress.current = true;
-                  setSwipedId((prev) => (prev === c.id ? null : c.id));
+                  toggleSelected(c.id);
                 }, LONG_PRESS_MS);
               }}
               onPointerUp={clearLongPress}
@@ -155,8 +180,9 @@ function RequestsList() {
                   didLongPress.current = false;
                   return;
                 }
-                if (isOpen) {
-                  setSwipedId(null);
+                if (inSelectMode) {
+                  toggleSelected(c.id);
+                  setConfirmDeleteId(null);
                 } else {
                   navigate({ to: "/conversation/$id", params: { id: c.id } });
                 }
