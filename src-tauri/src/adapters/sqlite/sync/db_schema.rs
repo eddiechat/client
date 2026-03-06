@@ -178,6 +178,8 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
     let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN thread_id TEXT;");
     // Add classification_headers column for RFC header-based classification
     let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN classification_headers TEXT DEFAULT '{}';");
+    // Add initial_sender_email to conversations (first non-self sender)
+    let _ = conn.execute_batch("ALTER TABLE conversations ADD COLUMN initial_sender_email TEXT;");
 
     Ok(())
 }

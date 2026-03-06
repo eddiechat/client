@@ -99,7 +99,10 @@ function RequestsList() {
                 className="h-full px-4 bg-green-600 text-white text-[14px] font-bold"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleMove(participantEmails(c));
+                  const emails = participantCount(c) > 1 && c.initial_sender_email
+                    ? [c.initial_sender_email]
+                    : participantEmails(c);
+                  handleMove(emails);
                 }}
               >
                 Accept
@@ -108,7 +111,10 @@ function RequestsList() {
                 className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId === c.id ? "bg-red-700" : "bg-accent-red"}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDelete(c.id, participantEmails(c));
+                  const emails = participantCount(c) > 1 && c.initial_sender_email
+                    ? [c.initial_sender_email]
+                    : participantEmails(c);
+                  handleDelete(c.id, emails);
                 }}
               >
                 {confirmDeleteId === c.id ? "Sure?" : "Block"}

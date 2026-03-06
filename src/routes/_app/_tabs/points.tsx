@@ -107,7 +107,10 @@ function PointsList() {
                 className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId === c.id ? "bg-red-700" : "bg-accent-red"}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleBlock(c.id, participantEmails(c));
+                  const emails = participantCount(c) > 1 && c.initial_sender_email
+                    ? [c.initial_sender_email]
+                    : participantEmails(c);
+                  handleBlock(c.id, emails);
                 }}
               >
                 {confirmDeleteId === c.id ? "Sure?" : "Block"}

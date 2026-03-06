@@ -198,7 +198,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
         let mut map: HashMap<String, ConversationBuilder> = HashMap::new();
         for row in rows {
             let (conv_id, participant_key, date, distilled_text,
-                 _from_address, _from_name, classification, is_important, imap_flags, is_trusted) =
+                 from_address, _from_name, classification, is_important, imap_flags, is_trusted) =
                 row?;
 
             let preview = distilled_text
@@ -218,8 +218,15 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                     unread_count: 0,
                     total_count: 0,
                     names: BTreeMap::new(),
+                    initial_sender_email: None,
                 }
             });
+
+            // Track initial sender: query is ordered date DESC, so last
+            // non-self from_address we see is from the earliest message.
+            if !is_self(&from_address, &self_emails) {
+                builder.initial_sender_email = Some(from_address.to_lowercase());
+            }
 
             if classification.as_deref() == Some("chat") {
                 builder.has_chat = true;
@@ -258,6 +265,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
     // ========================================
 
     let blocked_emails = entities::get_blocked_emails(pool, account_id)?;
+    let trusted_emails = entities::get_trusted_emails(pool, account_id)?;
 
     let tx = conn.unchecked_transaction()?;
 
@@ -280,9 +288,14 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                 continue;
             }
         }
+
+        // A conversation is trusted if any participant (sender, To, or Cc) is a connection
+        let has_trusted = builder.has_trusted || builder.participant_key.split('\n')
+            .any(|p| !p.is_empty() && trusted_emails.contains(p));
+
         let names_json = serde_json::to_string(&builder.names).ok();
 
-        let classification = if builder.has_chat && builder.has_trusted {
+        let classification = if builder.has_chat && has_trusted {
             Some("connections")
         } else if builder.has_chat {
             Some("others")
@@ -294,8 +307,9 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
             "INSERT INTO conversations (
                 id, account_id, participant_key, participant_names,
                 classification, last_message_date, last_message_preview,
-                unread_count, total_count, is_muted, is_pinned, is_important, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, 0, ?10, ?11)",
+                unread_count, total_count, is_muted, is_pinned, is_important, updated_at,
+                initial_sender_email
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, 0, ?10, ?11, ?12)",
             params![
                 builder.id,
                 account_id,
@@ -308,6 +322,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                 builder.total_count,
                 builder.has_important,
                 now,
+                builder.initial_sender_email,
             ],
         )?;
 
@@ -329,6 +344,7 @@ struct ConversationBuilder {
     unread_count: i32,
     total_count: i32,
     names: BTreeMap<String, String>,
+    initial_sender_email: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -348,6 +364,7 @@ pub struct Conversation {
     pub is_pinned: bool,
     pub is_important: bool,
     pub updated_at: i64,
+    pub initial_sender_email: Option<String>,
 }
 
 pub fn fetch_conversations(
@@ -363,7 +380,8 @@ pub fn fetch_conversations(
                     lm.distilled_text,
                     c.unread_count, c.is_muted, c.is_pinned, c.is_important, c.updated_at,
                     c.total_count,
-                    lm.from_name, lm.from_address, lm.gmail_labels, lm.imap_folder
+                    lm.from_name, lm.from_address, lm.gmail_labels, lm.imap_folder,
+                    c.initial_sender_email
              FROM conversations c
              LEFT JOIN (
                  SELECT conversation_id, distilled_text, from_name, from_address,
@@ -403,6 +421,7 @@ pub fn fetch_conversations(
                 is_important: row.get::<_, i32>(10)? != 0,
                 updated_at: row.get(11)?,
                 total_count: row.get(12)?,
+                initial_sender_email: row.get(17)?,
             })
         })?;
 

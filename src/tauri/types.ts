@@ -24,6 +24,7 @@ export type Conversation = {
   is_pinned: boolean;
   is_important: boolean;
   updated_at: number;
+  initial_sender_email: string | null;
 };
 
 export type Message = {
