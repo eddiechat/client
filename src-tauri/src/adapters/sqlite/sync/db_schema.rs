@@ -2,63 +2,112 @@ use rusqlite::Connection;
 
 use crate::error::EddieError;
 
+const SCHEMA_VERSION: &str = "1";
+
 pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
+    // Ensure accounts and settings tables exist first (they survive resets).
     conn.execute_batch("
-        -- Accounts & identity
         CREATE TABLE IF NOT EXISTS accounts (
-            id              TEXT PRIMARY KEY,   -- UUID
+            id              TEXT PRIMARY KEY,
             email           TEXT NOT NULL UNIQUE,
             password        TEXT,
             display_name    TEXT,
             imap_host       TEXT NOT NULL,
             imap_port       INTEGER NOT NULL DEFAULT 993,
+            imap_tls        INTEGER NOT NULL DEFAULT 1,
             smtp_host       TEXT NOT NULL,
             smtp_port       INTEGER NOT NULL DEFAULT 587,
-            carddav_url     TEXT,               -- nullable, contacts are optional
-            created_at      INTEGER NOT NULL,   -- unix epoch ms
-            last_full_sync  INTEGER             -- unix epoch ms, NULL until onboarding completes
+            carddav_url     TEXT,
+            created_at      INTEGER NOT NULL,
+            last_full_sync  INTEGER
         );
 
-        -- Raw message store (cache of IMAP data)
+        CREATE TABLE IF NOT EXISTS settings (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+    ")?;
+
+    // Check schema version — if missing or outdated, drop everything else and rebuild.
+    let current_version: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if current_version.as_deref() != Some(SCHEMA_VERSION) {
+        drop_data_tables(conn)?;
+        // Also reset onboarding so accounts re-sync from scratch.
+        conn.execute_batch("UPDATE accounts SET last_full_sync = NULL;")?;
+    }
+
+    create_data_tables(conn)?;
+
+    // Stamp the version
+    conn.execute_batch(&format!(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) \
+         VALUES ('schema_version', '{}', strftime('%s','now') * 1000);",
+        SCHEMA_VERSION
+    ))?;
+
+    Ok(())
+}
+
+/// Drop all tables except `accounts` and `settings`.
+fn drop_data_tables(conn: &Connection) -> Result<(), EddieError> {
+    conn.execute_batch("
+        DROP TABLE IF EXISTS messages;
+        DROP TABLE IF EXISTS conversations;
+        DROP TABLE IF EXISTS entities;
+        DROP TABLE IF EXISTS action_queue;
+        DROP TABLE IF EXISTS sync_state;
+        DROP TABLE IF EXISTS folder_sync;
+        DROP TABLE IF EXISTS onboarding_tasks;
+    ")?;
+    Ok(())
+}
+
+/// Create all data tables (idempotent via IF NOT EXISTS).
+fn create_data_tables(conn: &Connection) -> Result<(), EddieError> {
+    conn.execute_batch("
         CREATE TABLE IF NOT EXISTS messages (
-            id              TEXT PRIMARY KEY,   -- UUID
+            id              TEXT PRIMARY KEY,
             account_id      TEXT NOT NULL REFERENCES accounts(id),
-            message_id      TEXT NOT NULL,      -- RFC 5322 Message-ID header
+            message_id      TEXT NOT NULL,
             imap_uid        INTEGER NOT NULL,
             imap_folder     TEXT NOT NULL,
-            date            INTEGER NOT NULL,   -- unix epoch ms
+            date            INTEGER NOT NULL,
             from_address    TEXT NOT NULL,
             from_name       TEXT,
-            to_addresses    TEXT NOT NULL,      -- JSON array
-            cc_addresses    TEXT DEFAULT '[]',  -- JSON array
-            bcc_addresses   TEXT DEFAULT '[]',  -- JSON array
+            to_addresses    TEXT NOT NULL,
+            cc_addresses    TEXT DEFAULT '[]',
+            bcc_addresses   TEXT DEFAULT '[]',
             subject         TEXT,
-            body_text       TEXT,               -- plain text body
-            body_html       TEXT,               -- HTML body (stored for full-view)
+            body_text       TEXT,
+            body_html       TEXT,
             size_bytes      INTEGER,
             has_attachments  INTEGER DEFAULT 0,
 
-            in_reply_to     TEXT,               -- Message-ID of parent
-            references_ids  TEXT DEFAULT '[]',  -- JSON array of Message-IDs
-            participant_changes TEXT,           -- JSON: {added: [...], removed: [...]}
+            in_reply_to     TEXT,
+            references_ids  TEXT DEFAULT '[]',
+            participant_changes TEXT,
 
-            -- Sync metadata
-            imap_flags      TEXT DEFAULT '[]',  -- JSON array (\\Seen, \\Flagged, etc.)
-            gmail_labels    TEXT DEFAULT '[]',  -- JSON array (Gmail labels, empty for non-Gmail)
+            imap_flags      TEXT DEFAULT '[]',
+            gmail_labels    TEXT DEFAULT '[]',
             fetched_at      INTEGER NOT NULL,
 
-            -- Processing outputs (also written back as IMAP keywords when possible)
-            classification  TEXT,               -- 'chat' | 'newsletter' | 'promotion' | 'update' | 'transactional'
+            classification  TEXT,
+            classification_headers TEXT DEFAULT '{}',
             is_important    INTEGER DEFAULT 0,
-            distilled_text  TEXT,               -- short chat-style extract
-            processed_at    INTEGER,            -- NULL until processed
+            distilled_text  TEXT,
+            processed_at    INTEGER,
 
-            -- Conversation assignment
-            participant_key TEXT NOT NULL,       -- sorted, normalised participant list (excl. self)
-            conversation_id TEXT NOT NULL,       -- hash(participant_key)
-
-            -- Thread assignment (computed during rebuild_conversations)
-            thread_id       TEXT,               -- hash of thread root message_id
+            participant_key TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            thread_id       TEXT,
 
             UNIQUE(account_id, imap_folder, imap_uid)
         );
@@ -70,17 +119,15 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
         CREATE INDEX IF NOT EXISTS idx_messages_message_id     ON messages(message_id);
         CREATE INDEX IF NOT EXISTS idx_messages_thread          ON messages(account_id, thread_id);
 
-        -- Dedup: skip duplicate messages across folders (first-seen folder wins)
         CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup
         ON messages(account_id, message_id) WHERE message_id != '';
 
-        -- Conversations (derived / materialised)
         CREATE TABLE IF NOT EXISTS conversations (
-            id                  TEXT PRIMARY KEY,   -- hash(participant_key)
+            id                  TEXT PRIMARY KEY,
             account_id          TEXT NOT NULL REFERENCES accounts(id),
             participant_key     TEXT NOT NULL,
-            participant_names   TEXT,               -- JSON object { email: display_name }
-            classification      TEXT NOT NULL,      -- 'connections' | 'others' | 'important'
+            participant_names   TEXT,
+            classification      TEXT NOT NULL,
             last_message_date   INTEGER NOT NULL,
             last_message_preview TEXT,
             unread_count        INTEGER DEFAULT 0,
@@ -88,24 +135,24 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
             is_muted            INTEGER DEFAULT 0,
             is_pinned           INTEGER DEFAULT 0,
             is_important        INTEGER DEFAULT 0,
+            initial_sender_email TEXT,
             updated_at          INTEGER NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_conversations_class ON conversations(account_id, classification, last_message_date DESC);
         CREATE INDEX IF NOT EXISTS idx_conversations_date  ON conversations(account_id, last_message_date DESC);
 
-        -- Trust network
         CREATE TABLE IF NOT EXISTS entities (
-            id              TEXT PRIMARY KEY,   -- UUID
+            id              TEXT PRIMARY KEY,
             account_id      TEXT NOT NULL REFERENCES accounts(id),
             email           TEXT NOT NULL,
             display_name    TEXT,
-            trust_level     TEXT NOT NULL,      -- 'user' | 'alias' | 'contact' | 'connection'
-            source          TEXT,               -- 'carddav' | 'sent_scan' | 'manual'
+            trust_level     TEXT NOT NULL,
+            source          TEXT,
             first_seen      INTEGER NOT NULL,
             last_seen       INTEGER,
-            sent_count      INTEGER DEFAULT 0,  -- number of messages sent to this entity
-            metadata        TEXT DEFAULT '{}',  -- JSON blob for CardDAV vCard fields etc.
+            sent_count      INTEGER DEFAULT 0,
+            metadata        TEXT DEFAULT '{}',
 
             UNIQUE(account_id, email)
         );
@@ -113,13 +160,12 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
         CREATE INDEX IF NOT EXISTS idx_entities_trust ON entities(account_id, trust_level);
         CREATE INDEX IF NOT EXISTS idx_entities_email ON entities(email);
 
-        -- Action queue for optimistic updates
         CREATE TABLE IF NOT EXISTS action_queue (
-            id              TEXT PRIMARY KEY,   -- UUID
+            id              TEXT PRIMARY KEY,
             account_id      TEXT NOT NULL REFERENCES accounts(id),
-            action_type     TEXT NOT NULL,      -- 'mark_read' | 'archive' | 'delete' | 'move' | 'flag' | 'send' | 'mute' | 'pin'
-            payload         TEXT NOT NULL,      -- JSON
-            status          TEXT NOT NULL DEFAULT 'pending',  -- 'pending' | 'in_progress' | 'completed' | 'failed'
+            action_type     TEXT NOT NULL,
+            payload         TEXT NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'pending',
             retry_count     INTEGER DEFAULT 0,
             max_retries     INTEGER DEFAULT 3,
             created_at      INTEGER NOT NULL,
@@ -129,23 +175,19 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
 
         CREATE INDEX IF NOT EXISTS idx_action_queue_status ON action_queue(status, created_at);
 
-        -- Cross-device sync object version tracking
         CREATE TABLE IF NOT EXISTS sync_state (
             account_id      TEXT PRIMARY KEY REFERENCES accounts(id),
-            draft_uid       INTEGER,            -- IMAP UID of the sync-object draft
+            draft_uid       INTEGER,
             draft_version   INTEGER DEFAULT 0,
-            last_pushed     INTEGER,            -- epoch ms
-            last_pulled     INTEGER             -- epoch ms
+            last_pushed     INTEGER,
+            last_pulled     INTEGER
         );
 
-        -- Per-folder IMAP sync cursors
         CREATE TABLE IF NOT EXISTS folder_sync (
             account_id    TEXT NOT NULL,
             folder        TEXT NOT NULL,
             uid_validity  INTEGER NOT NULL DEFAULT 0,
-            -- For incremental sync after onboarding
             highest_uid   INTEGER DEFAULT 0,
-            -- The cursor for backwards historical fetch, during onboarding
             lowest_uid    INTEGER DEFAULT 0,
             sync_status   TEXT DEFAULT 'pending',
             last_sync     INTEGER,
@@ -160,26 +202,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
             updated_at  INTEGER,
             PRIMARY KEY (account_id, task)
         );
-
-        -- Global key-value settings (shared across accounts)
-        CREATE TABLE IF NOT EXISTS settings (
-            key        TEXT PRIMARY KEY,
-            value      TEXT NOT NULL,
-            updated_at INTEGER NOT NULL
-        );
     ")?;
-
-    // Migrations for existing databases
-    // Add sent_count column to entities (ignore error if already exists)
-    let _ = conn.execute_batch("ALTER TABLE entities ADD COLUMN sent_count INTEGER DEFAULT 0;");
-    // Add imap_tls column to accounts (defaults to 1 = true for existing accounts)
-    let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN imap_tls INTEGER NOT NULL DEFAULT 1;");
-    // Add thread_id column to messages (computed during rebuild_conversations)
-    let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN thread_id TEXT;");
-    // Add classification_headers column for RFC header-based classification
-    let _ = conn.execute_batch("ALTER TABLE messages ADD COLUMN classification_headers TEXT DEFAULT '{}';");
-    // Add initial_sender_email to conversations (first non-self sender)
-    let _ = conn.execute_batch("ALTER TABLE conversations ADD COLUMN initial_sender_email TEXT;");
 
     Ok(())
 }
