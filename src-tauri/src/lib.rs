@@ -4,7 +4,9 @@ mod services;
 mod commands;
 pub mod error;
 
-use adapters::sqlite::{sync};
+use adapters::sqlite::sync;
+use services::sync::helpers::message_classification::ClassifierState;
+use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::mpsc;
 use tracing_subscriber::{prelude::*, Layer};
@@ -51,15 +53,36 @@ pub fn run() {
             services::logger::init(&pool);
             services::logger::info("App initialized");
 
+            // Load ONNX classifier model once at startup.
+            // In production, resources are bundled via tauri.conf.json.
+            // In dev mode, fall back to src-tauri/resources/.
+            let resource_dir = app.path().resource_dir()
+                .expect("Failed to resolve resource directory");
+            let bundled = resource_dir.join("resources/model_int8.onnx");
+            let dev_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources");
+
+            let (model_path, tokenizer_path) = if bundled.exists() {
+                (bundled, resource_dir.join("resources/tokenizer.json"))
+            } else {
+                (dev_dir.join("model_int8.onnx"), dev_dir.join("tokenizer.json"))
+            };
+
+            let classifier = Arc::new(
+                ClassifierState::load(&model_path, &tokenizer_path)
+                    .expect("Failed to load ONNX classifier model")
+            );
+            services::logger::info("ONNX classifier loaded");
+
             let engine_pool = pool.clone();
             let engine_app = app.handle().clone();
+            let engine_classifier = classifier.clone();
 
             let (wake_tx, mut wake_rx) = mpsc::channel::<()>(1);
             app.manage(wake_tx);
 
             tauri::async_runtime::spawn(async move {
                 loop {
-                    match services::sync::worker::tick(&engine_app, &engine_pool).await {
+                    match services::sync::worker::tick(&engine_app, &engine_pool, &engine_classifier).await {
                         Ok(did_work) => {
                             if did_work {
                                 continue;
@@ -77,8 +100,9 @@ pub fn run() {
                 }
             });
 
-            // Make the pool available to all Tauri commands via State
+            // Make the pool and classifier available to all Tauri commands via State
             app.manage(pool);
+            app.manage(classifier);
 
             Ok(())
         })

@@ -45,6 +45,12 @@ base64 = "0.22"
 
 html2text = "0.14"
 
+email_classifier = { path = "../crates/email_classifier" }
+ort        = { version = "2.0.0-rc.12", features = ["ndarray"] }
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+ndarray    = "0.17"
+anyhow     = "1"
+
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 hickory-resolver = { version = "0.24", features = ["tokio-runtime"] }

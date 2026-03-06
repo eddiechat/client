@@ -6,9 +6,11 @@ use crate::adapters::imap::sent_scan::fetch_sent_recipients_batch;
 
 use crate::services::sync::{helpers, worker};
 use crate::services::sync::helpers::email_normalization::normalize_email;
+use crate::services::sync::helpers::message_classification::ClassifierState;
 use crate::error::EddieError;
 
 use crate::services::logger;
+use std::sync::Arc;
 
 /// Onboarding phase 2: Build trust network from sent folder.
 ///
@@ -26,6 +28,7 @@ pub async fn run_trust_network(
     pool: &DbPool,
     account_id: &str,
     task: &onboarding_tasks::Task,
+    classifier: &Arc<ClassifierState>,
 ) -> Result<(), EddieError> {
     let (creds, self_emails, mut conn) = worker::connect_account(pool, account_id).await?;
 
@@ -63,7 +66,7 @@ pub async fn run_trust_network(
             ));
             return scan_folders_for_sent(
                 app, pool, account_id, task, &creds.email, &self_emails,
-                &mut conn, &sync_folders,
+                &mut conn, &sync_folders, classifier,
             ).await;
         }
     };
@@ -120,7 +123,7 @@ pub async fn run_trust_network(
         None => {
             // All UIDs processed — finalize
             logger::debug("Trust network: all sent messages scanned");
-            worker::process_changes(app, pool, account_id)?;
+            worker::process_changes(app, pool, account_id, classifier)?;
             onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
         }
     }
@@ -140,6 +143,7 @@ async fn scan_folders_for_sent(
     self_emails: &[String],
     conn: &mut crate::adapters::imap::connection::ImapConnection,
     sync_folders: &[&folders::FolderInfo],
+    classifier: &Arc<ClassifierState>,
 ) -> Result<(), EddieError> {
     let self_normalized: Vec<String> = std::iter::once(normalize_email(user_email))
         .chain(self_emails.iter().map(|a| normalize_email(a)))
@@ -190,7 +194,7 @@ async fn scan_folders_for_sent(
         logger::info("Trust network fallback: no sent messages found in syncable folders");
     }
 
-    worker::process_changes(app, pool, account_id)?;
+    worker::process_changes(app, pool, account_id, classifier)?;
     onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
     Ok(())
 }

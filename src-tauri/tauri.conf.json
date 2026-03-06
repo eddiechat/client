@@ -25,6 +25,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": [
+      "resources/model_int8.onnx",
+      "resources/tokenizer.json",
+      "resources/tokenizer_config.json"
+    ],
     "category": "Productivity",
     "icon": [
       "icons/32x32.png",

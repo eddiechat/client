@@ -124,14 +124,22 @@ pub struct UnprocessedMessage {
     pub in_reply_to: Option<String>,
     pub references_ids: String,
     pub body_text: Option<String>,
-    pub classification_headers: String,
+    pub body_html: Option<String>,
+    pub to_addresses: String,
+    pub cc_addresses: String,
+    pub bcc_addresses: String,
+    pub imap_folder: String,
+    pub gmail_labels: String,
+    pub has_attachments: bool,
 }
 
 pub fn get_unprocessed_messages(pool: &DbPool, account_id: &str) -> Result<Vec<UnprocessedMessage>, EddieError> {
     let conn = pool.get()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, from_address, subject, in_reply_to, references_ids, body_text, classification_headers
+            "SELECT id, from_address, subject, in_reply_to, references_ids,
+                    body_text, body_html, to_addresses, cc_addresses, bcc_addresses,
+                    imap_folder, gmail_labels, has_attachments
              FROM messages WHERE account_id = ?1 AND processed_at IS NULL"
         )?;
 
@@ -142,9 +150,15 @@ pub fn get_unprocessed_messages(pool: &DbPool, account_id: &str) -> Result<Vec<U
                 from_address: row.get(1)?,
                 subject: row.get(2)?,
                 in_reply_to: row.get(3)?,
-                references_ids: row.get(4)?,
+                references_ids: row.get::<_, String>(4).unwrap_or_else(|_| "[]".to_string()),
                 body_text: row.get(5)?,
-                classification_headers: row.get::<_, String>(6).unwrap_or_else(|_| "{}".to_string()),
+                body_html: row.get(6)?,
+                to_addresses: row.get::<_, String>(7).unwrap_or_else(|_| "[]".to_string()),
+                cc_addresses: row.get::<_, String>(8).unwrap_or_else(|_| "[]".to_string()),
+                bcc_addresses: row.get::<_, String>(9).unwrap_or_else(|_| "[]".to_string()),
+                imap_folder: row.get::<_, String>(10).unwrap_or_default(),
+                gmail_labels: row.get::<_, String>(11).unwrap_or_else(|_| "[]".to_string()),
+                has_attachments: row.get::<_, i32>(12).unwrap_or(0) != 0,
             })
         })?;
 

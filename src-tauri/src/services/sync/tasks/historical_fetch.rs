@@ -2,9 +2,11 @@ use crate::adapters::sqlite;
 use crate::adapters::sqlite::{onboarding_tasks, DbPool};
 use crate::adapters::imap::{folders, historical};
 use crate::services::sync::{helpers, worker};
+use crate::services::sync::helpers::message_classification::ClassifierState;
 use crate::error::EddieError;
 
 use crate::services::logger;
+use std::sync::Arc;
 
 /// Onboarding phase 3: Fetch 12 months with text body
 pub async fn run_historical_fetch(
@@ -12,6 +14,7 @@ pub async fn run_historical_fetch(
     pool: &DbPool,
     account_id: &str,
     task: &onboarding_tasks::Task,
+    classifier: &Arc<ClassifierState>,
 ) -> Result<(), EddieError> {
     // Discover and seed folders first
     let (_creds, self_emails, mut conn) = worker::connect_account(pool, account_id).await?;
@@ -101,7 +104,7 @@ pub async fn run_historical_fetch(
                     .map_err(|e| e.to_string())?;
             }
 
-            worker::process_changes(app, pool, account_id)
+            worker::process_changes(app, pool, account_id, classifier)
                 .map_err(|e| e.to_string())?;
             Ok(())
         },

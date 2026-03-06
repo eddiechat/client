@@ -1,21 +1,24 @@
 use crate::adapters::sqlite;
 use crate::adapters::sqlite::{accounts, onboarding_tasks, DbPool};
 use crate::adapters::imap::connection;
-use crate::services::sync::{helpers, tasks};
+use crate::services::sync::helpers;
+use crate::services::sync::helpers::message_classification::ClassifierState;
+use crate::services::sync::tasks;
 use crate::error::EddieError;
-
 use crate::services::logger;
+use std::sync::Arc;
 
 /// Run one unit of work. Returns true if work was done (onboarding or skill classification).
 pub async fn tick(
     app: &tauri::AppHandle,
     pool: &DbPool,
+    classifier: &Arc<ClassifierState>,
 ) -> Result<bool, EddieError> {
     logger::debug("Engine tick");
 
     // Step 1: Always fetch latest messages for all onboarded accounts.
     // This runs even during onboarding so new mail keeps arriving.
-    let _ = tasks::run_incremental_sync_all(app, pool).await;
+    let _ = tasks::run_incremental_sync_all(app, pool, classifier).await;
     let _ = tasks::run_flag_resync_all(app, pool).await;
 
     // Step 2: Find an account that needs onboarding
@@ -39,10 +42,10 @@ pub async fn tick(
 
     // Step 5: Run it
     match task.name.as_str() {
-        "trust_network" => tasks::run_trust_network(app, pool, &account_id, &task).await?,
-        "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task).await?,
+        "trust_network" => tasks::run_trust_network(app, pool, &account_id, &task, classifier).await?,
+        "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task, classifier).await?,
         "connection_history" => {
-            tasks::run_connection_history(app, pool, &account_id, &task).await?;
+            tasks::run_connection_history(app, pool, &account_id, &task, classifier).await?;
         }
         _ => {
             logger::warn(&format!("Unknown task: {}", task.name));
@@ -75,6 +78,7 @@ pub fn process_changes(
     app: &tauri::AppHandle,
     pool: &DbPool,
     account_id: &str,
+    classifier: &Arc<ClassifierState>,
 ) -> Result<(), EddieError> {
     // Update trust network from new sent messages (before classify sets processed_at)
     let start = std::time::Instant::now();
@@ -85,7 +89,7 @@ pub fn process_changes(
 
     helpers::status_emit::emit_status(app, "classifying", "Identifying Points & Circles...");
     let start = std::time::Instant::now();
-    let classified = helpers::message_classification::classify_messages(pool, account_id)?;
+    let classified = helpers::message_classification::classify_messages(pool, account_id, classifier)?;
     logger::debug(&format!("Classified {} messages in {}", classified, logger::fmt_ms(start.elapsed())));
 
     helpers::status_emit::emit_status(app, "distilling", "Classifying Requests with AI...");

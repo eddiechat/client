@@ -2,20 +2,23 @@ use crate::adapters::sqlite;
 use crate::adapters::sqlite::DbPool;
 use crate::adapters::imap::{envelopes, folders, historical};
 use crate::services::sync::{helpers, worker};
+use crate::services::sync::helpers::message_classification::ClassifierState;
 use crate::error::EddieError;
 
 use crate::services::logger;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Run incremental sync for all accounts
 pub async fn run_incremental_sync_all(
     app: &tauri::AppHandle,
     pool: &DbPool,
+    classifier: &Arc<ClassifierState>,
 ) -> Result<bool, EddieError> {
     let account_ids = sqlite::accounts::list_onboarded_account_ids(pool)?;
     let mut did_work = false;
     for account_id in &account_ids {
-        match run_incremental_sync(app, pool, account_id).await {
+        match run_incremental_sync(app, pool, account_id, classifier).await {
             Ok(true) => did_work = true,
             Ok(false) => {},
             Err(e) => logger::error(&format!("Incremental sync error for {}: {}", account_id, e)),
@@ -29,6 +32,7 @@ pub async fn run_incremental_sync(
     app: &tauri::AppHandle,
     pool: &DbPool,
     account_id: &str,
+    classifier: &Arc<ClassifierState>,
 ) -> Result<bool, EddieError> {
     let (_creds, self_emails, mut conn) = worker::connect_account(pool, account_id).await?;
 
@@ -205,7 +209,7 @@ pub async fn run_incremental_sync(
     }
 
     if total_new > 0 {
-        worker::process_changes(app, pool, account_id)?;
+        worker::process_changes(app, pool, account_id, classifier)?;
     }
 
     Ok(total_new > 0)
