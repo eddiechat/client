@@ -30,6 +30,8 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
   const [taskMap, setTaskMap] = useState<Record<string, string>>({});
   const [done, setDone] = useState(false);
   const completing = useRef(false);
+  const [modelDownloaded, setModelDownloaded] = useState(false);
+  const [downloadingModel, setDownloadingModel] = useState(false);
 
   const triggerComplete = useCallback(() => {
     if (completing.current) return;
@@ -70,6 +72,12 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
     unsubs.push(
       onSyncStatus((s) => {
         setStatusMessage(s.message);
+        if (s.phase === "downloading_model") {
+          setDownloadingModel(true);
+        } else if (s.phase === "downloading_model_done") {
+          setDownloadingModel(false);
+          setModelDownloaded(true);
+        }
       })
     );
 
@@ -95,8 +103,8 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
   const historyDone = taskMap["historical_fetch"] === "done";
   const connectionDone = taskMap["connection_history"] === "done";
 
-  // Milestones: 0=nothing, 1=seeded, 2=trust, 3=history, 4=connections, 5=done
-  const targetMilestone = done ? 5 : connectionDone ? 4 : historyDone ? 3 : trustDone ? 2 : tasksSeeded ? 1 : 0;
+  // Milestones: 0=nothing, 1=model ready, 2=seeded, 3=trust, 4=history, 5=connections, 6=done
+  const targetMilestone = done ? 6 : connectionDone ? 5 : historyDone ? 4 : trustDone ? 3 : tasksSeeded ? 2 : modelDownloaded ? 1 : 0;
   const [displayMilestone, setDisplayMilestone] = useState(0);
 
   // Advance displayMilestone one step at a time, with minimum 800ms dwell per step.
@@ -113,43 +121,49 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
 
   // Derive step states from displayMilestone (never jumps, only advances one at a time)
   const dm = displayMilestone;
-  const showLower = dm >= 2; // steps 3-6 visible after trust milestone
+  const showLower = dm >= 3; // steps visible after trust milestone
 
   const steps: StepDef[] = [
     {
-      label: "Connecting to mail server",
+      label: downloadingModel ? "Downloading AI model..." : "Preparing AI model",
       done: dm >= 1,
-      active: dm < 1,
-      visible: true,
+      active: dm < 1 && downloadingModel,
+      visible: downloadingModel || modelDownloaded || dm >= 1,
     },
     {
-      label: "Building trust network",
+      label: "Connecting to mail server",
       done: dm >= 2,
       active: dm >= 1 && dm < 2,
       visible: true,
     },
     {
+      label: "Building trust network",
+      done: dm >= 3,
+      active: dm >= 2 && dm < 3,
+      visible: true,
+    },
+    {
       label: "Syncing message history",
-      done: dm >= 3,
-      active: dm >= 2 && dm < 3,
-      visible: showLower,
-    },
-    {
-      label: "Identifying Points & Circles",
-      done: dm >= 3,
-      active: dm >= 2 && dm < 3,
-      visible: showLower,
-    },
-    {
-      label: "Classifying Requests",
       done: dm >= 4,
       active: dm >= 3 && dm < 4,
       visible: showLower,
     },
     {
-      label: "Finishing up",
+      label: "Identifying Points & Circles",
+      done: dm >= 4,
+      active: dm >= 3 && dm < 4,
+      visible: showLower,
+    },
+    {
+      label: "Classifying Requests",
       done: dm >= 5,
       active: dm >= 4 && dm < 5,
+      visible: showLower,
+    },
+    {
+      label: "Finishing up",
+      done: dm >= 6,
+      active: dm >= 5 && dm < 6,
       visible: showLower,
     },
   ];
@@ -170,7 +184,7 @@ export function OnboardingScreen({ accountId, onComplete }: OnboardingScreenProp
       trustContacts[(contactOffset + i) % trustContacts.length]
     );
 
-  const PROGRESS_BY_MILESTONE = [3, 8, 30, 65, 92, 100];
+  const PROGRESS_BY_MILESTONE = [3, 6, 10, 30, 60, 90, 100];
   const progress = PROGRESS_BY_MILESTONE[dm] ?? 3;
 
   return (

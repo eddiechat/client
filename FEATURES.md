@@ -43,10 +43,11 @@
 - Thread context (In-Reply-To + References headers → Chat)
 
 **Neural Model (ONNX)**
-- INT8 quantized DistilBERT-based model bundled with the app
+- INT8 quantized DistilBERT-based model downloaded on first use
+- Onboarding screen shows download progress with percentage
 - Processes subject + body text with head+tail truncation (512 tokens max)
 - Uses 12 metadata features (reply status, recipient count, sender type, etc.)
-- Loaded once at startup for fast per-message inference
+- Loaded once after download for fast per-message inference
 
 **Reclassification**
 - Reclassify all messages for an account on demand

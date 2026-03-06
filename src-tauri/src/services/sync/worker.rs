@@ -6,19 +6,68 @@ use crate::services::sync::helpers::message_classification::ClassifierState;
 use crate::services::sync::tasks;
 use crate::error::EddieError;
 use crate::services::logger;
+use crate::SharedClassifier;
 use std::sync::Arc;
+use tauri::Manager;
+
+/// Ensure the ONNX model is downloaded and the classifier is loaded.
+/// Returns the classifier, loading it on first call.
+async fn ensure_classifier(
+    app: &tauri::AppHandle,
+    shared: &SharedClassifier,
+) -> Result<Arc<ClassifierState>, EddieError> {
+    // Fast path: already loaded
+    {
+        let guard = shared.read().await;
+        if let Some(ref c) = *guard {
+            return Ok(c.clone());
+        }
+    }
+
+    // Slow path: download model if needed, then load
+    let model_path = helpers::model_download::ensure_model(app)
+        .await
+        .map_err(|e| EddieError::Backend(format!("Model download failed: {}", e)))?;
+
+    // Tokenizer is still bundled as a resource
+    let tokenizer_path = {
+        let resource_dir = app.path().resource_dir()
+            .expect("Failed to resolve resource directory");
+        let bundled = resource_dir.join("resources/tokenizer.json");
+        if bundled.exists() {
+            bundled
+        } else {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources")
+                .join("tokenizer.json")
+        }
+    };
+
+    let classifier = Arc::new(
+        ClassifierState::load(&model_path, &tokenizer_path)
+            .map_err(|e| EddieError::Backend(format!("Failed to load classifier: {}", e)))?,
+    );
+    logger::info("ONNX classifier loaded");
+
+    let mut guard = shared.write().await;
+    *guard = Some(classifier.clone());
+    Ok(classifier)
+}
 
 /// Run one unit of work. Returns true if work was done (onboarding or skill classification).
 pub async fn tick(
     app: &tauri::AppHandle,
     pool: &DbPool,
-    classifier: &Arc<ClassifierState>,
+    classifier: &SharedClassifier,
 ) -> Result<bool, EddieError> {
     logger::debug("Engine tick");
 
+    // Ensure model is downloaded and classifier is ready
+    let resolved = ensure_classifier(app, classifier).await?;
+
     // Step 1: Always fetch latest messages for all onboarded accounts.
     // This runs even during onboarding so new mail keeps arriving.
-    let _ = tasks::run_incremental_sync_all(app, pool, classifier).await;
+    let _ = tasks::run_incremental_sync_all(app, pool, &resolved).await;
     let _ = tasks::run_flag_resync_all(app, pool).await;
 
     // Step 2: Find an account that needs onboarding
@@ -42,10 +91,10 @@ pub async fn tick(
 
     // Step 5: Run it
     match task.name.as_str() {
-        "trust_network" => tasks::run_trust_network(app, pool, &account_id, &task, classifier).await?,
-        "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task, classifier).await?,
+        "trust_network" => tasks::run_trust_network(app, pool, &account_id, &task, &resolved).await?,
+        "historical_fetch" => tasks::run_historical_fetch(app, pool, &account_id, &task, &resolved).await?,
         "connection_history" => {
-            tasks::run_connection_history(app, pool, &account_id, &task, classifier).await?;
+            tasks::run_connection_history(app, pool, &account_id, &task, &resolved).await?;
         }
         _ => {
             logger::warn(&format!("Unknown task: {}", task.name));

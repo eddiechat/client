@@ -26,9 +26,7 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "resources/model_int8.onnx",
-      "resources/tokenizer.json",
-      "resources/tokenizer_config.json"
+      "resources/tokenizer.json"
     ],
     "category": "Productivity",
     "icon": [
