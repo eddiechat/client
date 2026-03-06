@@ -279,12 +279,21 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
     let mut count = 0;
 
     for builder in conv_map.values() {
-        // Skip conversations where all external participants are blocked
+        // Skip blocked conversations:
+        // - 1:1: skip if the single participant is blocked
+        // - Group: skip if the initial sender is blocked
         if !blocked_emails.is_empty() {
             let participants: Vec<&str> = builder.participant_key.split('\n')
                 .filter(|s| !s.is_empty())
                 .collect();
-            if !participants.is_empty() && participants.iter().all(|p| blocked_emails.contains(*p)) {
+            let is_group = participants.len() > 1;
+            if is_group {
+                if let Some(ref sender) = builder.initial_sender_email {
+                    if blocked_emails.contains(sender.as_str()) {
+                        continue;
+                    }
+                }
+            } else if !participants.is_empty() && participants.iter().all(|p| blocked_emails.contains(*p)) {
                 continue;
             }
         }
