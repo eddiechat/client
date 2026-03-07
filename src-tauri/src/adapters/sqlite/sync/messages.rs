@@ -173,13 +173,18 @@ pub fn update_classification(
     pool: &DbPool,
     message_id: &str,
     classification: &str,
+    source: &str,
+    confidence: f32,
+    reason: &str,
     is_important: bool,
 ) -> Result<(), EddieError> {
     let conn = pool.get()?;
     let now = chrono::Utc::now().timestamp_millis();
     conn.execute(
-        "UPDATE messages SET classification = ?1, is_important = ?2, processed_at = ?3 WHERE id = ?4",
-        params![classification, is_important as i32, now, message_id],
+        "UPDATE messages SET classification = ?1, classification_source = ?2, \
+         classification_confidence = ?3, classification_reason = ?4, \
+         is_important = ?5, processed_at = ?6 WHERE id = ?7",
+        params![classification, source, confidence as f64, reason, is_important as i32, now, message_id],
     )?;
     Ok(())
 }

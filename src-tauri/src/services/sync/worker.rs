@@ -138,8 +138,11 @@ pub fn process_changes(
 
     helpers::status_emit::emit_status(app, "classifying", "Identifying Points & Circles...");
     let start = std::time::Instant::now();
-    let classified = helpers::message_classification::classify_messages(pool, account_id, classifier)?;
-    logger::debug(&format!("Classified {} messages in {}", classified, logger::fmt_ms(start.elapsed())));
+    let stats = helpers::message_classification::classify_messages(pool, account_id, classifier)?;
+    logger::debug(&format!(
+        "Classified {} messages in {} (rules={}, model={})",
+        stats.total, logger::fmt_ms(start.elapsed()), stats.rules, stats.model
+    ));
 
     helpers::status_emit::emit_status(app, "distilling", "Classifying Requests with AI...");
     let start = std::time::Instant::now();

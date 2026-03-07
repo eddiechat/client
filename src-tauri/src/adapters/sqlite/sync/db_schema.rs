@@ -2,7 +2,7 @@ use rusqlite::Connection;
 
 use crate::error::EddieError;
 
-const SCHEMA_VERSION: &str = "1";
+const SCHEMA_VERSION: &str = "2";
 
 pub fn initialize_schema(conn: &Connection) -> Result<(), EddieError> {
     // Ensure accounts and settings tables exist first (they survive resets).
@@ -100,6 +100,9 @@ fn create_data_tables(conn: &Connection) -> Result<(), EddieError> {
             fetched_at      INTEGER NOT NULL,
 
             classification  TEXT,
+            classification_source TEXT,
+            classification_confidence REAL,
+            classification_reason TEXT,
             classification_headers TEXT DEFAULT '{}',
             is_important    INTEGER DEFAULT 0,
             distilled_text  TEXT,

@@ -39,6 +39,21 @@ pub enum Source {
     Model,
 }
 
+impl Source {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Source::Deterministic => "rules",
+            Source::Model => "model",
+        }
+    }
+}
+
+pub struct ClassifyStats {
+    pub total: usize,
+    pub rules: usize,
+    pub model: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct ClassificationResult {
     pub label: Label,
@@ -85,10 +100,10 @@ pub fn classify_messages(
     pool: &DbPool,
     account_id: &str,
     classifier: &Arc<ClassifierState>,
-) -> Result<usize, EddieError> {
+) -> Result<ClassifyStats, EddieError> {
     let messages = sqlite::messages::get_unprocessed_messages(pool, account_id)?;
     if messages.is_empty() {
-        return Ok(0);
+        return Ok(ClassifyStats { total: 0, rules: 0, model: 0 });
     }
     logger::debug(&format!(
         "Classifying messages: account_id={}, pending={}",
@@ -96,19 +111,26 @@ pub fn classify_messages(
         messages.len()
     ));
 
-    let mut count = 0;
+    let mut stats = ClassifyStats { total: 0, rules: 0, model: 0 };
     for msg in &messages {
         let result = classify_email(msg, classifier);
         sqlite::messages::update_classification(
             pool,
             &msg.id,
             result.label.as_str(),
+            result.source.as_str(),
+            result.confidence,
+            &result.reason,
             false,
         )?;
-        count += 1;
+        stats.total += 1;
+        match result.source {
+            Source::Deterministic => stats.rules += 1,
+            Source::Model => stats.model += 1,
+        }
     }
 
-    Ok(count)
+    Ok(stats)
 }
 
 // ── Two-step pipeline ────────────────────────────────────────────────────────
@@ -227,7 +249,7 @@ fn run_model(
         label,
         confidence,
         source: Source::Model,
-        reason: format!("model:{confidence:.3}"),
+        reason: "model".to_string(),
     })
 }
 
