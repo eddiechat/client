@@ -27,9 +27,6 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             name: macOS (Apple Silicon)
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            name: macOS (Intel)
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             name: Linux
@@ -104,7 +101,7 @@ jobs:
           retention-days: 30
 
   # =============================================================================
-  # macOS App Store Build (Universal Binary, signed + uploaded)
+  # macOS App Store Build (Apple Silicon, signed + uploaded)
   # =============================================================================
   build-macos-appstore:
     name: macOS App Store
@@ -118,7 +115,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -185,12 +182,12 @@ jobs:
           echo -n "$MACOS_PROVISION_PROFILE" | base64 --decode > src-tauri/embedded.provisionprofile
           echo "Provisioning profile installed"
 
-      - name: Build Tauri app (Universal Binary)
+      - name: Build Tauri app (Apple Silicon)
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          bunx tauri build --target universal-apple-darwin --bundles app
+          bunx tauri build --target aarch64-apple-darwin --bundles app
 
       - name: Re-sign app with entitlements and create .pkg
         env:
@@ -198,7 +195,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           APP_NAME="eddie.chat"
-          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           ENTITLEMENTS="entitlements.plist"
 
           echo "=== App bundle contents ==="
@@ -369,6 +366,9 @@ jobs:
           echo "name=${PP_NAME}" >> $GITHUB_OUTPUT
           echo "Installed provisioning profile: ${PP_NAME} (${PP_UUID})"
 
+      - name: Download ORT binaries (iOS)
+        run: bash scripts/download-ort.sh ios
+
       - name: Initialize iOS project
         run: bunx tauri ios init
 
@@ -474,6 +474,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ORT_IOS_XCFWK_PATH: ${{ github.workspace }}/ort-libs/ios/onnxruntime.xcframework
         run: |
           # Tauri needs APPLE_API_KEY_PATH pointing to the .p8 file
           mkdir -p ~/private_keys
@@ -734,7 +735,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android
 
       - name: Install Linux dependencies
         run: |
@@ -761,15 +762,26 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
+      - name: Download ORT binaries (Android)
+        run: bash scripts/download-ort.sh android
+
       - name: Initialize Android project
         run: |
           rm -rf src-tauri/gen/android
           bunx tauri android init
 
+      - name: Bundle ORT shared library for Android
+        run: |
+          mkdir -p src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
+          cp ort-libs/android/arm64-v8a/libonnxruntime.so \
+             src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
+
       - name: Build Android app
-        run: bunx tauri android build
+        run: bunx tauri android build --target aarch64
         env:
           NDK_HOME: ${{ env.NDK_HOME }}
+          ORT_LIB_LOCATION: ${{ github.workspace }}/ort-libs/android/arm64-v8a
+          ORT_PREFER_DYNAMIC_LINK: "1"
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4

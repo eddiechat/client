@@ -61,3 +61,6 @@ settings.local.json
 .env.appstore
 test-ios-appstore.sh
 test-macos-appstore.sh
+
+# Downloaded ORT binaries for mobile builds
+ort-libs/

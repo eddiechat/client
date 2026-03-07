@@ -21,8 +21,16 @@ pub fn model_path(app: &tauri::AppHandle) -> PathBuf {
 pub async fn ensure_model(app: &tauri::AppHandle) -> Result<PathBuf, anyhow::Error> {
     let dest = model_path(app);
 
+    // Clean up stale .rten model from previous versions
+    if let Some(parent) = dest.parent() {
+        let legacy = parent.join("model_int8.rten");
+        if legacy.exists() {
+            let _ = std::fs::remove_file(&legacy);
+        }
+    }
+
     if dest.exists() {
-        logger::info("ONNX model already downloaded");
+        logger::info("Classification model already downloaded");
         return Ok(dest);
     }
 
@@ -31,7 +39,7 @@ pub async fn ensure_model(app: &tauri::AppHandle) -> Result<PathBuf, anyhow::Err
         std::fs::create_dir_all(parent)?;
     }
 
-    logger::info(&format!("Downloading ONNX model from {}", MODEL_URL));
+    logger::info(&format!("Downloading classification model from {}", MODEL_URL));
     super::status_emit::emit_status(app, "downloading_model", "Downloading AI model...");
 
     let response = reqwest::get(MODEL_URL).await?;
@@ -86,7 +94,7 @@ pub async fn ensure_model(app: &tauri::AppHandle) -> Result<PathBuf, anyhow::Err
     // Rename tmp → final
     tokio::fs::rename(&tmp_path, &dest).await?;
 
-    logger::info("ONNX model download complete");
+    logger::info("Classification model download complete");
     super::status_emit::emit_status(app, "downloading_model_done", "AI model ready");
 
     Ok(dest)
