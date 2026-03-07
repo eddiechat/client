@@ -1,18 +1,4 @@
-### Added
-- Filter in Requests tab
-- Transfer conversations between Chats and Requests
-- Download ML model on first use (lazy loading)
-- Multi-select for conversations
-- Database reset capability
-
 ### Changed
-- Replaced Lines with Requests
-- Finetuned chat classification model
-- Improved chat classifier accuracy
-- Made swipe actions more intuitive
-- Filter and block behavior tweaks
-- Removed compose button
-
-### Fixed
-- Group blocking behavior
-- MacOS build compatibility
+- Persist classification details for better debugging
+- Remove email normalization for user emails
+- Add cross-platform ORT binary support for iOS and Android builds
