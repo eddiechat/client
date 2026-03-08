@@ -47,6 +47,9 @@ function PointsList() {
   }, []);
 
   const conns = conversations.filter((c) => c.classification === "connections");
+  const reqs = conversations.filter(
+    (c) => c.classification === "others" && participantEmails(c).length > 0 && displayName(c).trim().length > 0
+  );
   const q = search.toLowerCase();
   // When searching, ignore chatFilter and search all connections
   const base = q
@@ -88,7 +91,23 @@ function PointsList() {
 
   return (
     <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25 select-none">
-      {visible.length === 0 && (
+      {reqs.length > 0 && (
+        <div
+          className="card-row flex items-center px-3.25 py-1.5 rounded-[12px] cursor-pointer gap-1.5"
+          style={{ opacity: 0.5 }}
+          onClick={() => navigate({ to: "/requests" })}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+            <circle cx="12" cy="8" r="4.5" fill="#A78BFA" />
+            <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8Z" fill="#A78BFA" />
+          </svg>
+          <span className="text-[13px] font-semibold text-text-muted" style={{ letterSpacing: "-0.1px" }}>
+            {reqs.length} request{reqs.length !== 1 ? "s" : ""} waiting
+          </span>
+          <span className="text-[13px] text-text-dim ml-auto">›</span>
+        </div>
+      )}
+      {visible.length === 0 && reqs.length === 0 && (
         <div className="text-center py-15 px-5 text-text-muted text-[16px] font-semibold">No conversations yet</div>
       )}
       {visible.map((c) => {

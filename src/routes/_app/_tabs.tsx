@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/_tabs")({
 const TAB_ACCENT: Record<string, string> = {
   points: "var(--color-accent-green)",
   circles: "var(--color-accent-amber)",
-  requests: "var(--color-accent-purple)",
+  lines: "var(--color-accent-purple)",
 };
 
 function ChatBubbleIcon() {
@@ -28,16 +28,13 @@ function ChatBubbleIcon() {
   );
 }
 
-function RequestsIcon() {
+function LanesIcon() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-      <rect width="24" height="24" rx="5" fill="#A78BFA" />
-      {/* Head — filled circle */}
-      <circle cx="12" cy="8" r="4.5" fill="white" />
-      {/* ? carved into head using background color */}
-      <text x="12" y="11" textAnchor="middle" fill="#A78BFA" fontSize="7" fontWeight="900" fontFamily="system-ui, sans-serif">?</text>
-      {/* Shoulders */}
-      <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8Z" fill="white" />
+      <rect width="24" height="24" rx="5" fill="#F5C43A" />
+      <rect x="5" y="7" width="14" height="2" rx="1" fill="white" />
+      <rect x="5" y="11" width="14" height="2" rx="1" fill="white" />
+      <rect x="5" y="15" width="9" height="2" rx="1" fill="white" />
     </svg>
   );
 }
@@ -71,14 +68,11 @@ function TabsLayout() {
 
   const path = location.pathname;
   const activeTab = path.includes("/circles") ? "circles"
-    : path.includes("/requests") ? "requests"
+    : path.includes("/lines") ? "lines"
       : "points";
 
   const conns = conversations.filter((c) => c.classification === "connections");
-  const reqs = conversations.filter((c) => c.classification === "others");
-  const tabUnread = activeTab === "requests"
-    ? reqs.reduce((sum, c) => sum + c.unread_count, 0)
-    : chatFilter === "1:1"
+  const tabUnread = chatFilter === "1:1"
       ? conns.filter((c) => participantCount(c) === 1).reduce((sum, c) => sum + c.unread_count, 0)
       : chatFilter === "3+"
         ? conns.filter((c) => participantCount(c) > 1).reduce((sum, c) => sum + c.unread_count, 0)
@@ -103,7 +97,7 @@ function TabsLayout() {
         </div>
         {/* Search + Filter */}
         <div className="px-2.75 pb-2.25 relative">
-          <div className={`flex items-center gap-2.25 px-3.25 py-2.25 rounded-[10px] border border-divider ${activeTab === "points" || activeTab === "requests" ? "mr-14.25" : ""}`}>
+          <div className={`flex items-center gap-2.25 px-3.25 py-2.25 rounded-[10px] border border-divider ${activeTab === "points" ? "mr-14.25" : ""}`}>
             <span className="text-text-dim text-[16px]">{"\u2315"}</span>
             <input
               className="flex-1 bg-transparent border-none outline-none text-[16px] font-medium text-text-primary placeholder:text-text-dim"
@@ -112,7 +106,7 @@ function TabsLayout() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          {(activeTab === "points" || activeTab === "requests") && (
+          {activeTab === "points" && (
             <div
               className="absolute top-0 right-2.75 bottom-2.25 w-12 rounded-[10px] flex items-center justify-center cursor-pointer"
               style={{ background: "#5BBCF5" }}
@@ -153,8 +147,8 @@ function TabsLayout() {
         </SearchContext.Provider>
       </div>
 
-      {/* FAB — Compose button (hidden on Requests tab) */}
-      {activeTab !== "requests" && (
+      {/* FAB — Compose button */}
+      {activeTab === "points" && (
         <div
           className="absolute right-3.5 z-10 w-14 h-14 rounded-[17px] flex items-center justify-center cursor-pointer text-white text-[38px] font-light leading-none"
           style={{
@@ -189,27 +183,26 @@ function TabsLayout() {
           </button>
           <button
             className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent text-[10px] font-extrabold tracking-wide opacity-30"
-            style={{ color: "#F5C43A", cursor: "default" }}
+            style={{ color: "#A78BFA", cursor: "default" }}
             disabled
           >
             <span className="flex items-center justify-center w-8 h-8">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <rect width="24" height="24" rx="5" fill="#F5C43A" />
+                <rect width="24" height="24" rx="5" fill="#A78BFA" />
                 <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="900" fontFamily="system-ui, sans-serif">#</text>
               </svg>
             </span>
             Groups
           </button>
           <button
-            className={`flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors ${reqs.length === 0 ? "opacity-30" : ""}`}
-            style={{ color: "#A78BFA" }}
-            onClick={() => navigate({ to: "/requests" })}
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent text-[10px] font-extrabold tracking-wide opacity-30"
+            style={{ color: "#F5C43A", cursor: "default" }}
+            disabled
           >
             <span className="flex items-center justify-center w-8 h-8">
-              <RequestsIcon />
+              <LanesIcon />
             </span>
-            Requests
-            {activeTab === "requests" && <span className="w-1 h-1 rounded-full" style={{ background: "#A78BFA" }} />}
+            Lanes
           </button>
         </div>
       </nav>

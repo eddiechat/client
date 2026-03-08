@@ -111,6 +111,16 @@ function RequestsList() {
 
   return (
     <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25 select-none">
+      <div
+        className="card-row flex items-center px-3.25 py-1.5 rounded-xl cursor-pointer gap-1.5"
+        style={{ opacity: 0.5 }}
+        onClick={() => navigate({ to: "/points" })}
+      >
+        <span className="text-[13px] text-text-dim">‹</span>
+        <span className="text-[13px] font-semibold text-text-muted" style={{ letterSpacing: "-0.1px" }}>
+          Back to chats
+        </span>
+      </div>
       {filtered.length === 0 && (
         <div className="text-center py-15 px-5 text-text-muted text-[16px] font-semibold">No requests yet</div>
       )}
