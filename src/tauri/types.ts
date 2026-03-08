@@ -41,6 +41,7 @@ export type Message = {
   imap_flags: string;
   distilled_text: string | null;
   is_sent: boolean;
+  in_reply_to: string | null;
 };
 
 export type ConnectAccountParams = {

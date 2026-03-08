@@ -296,6 +296,7 @@ pub struct Message {
     pub imap_flags: String,
     pub distilled_text: Option<String>,
     pub is_sent: bool,
+    pub in_reply_to: Option<String>,
 }
 
 pub fn fetch_conversation_messages(
@@ -308,7 +309,7 @@ pub fn fetch_conversation_messages(
     let mut stmt = conn.prepare(
         "SELECT id, date, from_address, from_name, to_addresses, cc_addresses,
                 subject, body_text, body_html, has_attachments, imap_flags, distilled_text,
-                gmail_labels, imap_folder
+                gmail_labels, imap_folder, in_reply_to
          FROM messages
          WHERE account_id = ?1 AND conversation_id = ?2
          ORDER BY date ASC",
@@ -332,6 +333,7 @@ pub fn fetch_conversation_messages(
             imap_flags: row.get(10)?,
             distilled_text: row.get(11)?,
             is_sent: false, // computed below
+            in_reply_to: row.get(14)?,
         }, gmail_labels, imap_folder, from_address))
     })?;
 
@@ -353,7 +355,7 @@ pub fn fetch_recent_messages(
     let mut stmt = conn.prepare(
         "SELECT id, date, from_address, from_name, to_addresses, cc_addresses,
                 subject, body_text, body_html, has_attachments, imap_flags, distilled_text,
-                gmail_labels, imap_folder
+                gmail_labels, imap_folder, in_reply_to
          FROM messages
          WHERE account_id = ?1 AND body_text IS NOT NULL
          ORDER BY date DESC
@@ -378,6 +380,7 @@ pub fn fetch_recent_messages(
             imap_flags: row.get(10)?,
             distilled_text: row.get(11)?,
             is_sent: false,
+            in_reply_to: row.get(14)?,
         }, gmail_labels, imap_folder, from_address))
     })?;
 

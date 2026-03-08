@@ -158,6 +158,7 @@ function ConversationView() {
             const year = new Date(m.date).getFullYear();
             const prevYear = i > 0 ? new Date(arr[i - 1].date).getFullYear() : year;
             const prevMsg = i > 0 ? arr[i - 1] : null;
+            const showSubject = !!m.subject && !m.in_reply_to;
             const timeDelta = prevMsg ? m.date - prevMsg.date : Infinity;
             const senderChanged = prevMsg ? prevMsg.is_sent !== m.is_sent || prevMsg.from_address !== m.from_address : true;
             const showTime = senderChanged || timeDelta > 30 * 60 * 1000;
@@ -215,6 +216,9 @@ function ConversationView() {
                       : { boxShadow: '0 1px 8px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.05)' }
                     }
                   >
+                    {showSubject && (
+                      <span className={`text-[13px] font-bold ${isSent ? "opacity-85" : "text-text-muted"}`}>{m.subject}{/[.!?:;]$/.test(m.subject!) ? " " : ". "}</span>
+                    )}
                     <LinkifiedText text={body} />
                   </div>
                 </div>
