@@ -201,7 +201,7 @@ function TabsLayout() {
             Groups
           </button>
           <button
-            className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors"
+            className={`flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors ${reqs.length === 0 ? "opacity-30" : ""}`}
             style={{ color: "#A78BFA" }}
             onClick={() => navigate({ to: "/requests" })}
           >
