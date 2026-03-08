@@ -209,7 +209,7 @@ fn seed_self_entities(
 
     let mut entities = vec![NewEntity {
         account_id: account_id.to_string(),
-        email: user_email.trim().to_lowercase(),
+        email: normalize_email(user_email),
         display_name: None,
         trust_level: "user".to_string(),
         source: Some("self".to_string()),
@@ -222,7 +222,7 @@ fn seed_self_entities(
     for alias in aliases {
         entities.push(NewEntity {
             account_id: account_id.to_string(),
-            email: alias.trim().to_lowercase(),
+            email: normalize_email(alias),
             display_name: None,
             trust_level: "alias".to_string(),
             source: Some("self".to_string()),

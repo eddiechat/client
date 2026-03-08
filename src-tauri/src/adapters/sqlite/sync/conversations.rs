@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap, BTreeSet};
 use super::DbPool;
 use super::{entities, messages};
 use crate::error::EddieError;
+use crate::services::sync::helpers::email_normalization::normalize_email;
 
 pub fn compute_conversation_id(participant_key: &str) -> String {
     let hash = Sha256::digest(participant_key.as_bytes());
@@ -478,7 +479,8 @@ impl UnionFind {
 // ----- Helpers -----
 
 fn is_self(addr: &str, self_emails: &[String]) -> bool {
-    self_emails.iter().any(|s| s.eq_ignore_ascii_case(addr))
+    let normalized = normalize_email(addr);
+    self_emails.iter().any(|s| normalize_email(s) == normalized)
 }
 
 fn collect_participants(
@@ -488,18 +490,18 @@ fn collect_participants(
     self_emails: &[String],
 ) -> BTreeSet<String> {
     let mut participants = BTreeSet::new();
-    let addr = from.to_lowercase();
+    let addr = normalize_email(from);
     if !is_self(&addr, self_emails) {
         participants.insert(addr);
     }
     for a in to {
-        let addr = a.to_lowercase();
+        let addr = normalize_email(a);
         if !is_self(&addr, self_emails) {
             participants.insert(addr);
         }
     }
     for a in cc {
-        let addr = a.to_lowercase();
+        let addr = normalize_email(a);
         if !is_self(&addr, self_emails) {
             participants.insert(addr);
         }

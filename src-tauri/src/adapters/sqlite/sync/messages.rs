@@ -5,6 +5,7 @@ use crate::services::logger;
 use super::DbPool;
 use super::entities;
 use crate::error::EddieError;
+use crate::services::sync::helpers::email_normalization::normalize_email;
 
 pub fn is_sent(gmail_labels: &str, imap_folder: &str, from_address: &str, self_emails: &[String]) -> bool {
     // Gmail: check labels
@@ -16,8 +17,9 @@ pub fn is_sent(gmail_labels: &str, imap_folder: &str, from_address: &str, self_e
     if folder_lower.contains("sent") {
         return true;
     }
-    // Fallback: check if from_address matches a self email (both already normalized)
-    self_emails.iter().any(|e| e.eq_ignore_ascii_case(from_address))
+    // Fallback: check if from_address matches a self email (normalize to handle Gmail dots)
+    let normalized_from = normalize_email(from_address);
+    self_emails.iter().any(|e| normalize_email(e) == normalized_from)
 }
 
 /// Represents a message ready to be stored in the database.
