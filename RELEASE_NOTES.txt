@@ -1,4 +1,10 @@
+### Added
+- Subject of first message in thread shown on chat bubble
+
 ### Changed
-- Persist classification details for better debugging
-- Remove email normalization for user emails
-- Add cross-platform ORT binary support for iOS and Android builds
+- Requests moved to a visual notification; lanes tab reintroduced
+- Requests tab fades when empty
+
+### Fixed
+- Email normalization fix
+- Prevent selecting text when long pressing
