@@ -33,29 +33,7 @@ Messages are inserted with `normalize_email()` applied to participant keys. Conv
 
 ---
 
-### 10. Stale closure in SkillStudio preview
-**File:** `src/skills/SkillStudio.tsx:~166`
-
-The preview `useEffect` depends on `[tab]` only but captures `prompt`, `selectedModel`, `temperature`, and other values. Changing those and switching to the Preview tab uses stale values from the previous render.
-
-**Fix:** Add the captured values to the dependency array, or use refs.
-
----
-
-### 11. Inconsistent address parsing between views
-**Files:**
-- `src/routes/_app/conversation.$id.tsx:109` — uses `JSON.parse(m.to_addresses)`
-- `src/routes/_app/cluster.$id.tsx:105` — uses `m.to_addresses.split(",")`
-
-The field is stored as a JSON array, so the cluster view's `split(",")` is wrong and will produce malformed addresses.
-
-**Fix:** Use `JSON.parse()` consistently in the cluster view.
-
----
-
-### 13. Silent error suppression in multiple places
-- `src/routes/_app/_tabs/lines.tsx:74-76` — Cluster fetch failures caught and ignored
-- `src/skills/SkillStudio.tsx:143-145` — Ollama call failures silently skipped
+### 13. Silent error suppression
 - `src-tauri/src/adapters/sqlite/sync/conversations.rs:~250` — `serde_json::to_string().ok()` silently drops serialization errors for participant names
 
 ---
@@ -106,13 +84,6 @@ Filtering and sorting happen on every render without `useMemo`. With thousands o
 
 ---
 
-### 19. OllamaModels vs OllamaEntry naming inconsistency
-**Files:** `src/tauri/types.ts` (type `OllamaModels`) vs `src-tauri/src/services/ollama.rs` (struct `OllamaEntry`)
-
-Type names differ between frontend and backend. Structure is identical so it works at runtime, but creates confusion when cross-referencing code.
-
----
-
 ## Summary
 
 | # | Severity | Description |
@@ -120,12 +91,9 @@ Type names differ between frontend and backend. Structure is identical so it wor
 | 7 | High | Auth state not persisted across reload |
 | 8 | Medium | Compose button non-functional |
 | 9 | Medium | Participant key normalization drift risk |
-| 10 | Medium | Stale closure in SkillStudio preview |
-| 11 | Medium | Inconsistent address parsing in cluster view |
 | 13 | Medium | Silent error suppression |
 | 14 | Medium | No logout functionality |
 | 15 | Low | UnionFind uses recursion |
 | 16 | Low | References fetch logic duplicated |
 | 17 | Low | Event listener cleanup returns Promise |
 | 18 | Low | List filtering not memoized |
-| 19 | Low | OllamaModels naming inconsistency |

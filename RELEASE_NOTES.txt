@@ -1,4 +1,2 @@
 ### Changed
-- Restyle login screen with new boxed logo and light mode default
-- Use image icons in chat messages
-- Use link badges instead of full links
+- Improve error handling

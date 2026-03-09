@@ -104,9 +104,10 @@ export function firstName(name: string): string {
 }
 
 export function initials(name: string) {
-  const p = name.trim().split(/[\s@]+/);
-  if (p.length >= 2) return (p[0][0] + p[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+  const p = name.trim().split(/[\s@]+/).filter(Boolean);
+  if (p.length >= 2 && p[0][0] && p[1][0]) return (p[0][0] + p[1][0]).toUpperCase();
+  const fallback = (p[0] ?? name).slice(0, 2);
+  return fallback ? fallback.toUpperCase() : "?";
 }
 
 export function relTime(ts: number) {
@@ -214,37 +215,6 @@ export function previewPrefix(c: Conversation): string {
   return text;
 }
 
-export function dedup(msgs: Message[]): Message[] {
-  const seen = new Set<string>();
-  return msgs.filter((m) => {
-    const key = `${m.from_address}|${m.date}|${(m.distilled_text || m.body_text || m.subject || "").slice(0, 100)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-export const LINE_EMOJIS = [
-  "\u2708\uFE0F", "\uD83D\uDCBC", "\uD83D\uDD28", "\uD83C\uDF89",
-  "\uD83D\uDCC1", "\uD83D\uDCC5", "\uD83D\uDCB0", "\uD83D\uDCE6",
-  "\uD83C\uDFAF", "\uD83D\uDE80", "\uD83C\uDF1F", "\uD83D\uDD2C",
-  "\uD83C\uDFA8", "\uD83C\uDF0D", "\uD83D\uDCA1", "\uD83D\uDCDA",
-  "\u2615", "\uD83C\uDFE0", "\uD83D\uDEE0\uFE0F", "\uD83C\uDFC6",
-];
-
-export const LINE_COLORS = [
-  "#FF5A5F", "#4A90E2", "#43B89C", "#9B72CF",
-  "#FF9F1C", "#2EC4B6", "#FF6584", "#6D28D9",
-];
-
-export function lineEmoji(name: string): string {
-  return LINE_EMOJIS[hash(name) % LINE_EMOJIS.length];
-}
-
-export function lineColor(name: string): string {
-  return LINE_COLORS[hash(name) % LINE_COLORS.length];
-}
-
 export function parseAddresses(json: string): string {
   try {
     const arr = JSON.parse(json) as string[];
@@ -258,4 +228,13 @@ export function hasAddresses(json: string): boolean {
     const arr = JSON.parse(json) as string[];
     return Array.isArray(arr) && arr.length > 0;
   } catch { return false; }
+}
+
+export function dedup(messages: Message[]): Message[] {
+  const seen = new Set<string>();
+  return messages.filter((m) => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
 }

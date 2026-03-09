@@ -7,6 +7,4 @@ pub mod discovery;
 pub mod entities;
 pub mod messages;
 pub mod sync;
-pub mod skills;
 pub mod settings;
-pub mod ollama;

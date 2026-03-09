@@ -27,7 +27,7 @@ function CirclesList() {
   );
 
   return (
-    <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25">
+    <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25 select-none">
       {filtered.length === 0 && (
         <div className="text-center py-15 px-5 text-text-muted text-[13px] font-semibold">No conversations yet</div>
       )}

@@ -5,6 +5,7 @@ use crate::services::logger;
 use super::DbPool;
 use super::entities;
 use crate::error::EddieError;
+use crate::services::sync::helpers::email_normalization::normalize_email;
 
 pub fn is_sent(gmail_labels: &str, imap_folder: &str, from_address: &str, self_emails: &[String]) -> bool {
     // Gmail: check labels
@@ -16,8 +17,9 @@ pub fn is_sent(gmail_labels: &str, imap_folder: &str, from_address: &str, self_e
     if folder_lower.contains("sent") {
         return true;
     }
-    // Fallback: check if from_address matches a self email (both already normalized)
-    self_emails.iter().any(|e| e.eq_ignore_ascii_case(from_address))
+    // Fallback: check if from_address matches a self email (normalize to handle Gmail dots)
+    let normalized_from = normalize_email(from_address);
+    self_emails.iter().any(|e| normalize_email(e) == normalized_from)
 }
 
 /// Represents a message ready to be stored in the database.
@@ -48,6 +50,7 @@ pub struct NewMessage {
     pub processed_at: Option<i64>,
     pub participant_key: String,
     pub conversation_id: String,
+    pub classification_headers: String, // JSON map of RFC headers for classification
 }
 
 pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, EddieError> {
@@ -65,14 +68,14 @@ pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, 
                 bcc_addresses, subject, body_text, body_html, size_bytes,
                 has_attachments, in_reply_to, references_ids, imap_flags,
                 gmail_labels, fetched_at, classification, is_important, distilled_text,
-                processed_at, participant_key, conversation_id
+                processed_at, participant_key, conversation_id, classification_headers
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5,
                 ?6, ?7, ?8, ?9, ?10,
                 ?11, ?12, ?13, ?14, ?15,
                 ?16, ?17, ?18, ?19, ?20,
                 ?21, ?22, ?23, ?24,
-                ?25, ?26, ?27
+                ?25, ?26, ?27, ?28
             )",
             params![
                 Uuid::new_v4().to_string(),
@@ -102,6 +105,7 @@ pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, 
                 msg.processed_at,
                 msg.participant_key,
                 msg.conversation_id,
+                msg.classification_headers,
             ],
         );
 
@@ -122,13 +126,22 @@ pub struct UnprocessedMessage {
     pub in_reply_to: Option<String>,
     pub references_ids: String,
     pub body_text: Option<String>,
+    pub body_html: Option<String>,
+    pub to_addresses: String,
+    pub cc_addresses: String,
+    pub bcc_addresses: String,
+    pub imap_folder: String,
+    pub gmail_labels: String,
+    pub has_attachments: bool,
 }
 
 pub fn get_unprocessed_messages(pool: &DbPool, account_id: &str) -> Result<Vec<UnprocessedMessage>, EddieError> {
     let conn = pool.get()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, from_address, subject, in_reply_to, references_ids, body_text
+            "SELECT id, from_address, subject, in_reply_to, references_ids,
+                    body_text, body_html, to_addresses, cc_addresses, bcc_addresses,
+                    imap_folder, gmail_labels, has_attachments
              FROM messages WHERE account_id = ?1 AND processed_at IS NULL"
         )?;
 
@@ -139,8 +152,15 @@ pub fn get_unprocessed_messages(pool: &DbPool, account_id: &str) -> Result<Vec<U
                 from_address: row.get(1)?,
                 subject: row.get(2)?,
                 in_reply_to: row.get(3)?,
-                references_ids: row.get(4)?,
+                references_ids: row.get::<_, String>(4).unwrap_or_else(|_| "[]".to_string()),
                 body_text: row.get(5)?,
+                body_html: row.get(6)?,
+                to_addresses: row.get::<_, String>(7).unwrap_or_else(|_| "[]".to_string()),
+                cc_addresses: row.get::<_, String>(8).unwrap_or_else(|_| "[]".to_string()),
+                bcc_addresses: row.get::<_, String>(9).unwrap_or_else(|_| "[]".to_string()),
+                imap_folder: row.get::<_, String>(10).unwrap_or_default(),
+                gmail_labels: row.get::<_, String>(11).unwrap_or_else(|_| "[]".to_string()),
+                has_attachments: row.get::<_, i32>(12).unwrap_or(0) != 0,
             })
         })?;
 
@@ -155,13 +175,18 @@ pub fn update_classification(
     pool: &DbPool,
     message_id: &str,
     classification: &str,
+    source: &str,
+    confidence: f32,
+    reason: &str,
     is_important: bool,
 ) -> Result<(), EddieError> {
     let conn = pool.get()?;
     let now = chrono::Utc::now().timestamp_millis();
     conn.execute(
-        "UPDATE messages SET classification = ?1, is_important = ?2, processed_at = ?3 WHERE id = ?4",
-        params![classification, is_important as i32, now, message_id],
+        "UPDATE messages SET classification = ?1, classification_source = ?2, \
+         classification_confidence = ?3, classification_reason = ?4, \
+         is_important = ?5, processed_at = ?6 WHERE id = ?7",
+        params![classification, source, confidence as f64, reason, is_important as i32, now, message_id],
     )?;
     Ok(())
 }
@@ -339,51 +364,6 @@ pub fn fetch_conversation_messages(
     let mut stmt = conn.prepare(&query)?;
     let rows = stmt.query(params![account_id, conversation_id])?;
     collect_messages(rows, &self_emails)
-}
-
-pub fn fetch_cluster_messages(
-    pool: &DbPool,
-    account_id: &str,
-    cluster_id: &str,
-) -> Result<Vec<Message>, EddieError> {
-    let self_emails = entities::get_self_emails(pool, account_id)?;
-    // Check if cluster_id is a join group
-    let join_senders = super::line_groups::get_domains_for_group(pool, account_id, cluster_id)?;
-
-    if join_senders.is_empty() {
-        // Single sender — use cluster_id as sender email
-        fetch_messages_by_senders(pool, account_id, &[cluster_id.to_string()], &self_emails)
-    } else {
-        fetch_messages_by_senders(pool, account_id, &join_senders, &self_emails)
-    }
-}
-
-fn fetch_messages_by_senders(
-    pool: &DbPool,
-    account_id: &str,
-    senders: &[String],
-    self_emails: &[String],
-) -> Result<Vec<Message>, EddieError> {
-    let conn = pool.get()?;
-
-    let placeholders: Vec<String> = senders.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
-    let in_clause = placeholders.join(", ");
-
-    let query = format!(
-        "SELECT {} FROM messages WHERE account_id = ?1 AND from_address IN ({}) ORDER BY date DESC",
-        MESSAGE_COLUMNS, in_clause
-    );
-
-    let mut stmt = conn.prepare(&query)?;
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-    param_values.push(Box::new(account_id.to_string()));
-    for s in senders {
-        param_values.push(Box::new(s.clone()));
-    }
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
-
-    let rows = stmt.query(param_refs.as_slice())?;
-    collect_messages(rows, self_emails)
 }
 
 pub fn fetch_skill_match_messages(

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use async_imap::types::Fetch;
 use imap_proto::BodyStructure;
 
@@ -17,6 +19,8 @@ pub struct Envelope {
     pub gmail_labels: Vec<String>,
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
+    /// RFC headers relevant to classification (lowercase key → value).
+    pub classification_headers: HashMap<String, String>,
 }
 
 pub fn parse_envelope(fetch: &Fetch) -> Option<Envelope> {
@@ -106,6 +110,7 @@ pub fn parse_envelope(fetch: &Fetch) -> Option<Envelope> {
         gmail_labels,
         in_reply_to,
         references: vec![],
+        classification_headers: HashMap::new(),
     })
 }
 
@@ -156,6 +161,56 @@ fn has_attachments(body: &BodyStructure) -> bool {
             bodies.iter().any(|b| has_attachments(b))
         }
     }
+}
+
+/// Parse raw RFC 2822 header bytes into a map of lowercase header names to values.
+/// Handles line continuation (folding) per RFC 2822 §2.2.3.
+/// Only keeps headers in `CLASSIFICATION_HEADERS`; References is handled separately.
+const CLASSIFICATION_HEADERS: &[&str] = &[
+    "list-id",
+    "auto-submitted",
+    "list-unsubscribe",
+    "precedence",
+    "feedback-id",
+    "x-mailer",
+    "return-path",
+];
+
+pub fn parse_classification_headers(raw: &[u8]) -> HashMap<String, String> {
+    let text = String::from_utf8_lossy(raw);
+    let mut result = HashMap::new();
+
+    // Unfold continuation lines then split into individual header lines
+    let mut current_name: Option<String> = None;
+    let mut current_value = String::new();
+
+    for line in text.lines() {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            // Continuation of previous header
+            current_value.push(' ');
+            current_value.push_str(line.trim());
+        } else if let Some(colon_pos) = line.find(':') {
+            // Flush previous header
+            if let Some(ref name) = current_name {
+                if CLASSIFICATION_HEADERS.contains(&name.as_str()) {
+                    result.insert(name.clone(), current_value.trim().to_string());
+                }
+            }
+            // Start new header
+            let name = line[..colon_pos].trim().to_lowercase();
+            current_value = line[colon_pos + 1..].to_string();
+            current_name = Some(name);
+        }
+    }
+
+    // Flush last header
+    if let Some(ref name) = current_name {
+        if CLASSIFICATION_HEADERS.contains(&name.as_str()) {
+            result.insert(name.clone(), current_value.trim().to_string());
+        }
+    }
+
+    result
 }
 
 pub fn parse_references_value(header_text: &str) -> Vec<String> {

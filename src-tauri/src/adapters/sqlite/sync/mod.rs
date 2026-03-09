@@ -6,9 +6,6 @@ pub mod entities;
 pub mod conversations;
 pub mod onboarding_tasks;
 pub mod folder_sync;
-pub mod skills;
-pub mod skill_classify;
-pub mod line_groups;
 pub mod settings;
 pub mod action_queue;
 

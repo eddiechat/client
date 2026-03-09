@@ -12,7 +12,7 @@ import {
   previewPrefix,
 } from "../../../shared/lib";
 import { Avatar, PartitionedAvatar } from "../../../shared/components";
-import { moveToLines, getSetting } from "../../../tauri";
+import { blockEntities, getSetting } from "../../../tauri";
 
 export const Route = createFileRoute("/_app/_tabs/points")({
   component: PointsList,
@@ -30,6 +30,7 @@ function PointsList() {
   const { conversations, refresh } = useData();
 
   const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const touchStartX = useRef(0);
   const touchDeltaX = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,6 +47,9 @@ function PointsList() {
   }, []);
 
   const conns = conversations.filter((c) => c.classification === "connections");
+  const reqs = conversations.filter(
+    (c) => c.classification === "others" && participantEmails(c).length > 0 && displayName(c).trim().length > 0
+  );
   const q = search.toLowerCase();
   // When searching, ignore chatFilter and search all connections
   const base = q
@@ -73,16 +77,37 @@ function PointsList() {
     }
   }
 
-  async function handleMove(emails: string[]) {
+  async function handleBlock(id: string, emails: string[]) {
     if (!accountId) return;
-    await moveToLines(accountId, emails);
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      return;
+    }
+    await blockEntities(accountId, emails);
+    setConfirmDeleteId(null);
     setSwipedId(null);
     await refresh(accountId);
   }
 
   return (
-    <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25">
-      {visible.length === 0 && (
+    <div className="flex flex-col gap-[5.5px] px-2.75 py-2.25 select-none">
+      {reqs.length > 0 && (
+        <div
+          className="card-row flex items-center px-3.25 py-1.5 rounded-[12px] cursor-pointer gap-1.5"
+          style={{ opacity: 0.5 }}
+          onClick={() => navigate({ to: "/requests" })}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+            <circle cx="12" cy="8" r="4.5" fill="#A78BFA" />
+            <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8Z" fill="#A78BFA" />
+          </svg>
+          <span className="text-[13px] font-semibold text-text-muted" style={{ letterSpacing: "-0.1px" }}>
+            {reqs.length} request{reqs.length !== 1 ? "s" : ""} waiting
+          </span>
+          <span className="text-[13px] text-text-dim ml-auto">›</span>
+        </div>
+      )}
+      {visible.length === 0 && reqs.length === 0 && (
         <div className="text-center py-15 px-5 text-text-muted text-[16px] font-semibold">No conversations yet</div>
       )}
       {visible.map((c) => {
@@ -95,23 +120,26 @@ function PointsList() {
             key={c.id}
             className="relative overflow-hidden rounded-[16px]"
           >
-            {/* Move button behind the row */}
+            {/* Block button behind the row */}
             <div className="absolute inset-y-0 right-0 flex items-center">
               <button
-                className="h-full px-5 bg-accent-red text-white text-[16px] font-bold rounded-r-[16px]"
+                className={`h-full px-4 text-white text-[14px] font-bold rounded-r-2xl ${confirmDeleteId === c.id ? "bg-red-700" : "bg-accent-red"}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleMove(participantEmails(c));
+                  const emails = participantCount(c) > 1 && c.initial_sender_email
+                    ? [c.initial_sender_email]
+                    : participantEmails(c);
+                  handleBlock(c.id, emails);
                 }}
               >
-                Move
+                {confirmDeleteId === c.id ? "Sure?" : "Block"}
               </button>
             </div>
 
             {/* Sliding foreground row */}
             <div
               className="relative card-row flex items-center px-3.25 py-3.25 cursor-pointer gap-3.25 transition-transform duration-200"
-              style={{ transform: isOpen ? "translateX(-72px)" : "translateX(0)" }}
+              style={{ transform: isOpen ? "translateX(-70px)" : "translateX(0)" }}
               onTouchStart={(e) => {
                 touchStartX.current = e.touches[0].clientX;
                 touchDeltaX.current = 0;

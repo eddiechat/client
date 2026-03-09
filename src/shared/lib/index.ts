@@ -19,12 +19,8 @@ export {
   participantNames,
   participantEntries,
   previewPrefix,
-  dedup,
-  LINE_EMOJIS,
-  LINE_COLORS,
-  lineEmoji,
-  lineColor,
   parseAddresses,
   hasAddresses,
+  dedup,
 } from "./helpers";
 export { useGravatar } from "./gravatar";

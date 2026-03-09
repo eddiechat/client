@@ -4,14 +4,14 @@ mod services;
 mod commands;
 pub mod error;
 
-use adapters::sqlite::{sync};
-use services::ollama::OllamaState;
-use tauri::Manager;
-use tokio::sync::mpsc;
-use std::collections::HashMap;
+use adapters::sqlite::sync;
+use services::sync::helpers::message_classification::ClassifierState;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tauri::Manager;
+use tokio::sync::{mpsc, RwLock};
 use tracing_subscriber::{prelude::*, Layer};
+
+pub type SharedClassifier = Arc<RwLock<Option<Arc<ClassifierState>>>>;
 
 const SYNC_WORKER_TICK_FREQ: u64 = 15; // seconds
 
@@ -55,15 +55,19 @@ pub fn run() {
             services::logger::init(&pool);
             services::logger::info("App initialized");
 
+            // Classifier is loaded lazily — the worker downloads the model on first use.
+            let classifier: SharedClassifier = Arc::new(RwLock::new(None));
+
             let engine_pool = pool.clone();
             let engine_app = app.handle().clone();
+            let engine_classifier = classifier.clone();
 
             let (wake_tx, mut wake_rx) = mpsc::channel::<()>(1);
             app.manage(wake_tx);
 
             tauri::async_runtime::spawn(async move {
                 loop {
-                    match services::sync::worker::tick(&engine_app, &engine_pool).await {
+                    match services::sync::worker::tick(&engine_app, &engine_pool, &engine_classifier).await {
                         Ok(did_work) => {
                             if did_work {
                                 continue;
@@ -81,16 +85,9 @@ pub fn run() {
                 }
             });
 
-            // Ollama model discovery (non-blocking)
-            let ollama_state: OllamaState = Arc::new(RwLock::new(HashMap::new()));
-            app.manage(ollama_state.clone());
-            let ollama_pool = pool.clone();
-            tauri::async_runtime::spawn(async move {
-                services::ollama::populate(&ollama_pool, &ollama_state).await;
-            });
-
-            // Make the pool available to all Tauri commands via State
+            // Make the pool and classifier available to all Tauri commands via State
             app.manage(pool);
+            app.manage(classifier);
 
             Ok(())
         })
@@ -99,28 +96,16 @@ pub fn run() {
             commands::account::get_existing_account,
             commands::conversations::fetch_conversations,
             commands::conversations::fetch_conversation_messages,
-            commands::conversations::fetch_clusters,
-            commands::conversations::fetch_cluster_messages,
-            commands::conversations::fetch_cluster_threads,
-            commands::conversations::fetch_thread_messages,
-            commands::conversations::group_domains,
-            commands::conversations::ungroup_domains,
             commands::classify::reclassify,
             commands::sync::sync_now,
             commands::sync::get_onboarding_status,
-            commands::skills::list_skills,
-            commands::skills::get_skill,
-            commands::skills::create_skill,
-            commands::skills::update_skill,
-            commands::skills::toggle_skill,
-            commands::skills::delete_skill,
             commands::settings::get_setting,
             commands::settings::set_setting,
-            commands::settings::get_ollama_models,
-            commands::conversations::move_to_lines,
+            commands::conversations::move_to_requests,
+            commands::conversations::move_to_points,
+            commands::conversations::block_entities,
             commands::conversations::fetch_recent_messages,
             commands::conversations::fetch_message_html,
-            commands::ollama::ollama_complete,
             commands::discovery::discover_email_config,
             commands::app::get_app_version,
             commands::actions::queue_action,

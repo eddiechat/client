@@ -1,6 +1,6 @@
 [package]
 name = "eddie-chat"
-version = "0.3.2"
+version = "0.4.3"
 description = "eddie.chat - Email Client"
 authors = ["you"]
 edition = "2021"
@@ -46,7 +46,13 @@ lettre = { version = "0.11", default-features = false, features = ["tokio1-rustl
 
 html2text = "0.14"
 
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+email_classifier = { path = "../crates/email_classifier" }
+ort        = { version = "2.0.0-rc.12", features = ["ndarray"] }
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+ndarray    = "0.17"
+anyhow     = "1"
+
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 
 hickory-resolver = { version = "0.24", features = ["tokio-runtime"] }
 quick-xml = { version = "0.36", features = ["serialize"] }

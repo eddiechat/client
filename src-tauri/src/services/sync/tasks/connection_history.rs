@@ -2,10 +2,12 @@ use crate::adapters::sqlite;
 use crate::adapters::sqlite::{onboarding_tasks, DbPool};
 use crate::adapters::imap::{envelopes, folders, historical};
 use crate::services::sync::{helpers, worker};
+use crate::services::sync::helpers::message_classification::ClassifierState;
 use crate::error::EddieError;
 
 use crate::services::logger;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Onboarding phase 4: Fetch full history for conversations of type "connections".
 ///
@@ -18,6 +20,7 @@ pub async fn run_connection_history(
     pool: &DbPool,
     account_id: &str,
     task: &onboarding_tasks::Task,
+    classifier: &Arc<ClassifierState>,
 ) -> Result<(), EddieError> {
     // TODO: Remove line to re-enable task (+ 1 in onboarding_tasks.rs)
     onboarding_tasks::mark_task_done(pool, account_id, &task.name)?;
@@ -220,7 +223,7 @@ pub async fn run_connection_history(
     }
 
     if total_fetched > 0 {
-        worker::process_changes(app, pool, account_id)?;
+        worker::process_changes(app, pool, account_id, classifier)?;
     }
 
     // Update cursor: add this email to the done list

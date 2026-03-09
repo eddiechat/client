@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap, BTreeSet};
 use super::DbPool;
 use super::{entities, messages};
 use crate::error::EddieError;
+use crate::services::sync::helpers::email_normalization::normalize_email;
 
 pub fn compute_conversation_id(participant_key: &str) -> String {
     let hash = Sha256::digest(participant_key.as_bytes());
@@ -174,7 +175,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                         CASE WHEN e.id IS NOT NULL THEN 1 ELSE 0 END AS is_trusted
                  FROM messages m
                  LEFT JOIN entities e ON e.email = m.from_address AND e.account_id = m.account_id
-                                       AND e.trust_level NOT IN ('user', 'alias')
+                                       AND e.trust_level NOT IN ('user', 'alias', 'blocked')
                  WHERE m.account_id = ?1
                  ORDER BY m.conversation_id, m.date DESC",
             )?;
@@ -198,7 +199,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
         let mut map: HashMap<String, ConversationBuilder> = HashMap::new();
         for row in rows {
             let (conv_id, participant_key, date, distilled_text,
-                 _from_address, _from_name, classification, is_important, imap_flags, is_trusted) =
+                 from_address, _from_name, classification, is_important, imap_flags, is_trusted) =
                 row?;
 
             let preview = distilled_text
@@ -218,8 +219,15 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                     unread_count: 0,
                     total_count: 0,
                     names: BTreeMap::new(),
+                    initial_sender_email: None,
                 }
             });
+
+            // Track initial sender: query is ordered date DESC, so last
+            // non-self from_address we see is from the earliest message.
+            if !is_self(&from_address, &self_emails) {
+                builder.initial_sender_email = Some(from_address.to_lowercase());
+            }
 
             if classification.as_deref() == Some("chat") {
                 builder.has_chat = true;
@@ -257,6 +265,9 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
     // PHASE 3: Upsert conversations
     // ========================================
 
+    let blocked_emails = entities::get_blocked_emails(pool, account_id)?;
+    let trusted_emails = entities::get_trusted_emails(pool, account_id)?;
+
     let tx = conn.unchecked_transaction()?;
 
     // Clear old conversations and rebuild fresh
@@ -269,9 +280,32 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
     let mut count = 0;
 
     for builder in conv_map.values() {
+        // Skip blocked conversations:
+        // - 1:1: skip if the single participant is blocked
+        // - Group: skip if the initial sender is blocked
+        if !blocked_emails.is_empty() {
+            let participants: Vec<&str> = builder.participant_key.split('\n')
+                .filter(|s| !s.is_empty())
+                .collect();
+            let is_group = participants.len() > 1;
+            if is_group {
+                if let Some(ref sender) = builder.initial_sender_email {
+                    if blocked_emails.contains(sender.as_str()) {
+                        continue;
+                    }
+                }
+            } else if !participants.is_empty() && participants.iter().all(|p| blocked_emails.contains(*p)) {
+                continue;
+            }
+        }
+
+        // A conversation is trusted if any participant (sender, To, or Cc) is a connection
+        let has_trusted = builder.has_trusted || builder.participant_key.split('\n')
+            .any(|p| !p.is_empty() && trusted_emails.contains(p));
+
         let names_json = serde_json::to_string(&builder.names).ok();
 
-        let classification = if builder.has_chat && builder.has_trusted {
+        let classification = if builder.has_chat && has_trusted {
             Some("connections")
         } else if builder.has_chat {
             Some("others")
@@ -283,8 +317,9 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
             "INSERT INTO conversations (
                 id, account_id, participant_key, participant_names,
                 classification, last_message_date, last_message_preview,
-                unread_count, total_count, is_muted, is_pinned, is_important, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, 0, ?10, ?11)",
+                unread_count, total_count, is_muted, is_pinned, is_important, updated_at,
+                initial_sender_email
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, 0, ?10, ?11, ?12)",
             params![
                 builder.id,
                 account_id,
@@ -297,6 +332,7 @@ pub fn rebuild_conversations(pool: &DbPool, account_id: &str) -> Result<usize, E
                 builder.total_count,
                 builder.has_important,
                 now,
+                builder.initial_sender_email,
             ],
         )?;
 
@@ -318,6 +354,7 @@ struct ConversationBuilder {
     unread_count: i32,
     total_count: i32,
     names: BTreeMap<String, String>,
+    initial_sender_email: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -337,6 +374,7 @@ pub struct Conversation {
     pub is_pinned: bool,
     pub is_important: bool,
     pub updated_at: i64,
+    pub initial_sender_email: Option<String>,
 }
 
 pub fn fetch_conversations(
@@ -352,7 +390,8 @@ pub fn fetch_conversations(
                     lm.distilled_text,
                     c.unread_count, c.is_muted, c.is_pinned, c.is_important, c.updated_at,
                     c.total_count,
-                    lm.from_name, lm.from_address, lm.gmail_labels, lm.imap_folder
+                    lm.from_name, lm.from_address, lm.gmail_labels, lm.imap_folder,
+                    c.initial_sender_email
              FROM conversations c
              LEFT JOIN (
                  SELECT conversation_id, distilled_text, from_name, from_address,
@@ -392,6 +431,7 @@ pub fn fetch_conversations(
                 is_important: row.get::<_, i32>(10)? != 0,
                 updated_at: row.get(11)?,
                 total_count: row.get(12)?,
+                initial_sender_email: row.get(17)?,
             })
         })?;
 
@@ -400,302 +440,6 @@ pub fn fetch_conversations(
         conversations.push(row?);
     }
     Ok(conversations)
-}
-
-#[derive(serde::Serialize)]
-pub struct Cluster {
-    pub id: String,
-    pub name: String,
-    pub from_name: Option<String>,
-    pub message_count: i32,
-    pub unread_count: i32,
-    pub keywords: String,
-    pub last_activity: i64,
-    pub account_id: String,
-    pub is_join: bool,
-    pub domains: String, // JSON array of sender emails
-    pub is_skill: bool,
-    pub skill_id: Option<String>,
-    pub icon: Option<String>,
-    pub icon_bg: Option<String>,
-}
-pub fn fetch_clusters(
-    pool: &DbPool,
-    account_id: &str,
-) -> Result<Vec<Cluster>, EddieError> {
-    let conn = pool.get()?;
-    let sender_names = name_lookup(pool, account_id)?;
-
-    // 1. Raw per-sender clusters
-    let mut stmt = conn
-        .prepare(
-            "SELECT
-                    from_address,
-                    COUNT(*) AS message_count,
-                    SUM(CASE WHEN NOT EXISTS (
-                        SELECT 1 FROM json_each(imap_flags) WHERE value = 'Seen'
-                    ) THEN 1 ELSE 0 END) AS unread_count,
-                    MAX(date) AS last_activity,
-                    account_id
-                FROM messages
-                WHERE account_id = ?1
-                GROUP BY from_address
-                ORDER BY last_activity DESC;",
-        )?;
-
-    struct RawCluster {
-        sender: String,
-        message_count: i32,
-        unread_count: i32,
-        last_activity: i64,
-        account_id: String,
-    }
-
-    let raw: Vec<RawCluster> = stmt
-        .query_map(params![account_id], |row| {
-            Ok(RawCluster {
-                sender: row.get(0)?,
-                message_count: row.get(1)?,
-                unread_count: row.get(2)?,
-                last_activity: row.get(3)?,
-                account_id: row.get(4)?,
-            })
-        })?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    // 2. Get sender → group_id mapping
-    let sender_to_group = super::line_groups::get_domain_to_group(pool, account_id)?;
-
-    // 3. Merge joined senders, keep singles as-is
-    let mut join_groups: HashMap<String, Vec<&RawCluster>> = HashMap::new();
-    let mut singles: Vec<&RawCluster> = Vec::new();
-
-    for rc in &raw {
-        if let Some(group_id) = sender_to_group.get(&rc.sender) {
-            join_groups.entry(group_id.clone()).or_default().push(rc);
-        } else {
-            singles.push(rc);
-        }
-    }
-
-    let mut clusters: Vec<Cluster> = Vec::new();
-
-    // Joined groups — group_id is the user-chosen name
-    for (group_id, members) in &join_groups {
-        let mut senders: Vec<&str> = members.iter().map(|m| m.sender.as_str()).collect();
-        senders.sort();
-        let senders_json = serde_json::to_string(&senders).unwrap_or_else(|_| "[]".to_string());
-
-        clusters.push(Cluster {
-            id: group_id.clone(),
-            name: group_id.clone(),
-            from_name: None,
-            message_count: members.iter().map(|m| m.message_count).sum(),
-            unread_count: members.iter().map(|m| m.unread_count).sum(),
-            keywords: "[]".to_string(),
-            last_activity: members.iter().map(|m| m.last_activity).max().unwrap_or(0),
-            account_id: members[0].account_id.clone(),
-            is_join: true,
-            domains: senders_json,
-            is_skill: false,
-            skill_id: None,
-            icon: None,
-            icon_bg: None,
-        });
-    }
-
-    // Singles
-    for rc in &singles {
-        let display_name = sender_names.get(&rc.sender.to_lowercase()).cloned();
-        let name = display_name.clone().unwrap_or_else(|| rc.sender.clone());
-        let senders_json = serde_json::to_string(&[&rc.sender]).unwrap_or_else(|_| "[]".to_string());
-        clusters.push(Cluster {
-            id: rc.sender.clone(),
-            name,
-            from_name: display_name,
-            message_count: rc.message_count,
-            unread_count: rc.unread_count,
-            keywords: "[]".to_string(),
-            last_activity: rc.last_activity,
-            account_id: rc.account_id.clone(),
-            is_join: false,
-            domains: senders_json,
-            is_skill: false,
-            skill_id: None,
-            icon: None,
-            icon_bg: None,
-        });
-    }
-
-    // 4. Skill clusters — virtual clusters from skill_matches
-    {
-        let mut skill_stmt = conn.prepare(
-            "SELECT s.id, s.name, s.icon, s.icon_bg,
-                    COUNT(sm.message_id) AS message_count,
-                    SUM(CASE WHEN NOT EXISTS (
-                        SELECT 1 FROM json_each(m.imap_flags) WHERE value = 'Seen'
-                    ) THEN 1 ELSE 0 END) AS unread_count,
-                    MAX(m.date) AS last_activity
-             FROM skills s
-             JOIN skill_matches sm ON sm.skill_id = s.id
-             JOIN messages m ON m.id = sm.message_id
-             WHERE s.account_id = ?1 AND s.enabled = 1
-             GROUP BY s.id",
-        )?;
-
-        let skill_rows = skill_stmt.query_map(params![account_id], |row| {
-            Ok(Cluster {
-                id: format!("skill:{}", row.get::<_, String>(0)?),
-                name: row.get(1)?,
-                from_name: None,
-                message_count: row.get(4)?,
-                unread_count: row.get(5)?,
-                keywords: "[]".to_string(),
-                last_activity: row.get(6)?,
-                account_id: account_id.to_string(),
-                is_join: false,
-                domains: "[]".to_string(),
-                is_skill: true,
-                skill_id: Some(row.get(0)?),
-                icon: Some(row.get(2)?),
-                icon_bg: Some(row.get(3)?),
-            })
-        })?;
-
-        for row in skill_rows {
-            if let Ok(c) = row {
-                clusters.push(c);
-            }
-        }
-    }
-
-    // Sort: skill clusters first (by last_activity desc), then regular (by last_activity desc)
-    clusters.sort_by(|a, b| {
-        b.is_skill.cmp(&a.is_skill)
-            .then(b.last_activity.cmp(&a.last_activity))
-    });
-
-    Ok(clusters)
-}
-
-#[derive(serde::Serialize)]
-pub struct Thread {
-    pub thread_id: String,
-    pub subject: Option<String>,
-    pub message_count: i32,
-    pub unread_count: i32,
-    pub last_activity: i64,
-    pub from_name: Option<String>,
-    pub from_address: String,
-    pub preview: Option<String>,
-}
-
-pub fn fetch_cluster_threads(
-    pool: &DbPool,
-    account_id: &str,
-    cluster_id: &str,
-) -> Result<Vec<Thread>, EddieError> {
-    // Resolve senders for this cluster
-    let join_senders = super::line_groups::get_domains_for_group(pool, account_id, cluster_id)?;
-    let senders: Vec<String> = if join_senders.is_empty() {
-        vec![cluster_id.to_string()]
-    } else {
-        join_senders
-    };
-
-    let conn = pool.get()?;
-
-    let placeholders: Vec<String> = senders.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
-    let in_clause = placeholders.join(", ");
-
-    // Query all messages for the cluster senders, ordered for processing
-    let query = format!(
-        "SELECT thread_id, subject, from_name, from_address, date, imap_flags, distilled_text
-         FROM messages
-         WHERE account_id = ?1
-           AND thread_id IS NOT NULL
-           AND from_address IN ({})
-         ORDER BY thread_id, date ASC",
-        in_clause
-    );
-
-    let mut stmt = conn.prepare(&query)?;
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-    param_values.push(Box::new(account_id.to_string()));
-    for s in &senders {
-        param_values.push(Box::new(s.clone()));
-    }
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
-
-    struct MsgRow {
-        thread_id: String,
-        subject: Option<String>,
-        from_name: Option<String>,
-        from_address: String,
-        date: i64,
-        imap_flags: String,
-        distilled_text: Option<String>,
-    }
-
-    let rows = stmt.query_map(param_refs.as_slice(), |row| {
-        Ok(MsgRow {
-            thread_id: row.get(0)?,
-            subject: row.get(1)?,
-            from_name: row.get(2)?,
-            from_address: row.get(3)?,
-            date: row.get(4)?,
-            imap_flags: row.get(5)?,
-            distilled_text: row.get(6)?,
-        })
-    })?;
-
-    // Aggregate into threads
-    let mut thread_map: HashMap<String, Thread> = HashMap::new();
-    let mut thread_order: Vec<String> = Vec::new();
-
-    for row in rows {
-        let r = row?;
-        let is_unread = {
-            let flags: Vec<String> = serde_json::from_str(&r.imap_flags).unwrap_or_default();
-            !flags.iter().any(|f| f == "Seen")
-        };
-
-        let thread = thread_map.entry(r.thread_id.clone()).or_insert_with(|| {
-            thread_order.push(r.thread_id.clone());
-            Thread {
-                thread_id: r.thread_id.clone(),
-                subject: r.subject.clone(),      // first message's subject
-                message_count: 0,
-                unread_count: 0,
-                last_activity: r.date,
-                from_name: r.from_name.clone(),   // first message's sender
-                from_address: r.from_address.clone(),
-                preview: None,
-            }
-        });
-
-        thread.message_count += 1;
-        if is_unread {
-            thread.unread_count += 1;
-        }
-        // Update last_activity and preview from latest message
-        if r.date >= thread.last_activity {
-            thread.last_activity = r.date;
-            if r.distilled_text.is_some() {
-                thread.preview = r.distilled_text;
-            }
-        }
-    }
-
-    // Collect and sort by last_activity descending
-    let mut threads: Vec<Thread> = thread_order
-        .into_iter()
-        .filter_map(|id| thread_map.remove(&id))
-        .collect();
-    threads.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
-
-    Ok(threads)
 }
 
 // ----- Union-Find -----
@@ -735,7 +479,8 @@ impl UnionFind {
 // ----- Helpers -----
 
 fn is_self(addr: &str, self_emails: &[String]) -> bool {
-    self_emails.iter().any(|s| s.eq_ignore_ascii_case(addr))
+    let normalized = normalize_email(addr);
+    self_emails.iter().any(|s| normalize_email(s) == normalized)
 }
 
 fn collect_participants(
@@ -745,18 +490,18 @@ fn collect_participants(
     self_emails: &[String],
 ) -> BTreeSet<String> {
     let mut participants = BTreeSet::new();
-    let addr = from.to_lowercase();
+    let addr = normalize_email(from);
     if !is_self(&addr, self_emails) {
         participants.insert(addr);
     }
     for a in to {
-        let addr = a.to_lowercase();
+        let addr = normalize_email(a);
         if !is_self(&addr, self_emails) {
             participants.insert(addr);
         }
     }
     for a in cc {
-        let addr = a.to_lowercase();
+        let addr = normalize_email(a);
         if !is_self(&addr, self_emails) {
             participants.insert(addr);
         }

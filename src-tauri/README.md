@@ -26,7 +26,7 @@ The backend follows a **separation of concerns** pattern with four top-level mod
 │  (thin wrappers)    │  (business logic)   │  (provider detection)        │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  adapters/                                                               │
-│  (imap protocol, sqlite persistence, ollama AI)                          │
+│  (imap protocol, sqlite persistence)                                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                           SQLite Database                                │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -51,13 +51,11 @@ src/
 ├── commands/              # Tauri command handlers (thin wrappers)
 │   ├── mod.rs             # Module exports
 │   ├── account.rs         # Account connect/lookup
-│   ├── conversations.rs   # Conversation & cluster queries
+│   ├── conversations.rs   # Conversation queries
 │   ├── sync.rs            # Sync control & onboarding status
 │   ├── classify.rs        # Message reclassification
 │   ├── discovery.rs       # Email autodiscovery
-│   ├── skills.rs          # Skill CRUD
-│   ├── settings.rs        # App settings & Ollama model listing
-│   ├── ollama.rs          # Ollama LLM completion
+│   ├── settings.rs        # App settings
 │   └── app.rs             # App metadata (version)
 │
 ├── services/              # Business logic (Tauri-agnostic)
@@ -77,8 +75,6 @@ src/
 │   │       ├── connection_history.rs
 │   │       ├── incremental_sync.rs
 │   │       ├── flag_resync.rs
-│   │       └── skill_classify.rs
-│   ├── ollama.rs          # Ollama model discovery & state
 │   └── logger.rs          # Structured logging to DB
 │
 ├── adapters/              # External service bridges
@@ -98,12 +94,7 @@ src/
 │   │       ├── accounts.rs        # Account queries
 │   │       ├── folder_sync.rs     # Per-folder IMAP sync cursors
 │   │       ├── onboarding_tasks.rs# Onboarding task queue
-│   │       ├── skills.rs          # Skill persistence
-│   │       ├── skill_classify.rs  # Skill classification results
-│   │       ├── settings.rs        # App settings (key-value)
-│   │       └── line_groups.rs     # Line grouping
-│   └── ollama/            # Ollama AI adapter
-│       └── mod.rs         # HTTP calls to local Ollama
+│   │       └── settings.rs        # App settings (key-value)
 │
 └── autodiscovery/         # Email provider auto-configuration
     ├── mod.rs             # Discovery pipeline
@@ -220,7 +211,7 @@ RUST_LOG=eddie_chat_lib=debug cargo tauri dev
 | `tokio` | Async runtime |
 | `serde` | Serialization |
 | `tracing` | Structured logging |
-| `reqwest` | HTTP client (Ollama, autodiscovery) |
+| `reqwest` | HTTP client (autodiscovery) |
 | `html2text` | HTML to plain text conversion |
 | `sentry` | Error tracking |
 

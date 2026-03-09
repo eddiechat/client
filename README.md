@@ -15,7 +15,6 @@ Built on standard email protocols, eddie brings the simplicity of modern chat to
 
 But it doesn't stop there. We want to augment communication with a client-centric and fully transparent AI infrastructure.
 
-We believe that an open and shared repository of agent skills, and the ability for anyone to easily use, improve, and reshare skills, will help humanity communicate better, spark creativity, learn faster, and automate repetitive processes.
 
 [Read the Manifesto →](https://eddie.chat)
 
@@ -33,7 +32,7 @@ We believe that an open and shared repository of agent skills, and the ability f
 │  • File-based Routing   │  • Sync Engine (worker loop)      │
 │  • Context Providers    │  • Command Handlers               │
 │  • Tauri IPC Client     │  • IMAP/SMTP Adapters             │
-│  • Skills UI            │  • SQLite Cache + Classification  │
+│                         │  • SQLite Cache + Classification  │
 └─────────────────────────┴───────────────────────────────────┘
                                │
                                ▼
@@ -57,7 +56,6 @@ We believe that an open and shared repository of agent skills, and the ability f
 | **Email Protocol** | async-imap + mailparse | IMAP protocol and message parsing |
 | **TLS** | tokio-rustls | Secure connections |
 | **Database** | SQLite (rusqlite + r2d2) | Local email cache and settings |
-| **AI** | Ollama (optional) | Local LLM for skill classification |
 
 ### Data Flow
 
@@ -87,7 +85,6 @@ The frontend uses **file-based routing** with TanStack Router and React Context 
 |-----------|---------|
 | `routes/` | File-based route definitions (TanStack Router conventions) |
 | `shared/` | Reusable components, context providers, and utility functions |
-| `skills/` | Skill UI components (SkillsHub, SkillStudio) |
 | `tauri/` | Centralized Tauri communication layer (commands, events, types) |
 
 ##### Routes (`routes/`)
@@ -96,11 +93,9 @@ Route files follow TanStack Router conventions:
 - `__root.tsx` — Root layout
 - `_app.tsx` — Auth guard (`beforeLoad`)
 - `_app/_tabs.tsx` — Tab layout (header, tabs, account drawer)
-- `_app/_tabs/points.tsx`, `circles.tsx`, `lines.tsx` — Tab routes
+- `_app/_tabs/points.tsx`, `circles.tsx`, `lines.tsx` — Tab routes (Chats, Groups, Requests)
 - `_app/conversation.$id.tsx` — Conversation detail
-- `_app/cluster.$id.tsx` — Cluster detail
 - `_app/settings.tsx` — Settings screen
-- `_app/skills.hub.tsx`, `skills.studio.tsx` — Skills routes
 - `login.tsx`, `onboarding.tsx` — Unauthenticated routes
 
 ##### Tauri Layer (`tauri/`)
@@ -126,9 +121,9 @@ All Tauri communication is centralized for type safety and maintainability:
 
 | Module | Purpose |
 |--------|---------|
-| `adapters/` | External service bridges — IMAP protocol, SQLite persistence, Ollama AI |
+| `adapters/` | External service bridges — IMAP protocol, SQLite persistence |
 | `commands/` | Thin Tauri command wrappers exposed to frontend |
-| `services/` | Business logic — sync engine (worker, helpers, tasks), Ollama, logger |
+| `services/` | Business logic — sync engine (worker, helpers, tasks), logger |
 | `autodiscovery/` | Email provider auto-configuration (autoconfig, DNS, probing) |
 | `error.rs` | `EddieError` enum for all error returns |
 
@@ -149,13 +144,11 @@ eddie.chat/
 │   │   ├── _app.tsx                  # Auth guard (beforeLoad)
 │   │   ├── _app/_tabs.tsx            # Tab layout
 │   │   ├── _app/_tabs/              # Tab routes
-│   │   │   ├── points.tsx            # Points tab (connections)
-│   │   │   ├── circles.tsx           # Circles tab (clusters)
-│   │   │   └── lines.tsx             # Lines tab (automated)
+│   │   │   ├── points.tsx            # Chats tab (trusted senders)
+│   │   │   ├── circles.tsx           # Groups tab (placeholder)
+│   │   │   └── lines.tsx             # Requests tab (unknown senders)
 │   │   ├── _app/conversation.$id.tsx # Conversation detail
-│   │   ├── _app/cluster.$id.tsx      # Cluster detail
-│   │   ├── _app/settings.tsx         # Settings screen
-│   │   └── _app/skills.*.tsx         # Skills routes
+│   │   └── _app/settings.tsx         # Settings screen
 │   │
 │   ├── shared/                       # Shared utilities & components
 │   │   ├── components/               # Generic UI components
@@ -177,12 +170,6 @@ eddie.chat/
 │   │   │   └── index.ts
 │   │   └── index.ts
 │   │
-│   ├── skills/                       # Skill UI components
-│   │   ├── SkillsHub.tsx
-│   │   ├── SkillStudio.tsx
-│   │   ├── types.ts
-│   │   └── index.ts
-│   │
 │   └── tauri/                        # Tauri integration layer
 │       ├── commands.ts               # Type-safe invoke wrappers
 │       ├── events.ts                 # Event listener subscriptions
@@ -196,13 +183,11 @@ eddie.chat/
 │   │   ├── error.rs                  # EddieError enum
 │   │   ├── commands/                 # Tauri command handlers
 │   │   │   ├── account.rs            # Account connect/lookup
-│   │   │   ├── conversations.rs      # Conversation & cluster queries
+│   │   │   ├── conversations.rs      # Conversation queries
 │   │   │   ├── sync.rs               # Sync control & onboarding status
 │   │   │   ├── classify.rs           # Message reclassification
 │   │   │   ├── discovery.rs          # Email autodiscovery
-│   │   │   ├── skills.rs             # Skill CRUD
-│   │   │   ├── settings.rs           # App settings & Ollama models
-│   │   │   ├── ollama.rs             # Ollama LLM completion
+│   │   │   ├── settings.rs           # App settings
 │   │   │   ├── app.rs                # App metadata (version)
 │   │   │   └── mod.rs
 │   │   ├── services/                 # Business logic
@@ -210,7 +195,6 @@ eddie.chat/
 │   │   │   │   ├── worker.rs         # Tick loop (15s interval)
 │   │   │   │   ├── helpers/          # Processing utilities
 │   │   │   │   └── tasks/            # Onboarding & recurring tasks
-│   │   │   ├── ollama.rs             # Ollama model discovery
 │   │   │   ├── logger.rs             # Structured logging
 │   │   │   └── mod.rs
 │   │   ├── adapters/                 # External service bridges
@@ -228,11 +212,8 @@ eddie.chat/
 │   │   │   │       ├── conversations.rs # Conversation materialization
 │   │   │   │       ├── entities.rs   # Trust network
 │   │   │   │       ├── folder_sync.rs # IMAP sync cursors
-│   │   │   │       ├── skills.rs     # Skill persistence
-│   │   │   │       ├── skill_classify.rs # Skill classification
 │   │   │   │       ├── settings.rs   # App settings
 │   │   │   │       └── onboarding_tasks.rs
-│   │   │   └── ollama/               # Ollama AI adapter
 │   │   └── autodiscovery/            # Email provider detection
 │   │       ├── autoconfig.rs         # Mozilla autoconfig
 │   │       ├── dns.rs                # DNS SRV/MX lookup
@@ -384,7 +365,7 @@ Note that the builds aren't signed, for macOS run the following command after in
 
 Accounts are configured through the application's setup wizard, which includes email autodiscovery for automatic IMAP/SMTP server detection. Account credentials are stored locally in an encrypted SQLite database.
 
-App settings (theme, Ollama model preferences, etc.) are stored in a key-value `settings` table in the same local database.
+App settings (theme, display preferences, etc.) are stored in a key-value `settings` table in the same local database.
 
 ---
 
@@ -455,7 +436,6 @@ Copyright 2022-2024 eddie.chat contributors.
 ## Roadmap
 
 - [ ] OAuth2 authentication support
-- [ ] Agent skills marketplace
 - [ ] Collaborative inbox features
 - [ ] End-to-end encryption
 - [ ] Plugin system for custom workflows

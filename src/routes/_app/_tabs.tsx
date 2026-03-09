@@ -13,8 +13,8 @@ export const Route = createFileRoute("/_app/_tabs")({
 
 const TAB_ACCENT: Record<string, string> = {
   points: "var(--color-accent-green)",
-  circles: "var(--color-accent-purple)",
-  lines: "var(--color-accent-amber)",
+  circles: "var(--color-accent-amber)",
+  lines: "var(--color-accent-purple)",
 };
 
 function ChatBubbleIcon() {
@@ -28,7 +28,7 @@ function ChatBubbleIcon() {
   );
 }
 
-function LetterIcon() {
+function LanesIcon() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
       <rect width="24" height="24" rx="5" fill="#F5C43A" />
@@ -43,7 +43,7 @@ function TabsLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { email } = useAuth();
-  const { status, conversations, clusters } = useData();
+  const { status, conversations } = useData();
   const [showAccountDrawer, setShowAccountDrawer] = useState(false);
   const [search, setSearch] = useState("");
   const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
@@ -72,9 +72,7 @@ function TabsLayout() {
       : "points";
 
   const conns = conversations.filter((c) => c.classification === "connections");
-  const tabUnread = activeTab === "lines"
-    ? clusters.reduce((sum, c) => sum + c.unread_count, 0)
-    : chatFilter === "1:1"
+  const tabUnread = chatFilter === "1:1"
       ? conns.filter((c) => participantCount(c) === 1).reduce((sum, c) => sum + c.unread_count, 0)
       : chatFilter === "3+"
         ? conns.filter((c) => participantCount(c) > 1).reduce((sum, c) => sum + c.unread_count, 0)
@@ -150,17 +148,19 @@ function TabsLayout() {
       </div>
 
       {/* FAB — Compose button */}
-      <div
-        className="absolute right-3.5 z-10 w-14 h-14 rounded-[17px] flex items-center justify-center cursor-pointer text-white text-[38px] font-light leading-none"
-        style={{
-          bottom: 'calc(5.5rem + 0.875rem)',
-          background: TAB_ACCENT[activeTab],
-          boxShadow: `0 4px 14px color-mix(in srgb, ${TAB_ACCENT[activeTab]} 40%, transparent)`,
-        }}
-        onClick={() => navigate({ to: '/compose' })}
-      >
-        +
-      </div>
+      {activeTab === "points" && (
+        <div
+          className="absolute right-3.5 z-10 w-14 h-14 rounded-[17px] flex items-center justify-center cursor-pointer text-white text-[38px] font-light leading-none"
+          style={{
+            bottom: 'calc(5.5rem + 0.875rem)',
+            background: TAB_ACCENT[activeTab],
+            boxShadow: `0 4px 14px color-mix(in srgb, ${TAB_ACCENT[activeTab]} 40%, transparent)`,
+          }}
+          onClick={() => navigate({ to: '/compose' })}
+        >
+          +
+        </div>
+      )}
 
       {/* Bottom Tab Bar */}
       <nav className="relative flex flex-col border-t border-divider bg-bg-secondary shrink-0">
@@ -196,15 +196,14 @@ function TabsLayout() {
             Groups
           </button>
           <button
-            className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent cursor-pointer text-[10px] font-extrabold tracking-wide transition-colors"
-            style={{ color: "#F5C43A" }}
-            onClick={() => navigate({ to: "/lines" })}
+            className="flex-1 flex flex-col items-center gap-0.5 py-3.75 border-none bg-transparent text-[10px] font-extrabold tracking-wide opacity-30"
+            style={{ color: "#F5C43A", cursor: "default" }}
+            disabled
           >
             <span className="flex items-center justify-center w-8 h-8">
-              <LetterIcon />
+              <LanesIcon />
             </span>
             Lanes
-            {activeTab === "lines" && <span className="w-1 h-1 rounded-full" style={{ background: "#F5C43A" }} />}
           </button>
         </div>
       </nav>

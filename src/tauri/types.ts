@@ -24,34 +24,7 @@ export type Conversation = {
   is_pinned: boolean;
   is_important: boolean;
   updated_at: number;
-};
-
-export type Cluster = {
-  id: string;
-  name: string;
-  from_name: string | null;
-  message_count: number;
-  unread_count: number;
-  keywords: string;
-  last_activity: number;
-  account_id: string;
-  is_join: boolean;
-  domains: string; // JSON array of sender email strings
-  is_skill: boolean;
-  skill_id: string | null;
-  icon: string | null;
-  icon_bg: string | null;
-};
-
-export type Thread = {
-  thread_id: string;
-  subject: string | null;
-  message_count: number;
-  unread_count: number;
-  last_activity: number;
-  from_name: string | null;
-  from_address: string;
-  preview: string | null;
+  initial_sender_email: string | null;
 };
 
 export type Message = {
@@ -73,6 +46,7 @@ export type Message = {
   references_ids: string;
   distilled_text: string | null;
   is_sent: boolean;
+  in_reply_to: string | null;
 };
 
 export type ConnectAccountParams = {
@@ -85,36 +59,6 @@ export type ConnectAccountParams = {
   smtpPort: number;
   smtpTls?: boolean;
   aliases?: string;
-};
-
-export type Skill = {
-  id: string;
-  account_id: string;
-  name: string;
-  icon: string;
-  icon_bg: string;
-  enabled: boolean;
-  prompt: string;
-  modifiers: string;
-  settings: string;
-  created_at: number;
-  updated_at: number;
-  has_model: boolean;
-};
-
-export type SkillModifiers = {
-  excludeNewsletters: boolean;
-  onlyKnownSenders: boolean;
-  hasAttachments: boolean;
-  recentSixMonths: boolean;
-  excludeAutoReplies: boolean;
-};
-
-export type SkillSettings = Record<string, unknown>;
-
-export type OllamaModels = {
-  models: string[];
-  selected_model: string | null;
 };
 
 export type TaskStatus = {
