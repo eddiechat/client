@@ -14,6 +14,12 @@ const TAB_SUBTITLES: Record<string, string> = {
   lines: "Unpack your inbox",
 };
 
+const TAB_LABELS: Record<string, string> = {
+  points: "Chat",
+  circles: "Groups",
+  lines: "Archive",
+};
+
 function TabsLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,12 +44,7 @@ function TabsLayout() {
     : path.includes("/lines") ? "lines"
       : "points";
 
-  const tabConfig: Record<string, string> = {
-    points: "Points",
-    circles: "Circles",
-    lines: "Lines",
-  };
-  const title = tabConfig[activeTab];
+  const title = TAB_LABELS[activeTab];
 
   return (
     <div className="relative flex flex-col h-screen bg-bg-primary">
@@ -96,21 +97,21 @@ function TabsLayout() {
           onClick={() => navigate({ to: "/points" })}
         >
           <span className="flex items-center justify-center w-6 h-6 text-[18px]">{"\u25CF"}</span>
-          Points
+          Chat
         </button>
         <button
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[10px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "circles" ? "text-accent-purple" : "text-text-dim"}`}
-          onClick={() => navigate({ to: "/circles" })}
+          className="flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent text-[10px] font-semibold tracking-widest uppercase text-text-dim opacity-40 cursor-not-allowed"
+          disabled
         >
           <span className="flex items-center justify-center w-6 h-6 text-[18px]">{"\u25C9"}</span>
-          Circles
+          Groups
         </button>
         <button
           className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 border-none bg-transparent cursor-pointer text-[10px] font-semibold tracking-widest uppercase transition-colors ${activeTab === "lines" ? "text-accent-amber" : "text-text-dim"}`}
           onClick={() => navigate({ to: "/lines" })}
         >
           <span className="flex items-center justify-center w-6 h-6 text-[18px]">{"\u2261"}</span>
-          Lines
+          Archive
         </button>
       </nav>
 
