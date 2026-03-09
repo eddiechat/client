@@ -4,6 +4,7 @@ import { useAuth, useData, useTabSearch, useTheme } from "../../../shared/contex
 import {
   displayName,
   participantCount,
+  participantEntries,
   participantEmails,
   relTime,
 } from "../../../shared/lib";
@@ -30,8 +31,7 @@ function PointsList() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
-  const conns = conversations.filter((c) => c.classification === "connections");
-  const points = conns.filter((c) => participantCount(c) === 1);
+  const points = conversations.filter((c) => c.classification === "connections");
   const q = search.toLowerCase();
   const filtered = points.filter(
     (c) => !q || displayName(c).toLowerCase().includes(q)
@@ -60,6 +60,8 @@ function PointsList() {
         const name = displayName(c);
         const hasUnread = c.unread_count > 0;
         const isOpen = swipedId === c.id;
+        const isGroup = participantCount(c) > 1;
+        const entries = participantEntries(c);
 
         return (
           <li
@@ -120,9 +122,24 @@ function PointsList() {
                 }
               }}
             >
-              <div className="relative shrink-0">
-                <Avatar name={name} email={participantEmails(c)[0]} size={12} fontSize="text-[17px]" />
-              </div>
+              {isGroup ? (
+                <div className="avatar-group w-12 h-12 relative shrink-0">
+                  {entries.slice(0, 3).map(([email, n], i) => (
+                    <Avatar
+                      key={i}
+                      name={n || email}
+                      email={email}
+                      size={8}
+                      fontSize="text-[11px]"
+                      className="avatar-sm absolute border-[1.5px] border-bg-primary"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="relative shrink-0">
+                  <Avatar name={name} email={participantEmails(c)[0]} size={12} fontSize="text-[17px]" />
+                </div>
+              )}
 
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline gap-2">
