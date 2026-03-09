@@ -104,9 +104,10 @@ export function firstName(name: string): string {
 }
 
 export function initials(name: string) {
-  const p = name.trim().split(/[\s@]+/);
-  if (p.length >= 2) return (p[0][0] + p[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+  const p = name.trim().split(/[\s@]+/).filter(Boolean);
+  if (p.length >= 2 && p[0][0] && p[1][0]) return (p[0][0] + p[1][0]).toUpperCase();
+  const fallback = (p[0] ?? name).slice(0, 2);
+  return fallback ? fallback.toUpperCase() : "?";
 }
 
 export function relTime(ts: number) {

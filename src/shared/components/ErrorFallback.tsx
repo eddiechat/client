@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
+import * as Sentry from "@sentry/react";
 
 export function ErrorFallback({ error }: { error: Error }) {
   const [showDetails, setShowDetails] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
 
   return (
     <div

@@ -16,6 +16,7 @@
     "tauri:android:build": "tauri android build"
   },
   "dependencies": {
+    "@sentry/react": "^10.42.0",
     "@tanstack/react-router": "^1.160.2",
     "@tanstack/router-devtools": "^1.160.2",
     "@tanstack/router-plugin": "^1.160.2",
