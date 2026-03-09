@@ -74,6 +74,7 @@ pub async fn send_message(
         processed_at: Some(now),
         participant_key,
         conversation_id: conversation_id.clone(),
+        classification_headers: "{}".to_string(),
     };
 
     sqlite::messages::insert_messages(&pool, &[new_msg])?;
@@ -127,7 +128,8 @@ pub async fn send_message(
     )?;
 
     // Rebuild conversations so the new message shows up immediately
-    crate::services::sync::worker::process_changes(&app, &pool, &account_id)?;
+    let conv_count = sqlite::conversations::rebuild_conversations(&pool, &account_id)?;
+    crate::services::sync::helpers::status_emit::emit_conversations_updated(&app, &account_id, conv_count);
 
     // Wake worker to replay the send action
     let _ = wake_tx.send(()).await;

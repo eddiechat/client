@@ -46,7 +46,6 @@ export type Message = {
   references_ids: string;
   distilled_text: string | null;
   is_sent: boolean;
-  in_reply_to: string | null;
 };
 
 export type ConnectAccountParams = {
