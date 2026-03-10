@@ -432,7 +432,7 @@ function ConversationView() {
             const year = new Date(m.date).getFullYear();
             const prevYear = i > 0 ? new Date(arr[i - 1].date).getFullYear() : year;
             const prevMsg = i > 0 ? arr[i - 1] : null;
-            const showSubject = !!m.subject && !m.in_reply_to;
+            const showSubject = !!m.subject && !m.in_reply_to && !/^re:\s/i.test(m.subject!) && !/via eddie$/i.test(m.subject!);
             const timeDelta = prevMsg ? m.date - prevMsg.date : Infinity;
             const senderChanged = prevMsg ? prevMsg.is_sent !== m.is_sent || prevMsg.from_address !== m.from_address : true;
             const showTime = senderChanged || timeDelta > 30 * 60 * 1000;
