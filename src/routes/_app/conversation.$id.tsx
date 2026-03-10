@@ -232,17 +232,19 @@ function ConversationView() {
       // Brand-new conversation with no prior messages
       subject = newSubject || `${myEmail.split("@")[0]} via Eddie`;
     } else {
-      // Existing conversation: continue the most recent thread to keep subject stable
-      const lastMsg = [...messages].reverse().find((m) => m.subject);
-      if (lastMsg?.subject) {
-        subject = lastMsg.subject.match(/^re:/i) ? lastMsg.subject : `Re: ${lastMsg.subject}`;
-        inReplyTo = lastMsg.message_id || undefined;
+      // Normal send (no reply button): always use "via Eddie" subject.
+      // Thread against the most recent "via Eddie" message if one exists.
+      const viaSubject = `${myEmail.split("@")[0]} via Eddie`;
+      subject = viaSubject;
+      const lastViaMsg = [...messages].reverse().find(
+        (m) => m.subject?.toLowerCase() === viaSubject.toLowerCase()
+      );
+      if (lastViaMsg) {
+        inReplyTo = lastViaMsg.message_id || undefined;
         try {
-          const existingRefs: string[] = JSON.parse(lastMsg.references_ids || "[]");
-          refs = [...existingRefs, lastMsg.message_id].filter(Boolean);
-        } catch { refs = [lastMsg.message_id].filter(Boolean); }
-      } else {
-        subject = `${myEmail.split("@")[0]} via Eddie`;
+          const existingRefs: string[] = JSON.parse(lastViaMsg.references_ids || "[]");
+          refs = [...existingRefs, lastViaMsg.message_id].filter(Boolean);
+        } catch { refs = [lastViaMsg.message_id].filter(Boolean); }
       }
     }
 
