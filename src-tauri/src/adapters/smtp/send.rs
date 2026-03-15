@@ -22,6 +22,7 @@ pub struct SmtpMessage {
     pub body: String,
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
+    pub message_id: Option<String>,
 }
 
 /// Send an email via SMTP and return the raw RFC 5322 message bytes
@@ -43,8 +44,11 @@ pub async fn send_message(
             .map_err(|e| EddieError::InvalidInput(format!("Invalid from address: {}", e)))?
     };
 
-    // Generate an explicit Message-ID using a domain we control
-    let generated_message_id = bracket(&format!("{}@eddie.app", Uuid::new_v4()));
+    // Use pre-generated Message-ID if provided, otherwise generate one
+    let generated_message_id = match &message.message_id {
+        Some(id) => bracket(id),
+        None => bracket(&format!("{}@eddie.app", Uuid::new_v4())),
+    };
 
     let mut builder: MessageBuilder = lettre::Message::builder()
         .from(from_mailbox)

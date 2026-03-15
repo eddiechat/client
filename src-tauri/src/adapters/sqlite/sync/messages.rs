@@ -62,7 +62,7 @@ pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, 
     for msg in messages {
         let now = chrono::Utc::now().timestamp_millis();
         let result = tx.execute(
-            "INSERT OR IGNORE INTO messages (
+            "INSERT INTO messages (
                 id, account_id, message_id, imap_uid, imap_folder,
                 date, from_address, from_name, to_addresses, cc_addresses,
                 bcc_addresses, subject, body_text, body_html, size_bytes,
@@ -76,7 +76,17 @@ pub fn insert_messages(pool: &DbPool, messages: &[NewMessage]) -> Result<usize, 
                 ?16, ?17, ?18, ?19, ?20,
                 ?21, ?22, ?23, ?24,
                 ?25, ?26, ?27, ?28
-            )",
+            )
+            ON CONFLICT(account_id, message_id) WHERE message_id != ''
+            DO UPDATE SET
+                imap_uid = excluded.imap_uid,
+                imap_folder = excluded.imap_folder,
+                imap_flags = excluded.imap_flags,
+                gmail_labels = excluded.gmail_labels,
+                fetched_at = excluded.fetched_at,
+                body_text = COALESCE(excluded.body_text, body_text),
+                body_html = COALESCE(excluded.body_html, body_html),
+                size_bytes = COALESCE(excluded.size_bytes, size_bytes)",
             params![
                 Uuid::new_v4().to_string(),
                 msg.account_id,

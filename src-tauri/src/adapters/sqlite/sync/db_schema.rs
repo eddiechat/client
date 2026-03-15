@@ -220,6 +220,9 @@ fn create_data_tables(conn: &Connection) -> Result<(), EddieError> {
     // Add smtp_tls column to accounts (defaults to 1 = true for existing accounts)
     let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN smtp_tls INTEGER NOT NULL DEFAULT 1;");
 
+    // Add message_id column to action_queue (for server confirmation of send actions)
+    let _ = conn.execute_batch("ALTER TABLE action_queue ADD COLUMN message_id TEXT;");
+
     // Migration: clear domain-based line_groups (Lines now group by sender, not domain).
     // The 'domain' column is reused to store sender emails.
     let needs_lines_migration: bool = conn.query_row(

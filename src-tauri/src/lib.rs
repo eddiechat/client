@@ -66,6 +66,13 @@ pub fn run() {
             app.manage(wake_tx);
 
             tauri::async_runtime::spawn(async move {
+                // Purge actions older than 72 hours on startup
+                match adapters::sqlite::sync::action_queue::purge_old(&engine_pool) {
+                    Ok(n) if n > 0 => services::logger::info(&format!("Purged {} stale actions", n)),
+                    Err(e) => services::logger::warn(&format!("Action purge failed: {}", e)),
+                    _ => {}
+                }
+
                 loop {
                     match services::sync::worker::tick(&engine_app, &engine_pool, &engine_classifier).await {
                         Ok(did_work) => {

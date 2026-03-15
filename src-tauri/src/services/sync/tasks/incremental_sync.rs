@@ -178,6 +178,17 @@ pub async fn run_incremental_sync(
         );
         sqlite::messages::insert_messages(pool, &messages)?;
 
+        // Confirm completed send actions whose message_id was just synced from server
+        for msg in &messages {
+            if !msg.message_id.is_empty() {
+                let action_ids = sqlite::action_queue::get_completed_by_message_id(pool, account_id, &msg.message_id)?;
+                for action_id in &action_ids {
+                    sqlite::action_queue::mark_done(pool, action_id)?;
+                    logger::debug(&format!("Send action {} confirmed by server (message_id={})", action_id, msg.message_id));
+                }
+            }
+        }
+
         for (uid, text, is_html) in &bodies {
             if *is_html {
                 let _ = sqlite::messages::update_body_html_by_uid(pool, account_id, *uid, text);

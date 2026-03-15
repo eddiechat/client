@@ -64,15 +64,15 @@ pub type ImapSession = Session<MaybeTlsStream>;
 pub struct ImapConnection {
     pub session: ImapSession,
     pub has_gmail_ext: bool,
-    pub read_only: bool,
+    pub write_mode: bool,
 }
 
 impl ImapConnection {
     pub async fn select_folder(&mut self, folder: &str) -> Result<Mailbox, EddieError> {
-        let mailbox = if self.read_only {
-            self.session.examine(folder).await
-        } else {
+        let mailbox = if self.write_mode {
             self.session.select(folder).await
+        } else {
+            self.session.examine(folder).await
         }
         .map_err(|e| EddieError::Backend(format!("SELECT failed: {}", e)))?;
 
@@ -122,7 +122,7 @@ pub async fn connect_with_tls(
     use_tls: bool,
     username: &str,
     password: &str,
-    read_only: bool,
+    write_mode: bool,
 ) -> Result<ImapConnection, EddieError> {
     logger::debug(&format!("Connecting to IMAP server: host={}, port={}, tls={}", host, port, use_tls));
 
@@ -165,6 +165,6 @@ pub async fn connect_with_tls(
     Ok(ImapConnection {
         session,
         has_gmail_ext,
-        read_only,
+        write_mode,
     })
 }

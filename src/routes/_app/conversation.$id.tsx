@@ -128,11 +128,12 @@ function ConversationView() {
     }
 
     // Queue actions per folder
-    for (const [folder, { uids }] of byFolder) {
-      queueAction(conversation.account_id, "mark_read", { folder, uids }).catch(() => {});
+    for (const [folder, { uids, ids }] of byFolder) {
+      queueAction(conversation.account_id, "mark_read", { folder, uids, ids }).catch(() => {});
     }
 
-    // Optimistic update: add \\Seen to local flags
+    // Optimistic update: add \\Seen to local flags immediately.
+    // Next sync will reconcile with server state (single source of truth).
     const markedIds = new Set(toMark.map(m => m.id));
     setMessages(prev => prev.map(m => {
       if (!markedIds.has(m.id)) return m;

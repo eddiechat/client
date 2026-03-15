@@ -12,12 +12,12 @@ export const Route = createFileRoute("/_app/settings")({
 const SETTING_KEYS = {
   hideOlderChats: "hide_older_chats",
   showToaster: "show_toaster",
-  readOnly: "read_only",
+  writeMode: "write_mode",
 } as const;
 
 const TOGGLE_DEFAULTS: Record<string, boolean> = {
   [SETTING_KEYS.showToaster]: false,
-  [SETTING_KEYS.readOnly]: true,
+  [SETTING_KEYS.writeMode]: false,
 };
 
 const CHAT_AGE_STEPS = ["1", "2", "3", "4", "all"] as const;
@@ -115,7 +115,7 @@ function SettingsScreen() {
     },
     {
       section: "Privacy", items: [
-        { label: "Read-only mode", desc: "Prevent Eddie from modifying your mailbox", key: SETTING_KEYS.readOnly },
+        { label: "Read-only mode", desc: "Prevent Eddie from modifying your mailbox", key: SETTING_KEYS.writeMode, invert: true },
       ]
     },
   ];
@@ -233,9 +233,10 @@ function SettingsScreen() {
                 </div>
               </div>
             </>)}
-            {group.items.map((item) => (
-              <SettingsToggle key={item.key} label={item.label} desc={item.desc} value={toggles[item.key]} onChange={(v) => persistToggle(item.key, v)} />
-            ))}
+            {group.items.map((item) => {
+              const invert = "invert" in item && item.invert;
+              return <SettingsToggle key={item.key} label={item.label} desc={item.desc} value={invert ? !toggles[item.key] : toggles[item.key]} onChange={(v) => persistToggle(item.key, invert ? !v : v)} />;
+            })}
           </div>
         ))}
 

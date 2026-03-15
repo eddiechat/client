@@ -28,6 +28,14 @@ pub async fn send_message(
     in_reply_to: Option<String>,
     references: Vec<String>,
 ) -> Result<SendResult, EddieError> {
+    // Block sends unless write-mode is explicitly enabled
+    let write_mode = sqlite::settings::get_setting(&pool, "write_mode")?
+        .map(|v| v == "true")
+        .unwrap_or(false);
+    if !write_mode {
+        return Err(EddieError::InvalidInput("Read-only mode: sending not permitted".into()));
+    }
+
     let self_emails = sqlite::entities::get_self_emails(&pool, &account_id)?;
 
     // Compute conversation placement
@@ -41,7 +49,9 @@ pub async fn send_message(
 
     let now = chrono::Utc::now().timestamp_millis();
     let db_id = uuid::Uuid::new_v4().to_string();
-    let placeholder_message_id = format!("{}.eddie@local", uuid::Uuid::new_v4());
+    let real_message_id = format!("{}@eddie.app", uuid::Uuid::new_v4());
+    // Random UID to avoid UNIQUE(account_id, imap_folder, imap_uid) collisions between OUTBOX placeholders
+    let outbox_uid = uuid::Uuid::new_v4().as_u128() as u32;
 
     // Insert optimistic message into local DB
     let to_json = serde_json::to_string(&to).unwrap_or_default();
@@ -50,8 +60,8 @@ pub async fn send_message(
 
     let new_msg = NewMessage {
         account_id: account_id.clone(),
-        message_id: placeholder_message_id.clone(),
-        imap_uid: 0,
+        message_id: real_message_id.clone(),
+        imap_uid: outbox_uid,
         imap_folder: "OUTBOX".to_string(),
         date: now,
         from_address: normalize_email(&from_email),
@@ -117,7 +127,7 @@ pub async fn send_message(
         "in_reply_to": in_reply_to,
         "references": references,
         "message_db_id": db_id,
-        "placeholder_message_id": placeholder_message_id,
+        "message_id": real_message_id,
     });
 
     sqlite::action_queue::enqueue(
@@ -125,6 +135,7 @@ pub async fn send_message(
         &account_id,
         "send",
         &payload.to_string(),
+        Some(&real_message_id),
     )?;
 
     // Rebuild conversations so the new message shows up immediately

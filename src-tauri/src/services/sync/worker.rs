@@ -121,11 +121,11 @@ pub(crate) async fn connect_account(
     let creds = sqlite::accounts::get_credentials(pool, account_id)?
         .ok_or(EddieError::AccountNotFound(account_id.to_string()))?;
 
-    let read_only = sqlite::settings::get_setting(pool, "read_only")?
-        .map(|v| v != "false")
-        .unwrap_or(true);
+    let write_mode = sqlite::settings::get_setting(pool, "write_mode")?
+        .map(|v| v == "true")
+        .unwrap_or(false);
 
-    let conn = connection::connect_with_tls(&creds.host, creds.port, creds.tls, &creds.email, &creds.password, read_only).await?;
+    let conn = connection::connect_with_tls(&creds.host, creds.port, creds.tls, &creds.email, &creds.password, write_mode).await?;
 
     let self_emails = sqlite::entities::get_self_emails(pool, account_id)?;
 

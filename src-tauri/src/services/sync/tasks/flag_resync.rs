@@ -189,6 +189,13 @@ pub async fn run_flag_resync(
         }
     }
 
+    // Confirm completed mark_read actions — server flags are now up to date
+    let completed_actions = sqlite::action_queue::get_completed_mark_read(pool, account_id)?;
+    for (action_id, _payload) in &completed_actions {
+        sqlite::action_queue::mark_done(pool, action_id)?;
+        logger::debug(&format!("mark_read action {} confirmed by flag resync", action_id));
+    }
+
     // Rebuild conversations once at the end if anything changed
     if any_changed {
         let conv_count = sqlite::conversations::rebuild_conversations(pool, account_id)?;
