@@ -1,2 +1,9 @@
+### Added
+- Write mode for composing messages
+- Re-implemented action queue
+
 ### Changed
-- Improve error handling
+- Improved hiding of subject lines
+
+### Fixed
+- Fixed inferred topic detection
