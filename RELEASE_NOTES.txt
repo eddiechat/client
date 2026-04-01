@@ -1,9 +1,2 @@
-### Added
-- Write mode for composing messages
-- Re-implemented action queue
-
-### Changed
-- Improved hiding of subject lines
-
 ### Fixed
-- Fixed inferred topic detection
+- Input field hidden by soft keyboard on iOS
